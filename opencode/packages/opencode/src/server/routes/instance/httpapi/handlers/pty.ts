@@ -1,4 +1,4 @@
-import * as InstanceState from "@/effect/instance-state"
+import { InstanceState } from "@/effect/instance-state"
 import path from "node:path"
 import { registerDisposer } from "@/effect/instance-registry"
 import { InstanceRef, WorkspaceRef } from "@/effect/instance-ref"
@@ -12,6 +12,7 @@ import { Location } from "@opencode-ai/core/location"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Shell } from "@opencode-ai/core/shell"
+import { LogicalDirectoryRegistry } from "@/project/logical-directory-registry"
 import { CorsConfig, isAllowedRequestOrigin, type CorsOptions } from "@opencode-ai/server/cors"
 import {
   PTY_CONNECT_TICKET_QUERY,
@@ -73,7 +74,7 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
     const create = Effect.fn("PtyHttpApi.create")(function* (ctx: { payload: typeof Pty.CreateInput.Type }) {
       // numas: PTY 工作目录支持 body `cwd` (右键「在终端中打开」指定目录), 但必须位于
       // 本 instance (x-opencode-directory header) 目录之内, 防越界; 缺省 = instance 目录.
-      const instanceDir = (yield* InstanceState.context).directory
+      const realInstanceDir = (yield* InstanceState.context).directory
       // numas: cwd 一律用「逻辑路径」(path.resolve 规范化, 不 realpath):
       //  ① 边界校验 — 拦截直接 ../ 逃逸, 但放行 workspace 内 symlink 指向 workspace 外
       //    (如 /home/community/333 -> /app/333), 与 core FileSystem.resolve 同一原则;
@@ -81,7 +82,13 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
       //  ③ 显式 PWD env = 逻辑路径 — shell (zsh/bash) 启动校验 $PWD 与 getcwd() inode
       //    一致后信任它, 于是逻辑 pwd / 提示符显示 symlink 路径 (/home/community/333/sub)
       //    而非物理路径 (/app/333/sub), 与 explorer 里看到的路径一致.
-      const logicalInstance = path.resolve(FSUtil.windowsPath(instanceDir))
+      // numas: `InstanceState.context.directory` 已经是 `FSUtil.resolve` realpath 化的
+      // 物理路径 (e.g. /usr/local/.storage/course/实验三_.../workdir), 跟 body `cwd` 这种
+      // logical 路径字符串直接 `path.relative` 必越界. 用 LogicalDirectoryRegistry 反查回
+      // 用户原始 logical instance 路径, 跟 body `cwd` 同维度再校验. 查不到时 (workspace
+      // 不是 symlink, real==logical) 走 fallback 仍用 real path, 行为不变.
+      const logicalInstance =
+        LogicalDirectoryRegistry.get(realInstanceDir) ?? path.resolve(FSUtil.windowsPath(realInstanceDir))
       const logicalCwd = ctx.payload.cwd
         ? path.resolve(FSUtil.windowsPath(ctx.payload.cwd))
         : logicalInstance
@@ -103,7 +110,7 @@ export const ptyHandlers = HttpApiBuilder.group(InstanceHttpApi, "pty", (handler
       // numas: 该 PTY 所在 workspace 注册为端口识别锚点: 容器/服务器部署 workspace 常挂
       // home 外 (如 /app), 该目录下后台启动的服务 (nohup/&) 靠 cwd∈workspace 识别,
       // 不依赖进程树 (shell 退出后孤儿照常进面板 / 可 /proxy 转发)
-      yield* ports.registerWorkspace(instanceDir)
+      yield* ports.registerWorkspace(realInstanceDir)
       return info
     })
 
