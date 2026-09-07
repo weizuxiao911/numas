@@ -11,6 +11,7 @@ import { TaskModule } from '@opensumi/ide-task/lib/browser';
 
 import { ActionsModule } from '../extensions/actions';
 import { ChatModule } from '../extensions/chat';
+import { ContextModule } from '../extensions/context';
 import { WorkspaceModule } from '../extensions/workspace';
 import { FilePickerModule } from '../extensions/filepicker';
 import { PdfReaderModule } from '../extensions/pdf';
@@ -51,6 +52,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     // 内置 UI 拓展
     ActionsModule,
     ChatModule,
+    ContextModule,          // 文件树/编辑器/终端选区「添加到对话」(依赖 ChatPanelApi.addContext)
     WorkspaceModule,
     FilePickerModule,
     PdfReaderModule,

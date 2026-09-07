@@ -32,7 +32,7 @@ import {
   getQuestionStore, subscribeQuestionChange, setQuestion, clearQuestion,
 } from './helpers';
 import { getBrand } from '../scheme';
-import { registerChatPanelApi } from '../commands/chatApi';
+import { registerChatPanelApi, contextItemKey, formatContextNote, type ChatContextItem, type AddContextResult } from '../commands/chatApi';
 import { styles } from './styles';
 import { ConnectingView } from './components/ConnectingView';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -178,6 +178,10 @@ export const Chat: React.FC = () => {
     return unsub;
   }, []);
   const [attachments, setAttachments] = useState<Array<{ name: string; path: string; dataUrl?: string }>>([]);
+  /** 上下文挂件 (编辑器选区/终端选区/文件树) — send 时拼成 formatContextNote 笔记 */
+  const [contextItems, setContextItems] = useState<ChatContextItem[]>([]);
+  const contextItemsRef = useRef<ChatContextItem[]>([]);
+  contextItemsRef.current = contextItems;
   /** 上传进度: { '<path>': 0..1 } — 上传中显示进度条 */
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [previewAttachment, setPreviewAttachment] = useState<{ name: string; path: string; dataUrl?: string } | null>(null);
@@ -793,16 +797,18 @@ export const Chat: React.FC = () => {
     return provider ? `${name} · ${provider}` : name;
   }, [selectedModel, providers]);
 
-  const sendPrompt = useCallback(async (text: string, opts?: { files?: Array<{ name: string; path: string }>; images?: Array<{ name: string; path: string; dataUrl?: string }> }) => {
+  const sendPrompt = useCallback(async (text: string, opts?: { files?: Array<{ name: string; path: string }>; images?: Array<{ name: string; path: string; dataUrl?: string }>; context?: ChatContextItem[] }) => {
     const t = (text || '').trim();
     const images = opts?.images || [];
     const files = opts?.files || [];
-    // 纯文件/图片 (无文字) 也允许发送
-    if ((!t && !images.length && !files.length) || busy || !client) return;
+    const ctx = opts?.context || [];
+    // 纯文件/图片/上下文 (无文字) 也允许发送
+    if ((!t && !images.length && !files.length && !ctx.length) || busy || !client) return;
+    const ctxNote = formatContextNote(ctx);
     const attachNote = files.length
       ? '\n\n[已上传文件]\n' + files.map((a) => `- ${a.path}`).join('\n')
       : '';
-    const fullText = t + attachNote;
+    const fullText = t + ctxNote + attachNote;
     const localId = `local-${Date.now()}`;
     const localParts: any[] = [{ type: 'text', text: fullText }];
     if (images.length) {
@@ -887,9 +893,25 @@ export const Chat: React.FC = () => {
     setInput('');
     const imgs = attachments.filter((a) => a.dataUrl);
     const files = attachments.filter((a) => !a.dataUrl);
+    const ctx = contextItems;
     setAttachments([]);
-    await sendPrompt(input, { files, images: imgs });
-  }, [input, attachments, sendPrompt]);
+    setContextItems([]);
+    await sendPrompt(input, { files, images: imgs, context: ctx });
+  }, [input, attachments, contextItems, sendPrompt]);
+
+  /** 跨拓展/外部入口挂上下文 (文件树/编辑器/终端选区) */
+  const addContext = useCallback((item: ChatContextItem): AddContextResult => {
+    if (item.kind === 'file' && !item.path) return { added: false, reason: 'empty' };
+    if (item.kind === 'selection' && !String(item.text || '').trim()) return { added: false, reason: 'empty' };
+    const key = contextItemKey(item);
+    if (contextItemsRef.current.some((x) => contextItemKey(x) === key)) {
+      showNotice('已在对话中');
+      return { added: false, reason: 'duplicate' };
+    }
+    setContextItems((prev) => [...prev, item]);
+    requestAnimationFrame(() => taRef.current?.focus());
+    return { added: true };
+  }, [showNotice]);
 
   const onAbort = useCallback(async (sid?: string) => {
     const target = sid || sessionID;
@@ -918,16 +940,17 @@ export const Chat: React.FC = () => {
     requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus()));
   }, [cleanupDraft, refreshSessionStatuses]);
 
-  // 注册 ChatPanelApi (供 PDF AI讲解等外部调 send 发消息; 卸载注销)
+  // 注册 ChatPanelApi (供 PDF AI讲解/文件树/选区等外部; 卸载注销)
   useEffect(() => {
     registerChatPanelApi({
       newSession: () => { void onNewSession?.(); },
       sessions: () => { /* 历史会话弹窗由内部 UI 管理 */ },
       send: (text) => { void sendPrompt(text); },
       changeSession: (sid) => onSwitchSession(sid),
+      addContext,
     });
     return () => registerChatPanelApi(null);
-  }, [sendPrompt, onSwitchSession]);
+  }, [sendPrompt, onSwitchSession, addContext]);
 
   const onDeleteSession = useCallback(async (sid: string) => {
     if (!client) return;
@@ -1686,6 +1709,56 @@ export const Chat: React.FC = () => {
               placeholder="输入/ 可以召唤魔法; 输入@ 可以选择智能体 🎉"
               rows={1}
             />
+            {contextItems.length > 0 && (
+              <div className="chat__input-chips">
+                {contextItems.map((c) => {
+                  const range = c.kind === 'selection' && typeof c.startLine === 'number'
+                    ? `${c.startLine}${typeof c.endLine === 'number' && c.endLine !== c.startLine ? `-${c.endLine}` : ''}`
+                    : '';
+                  const label = range ? c.name.replace(/:\d+(-\d+)?$/, '') : c.name;
+                  return (
+                    <button
+                      key={contextItemKey(c)}
+                      type="button"
+                      className="chat__ctx-chip"
+                      title={c.kind === 'file' ? c.path : c.text.slice(0, 200)}
+                    >
+                      <span className="chat__ctx-chip-ic" aria-hidden>
+                        {c.kind === 'file' ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        ) : c.source === 'terminal' ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        )}
+                      </span>
+                      <span className="chat__ctx-chip-name">{label}</span>
+                      {range ? <span className="chat__ctx-chip-range">{range}</span> : null}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        className="chat__ctx-chip-x"
+                        title="移除"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const key = contextItemKey(c);
+                          setContextItems((prev) => prev.filter((x) => contextItemKey(x) !== key));
+                          taRef.current?.focus();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            const key = contextItemKey(c);
+                            setContextItems((prev) => prev.filter((x) => contextItemKey(x) !== key));
+                            taRef.current?.focus();
+                          }
+                        }}
+                      >×</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {attachments.length > 0 && (
               <div className="chat__attach">
                 {attachments.map((a, i) => (

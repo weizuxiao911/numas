@@ -425,6 +425,46 @@ export const styles = `
 }
 .chat__input-wrap textarea::placeholder { color: var(--ai-fg-muted); }
 
+/* Context chips (编辑器选区 / 终端选区 / 文件树挂载) */
+.chat__input-chips {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 0 2px 6px;
+  min-width: 0;
+}
+.chat__ctx-chip {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 220px; height: 22px;
+  margin: 0; padding: 0 4px 0 5px;
+  box-sizing: border-box;
+  background: var(--ai-surface-muted, var(--ai-bg-elev));
+  border: 1px solid var(--ai-border, rgba(0,0,0,0.12));
+  border-radius: 4px;
+  font-size: 12px; line-height: 1; color: var(--ai-fg);
+  font-family: inherit; cursor: pointer; text-align: left;
+  flex: 0 0 auto;
+  user-select: none;
+}
+.chat__ctx-chip:hover { border-color: var(--ai-accent); }
+.chat__ctx-chip-ic {
+  flex-shrink: 0; width: 14px; height: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ai-fg-muted);
+}
+.chat__ctx-chip-name {
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat__ctx-chip-range {
+  flex-shrink: 0; color: var(--ai-fg-muted); font-size: 11px;
+}
+.chat__ctx-chip-x {
+  flex-shrink: 0;
+  background: transparent; border: none; color: var(--ai-fg-muted);
+  font-size: 12px; cursor: pointer; line-height: 1; padding: 0 1px;
+}
+.chat__ctx-chip-x:hover { color: var(--ai-danger); }
+
 /* Attachment cards */
 .chat__attach {
   display: flex; flex-wrap: wrap; gap: 6px;
