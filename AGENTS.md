@@ -565,3 +565,46 @@ AI **仍需 `question`**:
   或者把"撑开元素" (title / summary) 设 `flex: 1; min-width: 0` (`reason__caret` 也靠 `margin-left: auto` 居右, 模式统一).
 - **附加**: `.sub` 卡片 (委派子任务) 在 `SubAgentCard.tsx` 用 `sub__head` 类但 **styles.ts 完全没有定义**, 渲染时是裸 DOM (默认 block 流, 全宽). 新增子组件务必 grep styles.ts 确认样式存在, 否则 fallback 到浏览器默认渲染. 补法参考 `.todo` / `.reason` 玻璃卡片风格 (圆角 + `--ai-input-bg` 背景 + 1px divider).
 - **排查方法**: 1) 改布局前看 DOM 结构和 CSS 类名是否齐全 (`grep className` 与 `grep -n "\.类名"` 交叉), 2) 折叠 caret 靠右两种写法选其一 (margin-left:auto 或 flex:1 撑开), 项目内统一一种, 3) 子组件新增先建空 styles.ts 段占位, 避免裸 DOM.
+
+#### 30. pty create 在 symlink workspace 返回 400 `{"_tag":"BadRequest"}`: boundary check 混了 real vs logical 维度
+
+- **现象**: POST `/pty` 在 symlink workspace (k8s 容器内 `logical=/home/community/实验三_网络爬虫与数据可视化` → `real=/usr/local/.storage/course/实验三_.../workdir`) 一直返 400. 浏览器 explorer 在该 workspace 任何位置右键「在终端打开」传 body `cwd` (logical) 必 400; 不传 cwd 用 instance 默认能过. header 跟 body 用同一 logical 路径也 400 (因为 server 端把 header realpath 化了, body 保持 raw logical, 字符串不在同一子树).
+- **根因** (`packages/opencode/src/server/routes/instance/httpapi/handlers/pty.ts:84-88` 修复前):
+  ```ts
+  const instanceDir = (yield* InstanceState.context).directory
+  // ↑ InstanceStore.load 调 FSUtil.resolve realpath 化, 等于物理路径
+  const logicalInstance = path.resolve(FSUtil.windowsPath(instanceDir))  // real
+  const logicalCwd = path.resolve(FSUtil.windowsPath(ctx.payload.cwd))    // logical (raw)
+  if (ctx.payload.cwd && !FSUtil.contains(logicalInstance, logicalCwd))
+    return yield* new HttpApiError.BadRequest({})
+  ```
+  `path.relative("/usr/local/.storage/.../workdir", "/home/community/.../app")` 跨根越界 → 400. 跟中文无关, 任何 symlink/mount workspace 都触发.
+- **修法 (修法 B, 跟 #21 / #24 logical 路径约定一致)**: 复用 `LogicalDirectoryRegistry` (`packages/opencode/src/project/logical-directory-registry.ts:18-36`, `InstanceStore.load` 同步建立 real → logical 映射), 把 `logicalInstance` 反查回 logical:
+  ```ts
+  const realInstanceDir = (yield* InstanceState.context).directory
+  const logicalInstance =
+    LogicalDirectoryRegistry.get(realInstanceDir) ?? path.resolve(FSUtil.windowsPath(realInstanceDir))
+  ```
+  查不到时 (workspace 非 symlink, real==logical) fallback 走 realpath, 行为不变. spawn cwd / PWD env 仍用 logicalCwd, chdir 穿透 symlink, zsh 启动校验 $PWD 跟 getcwd() inode 一致后信任 $PWD, `pwd`/提示符跟 explorer 路径一致 (#21 同模式).
+- **复现命令** (本地 k8s, 容器内造 symlink):
+  ```bash
+  kubectl exec $POD -- sh -c '
+    mkdir -p /home/.storage/course/实验3_网络爬虫与数据可视化/app docs
+    touch /home/.storage/course/实验3_网络爬虫与数据可视化/README.md
+    ln -sfn /home/.storage/course/实验3_网络爬虫与数据可视化 /home/community/实验3_网络爬虫与数据可视化
+  '
+  curl -sS -i 'http://numas.localhost/pty' \
+    -H 'x-opencode-directory: %2Fhome%2Fcommunity%2F%E5%AE%9E%E9%AA%8C3_%E7%BD%91%E7%BB%9C%E7%88%AC%E8%99%AB%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%8F%AF%E8%A7%86%E5%8C%96' \
+    -H 'content-type: application/json' \
+    --data-raw '{"command":"/bin/zsh","args":["--login"],"cwd":"/home/community/实验3_网络爬虫与数据可视化"}'
+  # 修复前 400 {"_tag":"BadRequest"}, 修复后 200
+  ```
+- **验证矩阵** (本地 k8s deployment `numas` + ingress `numas.localhost`, image `numas:patched`):
+  | 场景 | 修复前 | 修复后 |
+  |------|--------|--------|
+  | header + body logical 同路径 | 400 | 200 |
+  | 子目录 cwd (`/app`) | 400 | 200 |
+  | 两级子目录 (`/docs`) | 400 | 200 |
+  | 父目录 header + logical 子 cwd (原 200 路径) | 200 | 200 (不回归) |
+  | 真越界 (`/etc`) | 400 | 400 (沙箱守住) |
+- **排查方法**: 1) `path.relative` debug: pty handler 加 `console.log` 打 `logicalInstance` / `logicalCwd` / `relative`, 跑 curl 看输出; 2) 跟 #24 fs watcher 模式一样, server 内部用 real, 对前端暴露走 logical (boundary check / spawn cwd / PWD env); 3) LogicalDirectoryRegistry 查不到时 (`real === logical` 的 workspace) 走 fallback, 跟历史行为一致; 4) 部署 patched image 必须重建 `numas:patched` 重新打, `kubectl cp` 改的 binary 不会跨 pod 重建带过去 (镜像 fs 只读), 走 `kubectl rollout restart deployment` + 改 image 拉新 tag.
