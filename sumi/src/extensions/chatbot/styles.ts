@@ -27,23 +27,20 @@ export const styles = `
 }
 
 /* container: 主区, 承载 ChatbotView (消息流 + 输入框)
-   宽度 75% 居中: 宽屏下不让消息/输入框拉满整屏 (阅读行长过长),
-   窄屏 (< 900px) 退回 100% + 20px 内边距 */
+   默认宽度 90% 居中, 最大 728px 封顶 (宽屏下不超过 728,
+   窄屏 / 窗口很小时仍能利用全宽的 90%) */
 .app-chatbot__container {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  width: 75%;
-  max-width: 75%;
+  width: 90%;
+  max-width: 728px;
   margin: 0 auto;
   padding: 0;
   display: flex;
   flex-direction: column;
   background: transparent;
   overflow: hidden;
-}
-@media (max-width: 900px) {
-  .app-chatbot__container { width: 100%; max-width: 100%; padding: 0 20px; }
 }
 
 /* ChatbotView 根 (.chat) 在 container 内撑满, 背景透明跟主区一致 */
