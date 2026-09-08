@@ -1,14 +1,21 @@
 /**
- * SoloLayout — SOLO 模式布局 (chat 风格, 自己实现 2 大卡片 + 拖动条)
+ * SoloLayout — SOLO 模式布局 (自己实现三列 + 拖动条)
  *
  * 不用 codeblitz BoxPanel/SplitPanel (SlotRenderer + isTabbar 跟 SplitPanel sash 互相打架,
- *  拖不了). 自己用 React state 管 sidebar 宽度, 渲染 2 个 card + 中间拖动手柄.
+ *  拖不了). 自己用 React state 管 sidebar 宽度, 渲染卡片 + 中间拖动手柄.
+ *
+ * 结构 (四槽, 见 config/slots.ts):
+ *   ┌──────────┬─────────────────────────┬────────┐
+ *   │ sidebar  │  action (顶部工具栏)      │        │
+ *   │          ├─────────────────────────┤ drawer │
+ *   │          │  main (对话主区)          │        │
+ *   └──────────┴─────────────────────────┴────────┘
  *
  * 卡片样式: 在 sumi/src/styles/app-shell.css 由 App 顶层装配 (全局唯一来源).
  * WorkspacePicker / FilePicker 是 codeblitz DI 内的全局浮层, 必须在 Layout 内部渲染.
  *
  * 折叠交互: SoloLayout 持有 sidebar 宽 state, mount 时通过 sidebar/commands/sidebarApi
- * 暴露给其他拓展 (Sidebar / ChatbotMain), 卸载时清空. 跨拓展不破 §2.2 铁律
+ * 暴露给其他拓展 (Sidebar / ActionBar), 卸载时清空. 跨拓展不破 §2.2 铁律
  * (单向: SoloLayout 是 api owner, 消费方只调 getSidebarApi() 拿快照 + 调方法).
  */
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -22,7 +29,7 @@ import {
   type SidebarApi,
 } from '../extensions/sidebar/commands/sidebarApi';
 
-const DEFAULT_SIDEBAR_W = 256;
+const DEFAULT_SIDEBAR_W = 320;
 const MIN_SIDEBAR_W = 1;
 const MAX_SIDEBAR_W = 480;
 const COLLAPSED_W = 1;
@@ -150,8 +157,18 @@ export function SoloLayout(): React.ReactElement {
       {sidebarW > COLLAPSED_W && (
         <div className="app-solo__resizer" onMouseDown={onResizerDown} role="separator" aria-orientation="vertical" />
       )}
-      <div className="app-solo__composer" style={{ flex: 1, minWidth: 0 }}>
-        <SlotRenderer slot={SOLO_SLOTS.Composer} />
+      {/* 中列: action (顶部工具栏) + main (对话主区), 上下结构 */}
+      <div className="app-solo__center">
+        <div className="app-solo__action">
+          <SlotRenderer slot={SOLO_SLOTS.Action} />
+        </div>
+        <div className="app-solo__main">
+          <SlotRenderer slot={SOLO_SLOTS.Main} />
+        </div>
+      </div>
+      {/* 右侧抽屉: 暂无拓展注册, 默认宽 0 完全隐藏 */}
+      <div className="app-solo__drawer">
+        <SlotRenderer slot={SOLO_SLOTS.Drawer} />
       </div>
       <WorkspacePicker />
       <FilePicker />

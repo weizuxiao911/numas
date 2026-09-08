@@ -22,6 +22,7 @@ import { PortsModule } from '../service/ports';
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
 import { SidebarModule } from '../extensions/sidebar';
+import { ActionModule } from '../extensions/action';
 import { ChatbotModule } from '../extensions/chatbot';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
@@ -40,7 +41,8 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
 
     // vsix 拓展 (UI 组件, 走 ComponentContribution 装 codeblitz slot)
     SidebarModule,         // 首页侧栏 (sidebar 槽)
-    ChatbotModule,         // 对话主区 (composer 槽)
+    ActionModule,          // 顶部工具栏 (action 槽)
+    ChatbotModule,         // 对话主区 (main 槽)
 
     // 自定义 file scheme provider (覆盖 codeblitz 默认 DiskFileSystemProvider)
     FsProviderModule,

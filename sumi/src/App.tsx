@@ -11,6 +11,7 @@ import { ExtensionServiceImpl } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
 import { runtimeConfig } from './config/runtime';
 import { SIDEBAR_PANEL_ID } from './extensions/sidebar';
+import { ACTION_PANEL_ID } from './extensions/action';
 import { CHATBOT_PANEL_ID } from './extensions/chatbot';
 import { SOLO_SLOTS } from './config/slots';
 import { IdeLayout } from './layouts/IdeLayout';
@@ -49,12 +50,13 @@ const layout = {
   [SlotLocation.extra]: { modules: [] },
 };
 
-/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开 dashboard + chatbot */
+/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开 dashboard + action + chatbot */
 const SOLO_MODE = {
   layout,
   panels: {
     [SOLO_SLOTS.Sidebar]: SIDEBAR_PANEL_ID,
-    [SOLO_SLOTS.Composer]: CHATBOT_PANEL_ID,
+    [SOLO_SLOTS.Action]: ACTION_PANEL_ID,
+    [SOLO_SLOTS.Main]: CHATBOT_PANEL_ID,
   },
 };
 
