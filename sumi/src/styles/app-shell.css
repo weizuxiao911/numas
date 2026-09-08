@@ -1,6 +1,6 @@
 /**
  * App Shell 全局布局 — 由 App 顶层 import, 不在拓展内
- * 包含: SOLO 模式 2 面板 + 自定义拖动条
+ * 包含: SOLO 模式三列 (sidebar / center / drawer) + 自定义拖动条
  *
  * 主题色: 全部走 codeblitz/opensumi token, 不硬编码颜色
  * 折叠/展开动效: sidebar 跟 resizer 都加 transition: width, 平滑向左折
@@ -23,7 +23,8 @@
 }
 
 .app-solo__sidebar,
-.app-solo__composer {
+.app-solo__center,
+.app-solo__drawer {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -36,18 +37,47 @@
 .app-solo__sidebar {
   z-index: 1;
   background: var(--editor-background);
-  flex: 0 0 var(--sidebar-w, 256px);
-  width: var(--sidebar-w, 256px);
+  flex: 0 0 var(--sidebar-w, 320px);
+  width: var(--sidebar-w, 320px);
   transition: flex-basis var(--solo-duration) var(--solo-ease),
               width var(--solo-duration) var(--solo-ease);
   will-change: width;
 }
-.app-solo__composer {
-  z-index: 1;
-  /* composer 跟 sidebar 1 档色差: 混 5% 前景色, 自动随主题反相
-     - 亮色主题: 前景色深, composer 略深于 sidebar (sidebar 更亮)
-     - 暗色主题: 前景色浅, composer 略亮于 sidebar (sidebar 更暗) */
-  background: color-mix(in srgb, var(--editor-background) 95%, var(--editor-foreground) 5%);
+
+/* 中列: action (顶部) + main (对话) 上下结构, 占满剩余宽度
+   跟 sidebar 半档色差: 混 2.5% 前景色, 自动随主题反相
+    - 亮色主题: 前景色深, 中列略深于 sidebar (sidebar 更亮)
+    - 暗色主题: 前景色浅, 中列略亮于 sidebar (sidebar 更暗)
+   5% 时色差过大显得两块割裂, 降到 2.5% 只做轻微区分 */
+.app-solo__center {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: color-mix(in srgb, var(--editor-background) 97.5%, var(--editor-foreground) 2.5%);
+  display: flex;
+  flex-direction: column;
+}
+.app-solo__action {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.app-solo__main {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 右侧抽屉: 默认宽 0 / 完全隐藏, 后续拓展注册时按需撑开 */
+.app-solo__drawer {
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  background: transparent;
+  transition: flex-basis var(--solo-duration) var(--solo-ease),
+              width var(--solo-duration) var(--solo-ease);
 }
 
 /* 拖动条: 朴素 1px 主线, 折叠时跟 sidebar 一起收, 动效跟 sidebar 同步 */
