@@ -208,7 +208,9 @@ graph TD
 
 | 拓展 | 能力 |
 |---|---|
-| **actions** | 顶栏 UI (品牌 / 工作目录切换 / 主题切换 / 3 个布局 toggle / 内置浏览器入口) |
+| **actions** | SOLO 顶栏 (模式切换 / sidebar 展开镜像 / 项目选择 / 抽屉开关), 跨拓展走 `numas.sidebar.*` / `numas.drawer.*` 全局命令 |
+| **sidebar** | SOLO 左侧栏 (模式切换 + 折叠按钮 + 新建会话 + 历史会话列表: 标题 + 相对工作目录 + 时间, 点击切换 / 删除, 排除 subagent 会话) |
+| **chatbot** | SOLO 对话主区 (消息流 + 输入区 + 模型/智能体/附件), 跨拓展契约 `numas.chatbot.*` (newSession / listSessions / changeSession / deleteSession) |
 | **ai 助手 (chat)** | 主聊天面板, 多 session / model / agent 切换, 工作目录切换, 附件上传, 走消息总线 |
 | **ask (无头)** | 通用 AI 通道 `ask(prompt, cb)`, 独立 session, 流式回调, 可取消, 看门狗超时 |
 | **filepicker** | 通用 filepicker modal, 监听 `filepicker:request` 事件 |
@@ -221,6 +223,17 @@ graph TD
 | **markdown** | markdown 预览 (双击 .md/.markdown 默认渲染, 可切 code 文本编辑器) |
 
 注册入口: `sumi/src/config/modules.ts#getBuiltinModules` 统一注册 (14 个 Module)。
+
+**SOLO 布局状态** (`service/layout` DI 单例): sidebar 折叠/宽度 + drawer 开合/宽度。渲染方 (SoloLayout) 读状态渲染; 操作方 (ActionBar / Sidebar) 经全局命令 `executeCommand` 调 `numas.sidebar.collapse/expand/toggle`、`numas.drawer.open/close/toggle`, 状态订阅走 `LayoutToken.subscribe`。交互规则:
+- 默认 sidebar 展开, drawer 折叠
+- drawer 展开 → 自动折叠 sidebar 让出空间 (关闭不自动恢复)
+- sidebar 折叠 → action 栏镜像显示 模式切换 + 展开按钮
+- sidebar 展开 → 镜像隐藏
+
+**会话恢复 + 新建** (`chatbot`):
+- 启动恢复: 查当前 cwd 的历史会话 → 有则载入最新的 (time.updated 最大), 无则新建草稿。无前端持久化缓存 (不依赖 sessionStorage)
+- 新建会话按钮: 仅当**最新会话已有消息**时才创建; 最新仍是空草稿则不重复创建 (跳到它), 避免堆积空会话
+- 历史会话列表: 显示全部会话 (含当前), 标题 + 相对工作目录 + 时间, 点击切换 / 删除
 
 ### 4.6 vsix 拓展 (registry 分发)
 

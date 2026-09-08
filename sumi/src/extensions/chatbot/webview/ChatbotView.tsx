@@ -14,6 +14,9 @@ import {
   aiListModels,
   aiListProviders,
   aiGetConfig,
+  aiListSessions,
+  aiListMessages,
+  aiDeleteSession,
   isAiReady,
 } from '@/extensions/chatbot/commands/api';
 import { modelPrefs } from '@/extensions/chatbot/commands/modelPrefs';
@@ -38,25 +41,6 @@ import { Portal } from './parts/Portal';
 
 function loadClientCmds() {
   return CLIENT_COMMANDS.map((c) => ({ cmd: c.cmd, name: c.desc, hint: c.hint || '', source: 'client-cmd' as const }));
-}
-
-/** 按 cwd 生成 sessionStorage key. 最后段的可读名 (raw, 任意 unicode) + 8位哈希防碰撞:
- *  - 保留 CJK 可读性 (浏览 sessionStorage 时一眼看出是哪个目录)
- *  - 哈希防同名目录 (如 ~/a 和 ~/b 但只是同名, 哈希区分) / 超长路径截断
- *  - 切工作目录后 key 变, 旧 session 不会跨目录复用, 避免 session.directory 跟当前 cwd 不一致. */
-function sessionKeyFor(cwd: string): string {
-  if (!cwd) return 'chat.sessionID.default';
-  // djb2 哈希 (非加密, sessionStorage 标识够用, 32-bit → 8 位 hex)
-  let hash = 5381;
-  for (let i = 0; i < cwd.length; i++) {
-    hash = ((hash << 5) + hash) + cwd.charCodeAt(i);
-  }
-  const hex = (hash >>> 0).toString(16).padStart(8, '0');
-  // 最后一段做可读短名 (取 unicode 字符, 限 12 字符, 空白 trim)
-  const lastSeg = (cwd.split('/').filter(Boolean).pop() || '').trim().slice(0, 12);
-  // 不可见字符或空 fallback
-  const readable = lastSeg.replace(/[\x00-\x1F\x7F]/g, '') || 'cwd';
-  return `chat.sessionID.${readable}-${hex}`;
 }
 
 /** /session/status 会话状态 (与 opencode SessionStatus.Info 对齐):
@@ -424,32 +408,55 @@ export const ChatbotView: React.FC = () => {
         providerID: m.info?.providerID || undefined,
       }));
       setRows(rs);
-    } catch (e) { setApiError(e); }
-  }, [client, setApiError]);
+    } catch (e: any) {
+      // 会话已被删除 (sidebar 清理空会话/用户删除) → 静默清空, 不报 Session not found
+      const msg = String(e?.data?.message || e?.message || e || '').toLowerCase();
+      const isNotFound = msg.includes('session not found') || msg.includes('not found')
+        || e?.data?._tag === 'NotFound' || e?.status === 404;
+      if (isNotFound) {
+        setRows([]);
+        if (target === sessionIDRef.current) {
+          sessionIDRef.current = '';
+          setSessionID('');
+          void ensureDraft();
+        }
+        return;
+      }
+      setApiError(e);
+    }
+  }, [client, setApiError, ensureDraft]);
 
   useEffect(() => {
     if (sessionID) loadMessages(sessionID);
     else setRows([]);
   }, [sessionID, loadMessages]);
 
-  // sessionID 持久化到 sessionStorage, 跟当前 APP_CWD 绑定.
-  // 切工作目录后 reload, 旧 SESSION_KEY 读不到 → 触发 ensureDraft 建新 session (新 cwd 下)
-  // 这保证 session 的 directory 字段永远跟当前 cwd 一致, pwd 等 shell 命令结果正确
-  const SESSION_KEY = useMemo(() => sessionKeyFor(getWorkspace()), []);
-  // 仅启动时恢复一次上次会话. 注意: 不能依赖 sessionID 重跑 (restore 读 storage + write 写
-  // storage 会形成 A↔B 乒乓 → applySessionToUI 反复 session.get → 请求洪流).
-  // 顺手清掉 4a0b040 之前的旧版 'chat.sessionID' (无 cwd 后缀) 残留
+  // 启动恢复: 查历史会话列表 → 有则载入最新的会话, 无则新建草稿.
+  // 不依赖 sessionStorage 恢复 id (残留失效 id 会触发 Session not found).
+  const restoredRef = useRef(false);
   useEffect(() => {
-    if (!ready || !client) return;
-    try { sessionStorage.removeItem('chat.sessionID'); } catch { /* */ }
-    const saved = sessionStorage.getItem(SESSION_KEY);
-    if (saved && saved !== sessionID) { setSessionID(saved); return; }
-    if (!saved && !sessionID) { void ensureDraft(); }
+    if (!ready || !client || restoredRef.current) return;
+    restoredRef.current = true;
+    (async () => {
+      try {
+        const list = await aiListSessions();
+        // 最新会话 = time.updated 最大
+        const latest = (list || []).reduce<any | null>(
+          (a, b) => ((b?.time?.updated || 0) > (a?.time?.updated || 0) ? b : a),
+          null,
+        );
+        if (latest?.id) {
+          sessionIDRef.current = latest.id;
+          setSessionID(latest.id);
+        } else {
+          void ensureDraft();
+        }
+      } catch {
+        void ensureDraft();
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, client]);
-  useEffect(() => {
-    if (sessionID) sessionStorage.setItem(SESSION_KEY, sessionID);
-  }, [sessionID]);
 
   // --- opencode SSE 事件流: 打字机式流式响应 (替代 500ms 轮询) ---
   // V2 SDK event.subscribe() → /api/event, 顶层 {id, type, data} 格式.
@@ -725,6 +732,30 @@ export const ChatbotView: React.FC = () => {
 
   const onNewSession = useCallback(async () => {
     if (!ready || !client) return;
+    // 新建会话的前提: 最新会话已有消息. 若最新会话仍是空草稿 (无消息),
+    // 则不重复创建 — 只有最新的一个允许是空的.
+    try {
+      const list = await aiListSessions();
+      const latest = (list || []).reduce<any | null>(
+        (a, b) => ((b?.time?.updated || 0) > (a?.time?.updated || 0) ? b : a),
+        null,
+      );
+      if (latest?.id) {
+        const msgs = await aiListMessages(latest.id);
+        if (!Array.isArray(msgs) || msgs.length === 0) {
+          // 最新会话是空草稿 → 跳到它 (不新建)
+          if (sessionIDRef.current !== latest.id) {
+            sessionIDRef.current = latest.id;
+            setSessionID(latest.id);
+          }
+          setRows([]);
+          setStatusBySession((prev) => ({ ...prev, [latest.id]: { type: 'idle' } }));
+          setError('');
+          setCurrentTitle('新会话');
+          return;
+        }
+      }
+    } catch { /* 查询失败则照常新建 */ }
     // 不 abort 当前会话: 允许多会话并行生成, 切回后事件流自动续播
     cleanupDraft();
     try {
@@ -912,10 +943,27 @@ export const ChatbotView: React.FC = () => {
       sessions: () => { /* chatbot 不提供历史会话弹窗 (topbar 已移除) */ },
       send: (text) => { void sendPrompt(text); },
       changeSession: (sid) => onSwitchSession(sid),
+      getCurrentSessionID: () => sessionIDRef.current,
+      listSessions: async () => {
+        // 历史会话列表: 全部会话 (含当前空草稿 / 空的新会话). 不做任何自动删除.
+        // roots=true 已在 aiListSessions 内排除 subagent; 按当前 cwd 过滤.
+        try {
+          return await aiListSessions();
+        } catch { return []; }
+      },
+      deleteSession: async (sid) => {
+        try {
+          await aiDeleteSession(sid);
+          if (sessionIDRef.current === sid) {
+            // 删的是当前会话 → 新建一个空白会话顶替
+            await onNewSession();
+          }
+        } catch { /* 忽略 */ }
+      },
       addContext,
     });
     return () => registerChatPanelApi(null);
-  }, [sendPrompt, onSwitchSession, addContext]);
+  }, [sendPrompt, onSwitchSession, addContext, onNewSession]);
 
   const onSwitchAgent = useCallback(async (agent: string) => {
     setCurrentAgent(agent);
