@@ -30,7 +30,13 @@ function getNetworkIPs() {
 
 export const WebCommand = effectCmd({
   command: "web",
-  builder: (yargs) => withNetworkOptions(yargs),
+  builder: (yargs) =>
+    withNetworkOptions(yargs).option("dev", {
+      type: "boolean" as const,
+      describe:
+        "dev mode: do not auto-open the browser; caller (e.g. dev.js) opens it with a custom URL (e.g. ?directory=)",
+      default: false,
+    }),
   describe: "start opencode server and open web interface",
   // Server loads instances per-request via x-opencode-directory header — no
   // ambient project InstanceContext needed at startup.
@@ -43,6 +49,7 @@ export const WebCommand = effectCmd({
     const opts = yield* resolveNetworkOptions(args)
     const webUIBad = validateWebUIOption(opts.webUI)
     if (webUIBad) return yield* fail(webUIBad)
+    const devMode = Boolean((args as { dev?: boolean }).dev)
     const server = yield* Effect.promise(() => Server.listen(opts))
     UI.empty()
     UI.println(UI.logo("  "))
@@ -75,6 +82,8 @@ export const WebCommand = effectCmd({
     // only after the initial /agent request has completed. Spawn inside
     // /bin/sh with `&` so the shell exits immediately and open(1) runs in
     // a brand-new process tree.
+    // numas: --dev 时跳过自动开浏览器, 让 dev.js 自己用拼好 ?directory= 的 URL 开
+    // (避免双 tab). warmup fetch 仍跑 (pre-warm InstanceStore 不依赖打开浏览器).
     const baseUrl = `http://127.0.0.1:${server.port}`
     const warmupHandle = setTimeout(() => {
       // fire-and-forget; failures are fine — subsequent real requests will retry
@@ -88,20 +97,22 @@ export const WebCommand = effectCmd({
     }, 50)
     warmupHandle.unref()
 
-    const handle = setTimeout(() => {
-      try {
-        const child = spawn("/bin/sh", ["-c", `open "${displayUrl.replace(/"/g, '\\"')}" &`], {
-          detached: true,
-          stdio: "ignore",
-          windowsHide: true,
-        })
-        child.on("error", () => {})
-        child.unref()
-      } catch {
-        // ignore — opening the browser is best-effort
-      }
-    }, 1500)
-    handle.unref()
+    if (!devMode) {
+      const handle = setTimeout(() => {
+        try {
+          const child = spawn("/bin/sh", ["-c", `open "${displayUrl.replace(/"/g, '\\"')}" &`], {
+            detached: true,
+            stdio: "ignore",
+            windowsHide: true,
+          })
+          child.on("error", () => {})
+          child.unref()
+        } catch {
+          // ignore — opening the browser is best-effort
+        }
+      }, 1500)
+      handle.unref()
+    }
 
     yield* Effect.never
   }),

@@ -526,6 +526,25 @@ AI **仍需 `question`**:
   1. **fork 的 title 任务 vs prompt 主循环 abort**: `Effect.forkIn(scope)` 出的标题生成不随 prompt abort 取消, 所以"点停止"一般不丢标题; 丢标题要查 title fork **内部是否失败** (getModel 报错) — 别只盯着 abort.
   2. **空 assistant 消息是 abort 指纹, 报错不留 assistant 行**: `parts=[] && finish=None && error=null` = 中断在产出前; `session.error` SSE 事件 + 无 assistant 行 = 报错. 前端区分这两类才能给对状态 (中断→"已停止生成", 报错→红色横幅).
   3. **前端静默 abort 错误是对的** (不弹红框), 但静默不等于不展示 — 中断状态要在消息流里用占位表达.
+#### 32. yargs `--no-xxx` 自动否定机制把未声明 `--xxx` 的 flag 误识别 → `web` 命令直接打印 help 退出 (code 1)
+
+- **现象**: opencode `web` 命令加 `--no-open` boolean flag (期望默认 false, 传了跳过自动开浏览器) — 命令启动后**直接打印 help 退出** code=1, dev.js 的 spawn 进程异常退出, 后续 server 不起来, 30s 后 dev.js timeout 才报"server 没起来".
+- **根因 (yargs auto-negation)**: yargs 默认把 `--no-xxx` 当成**未声明的** `--xxx` boolean 的**否定形式**. 当子命令**没有声明 `open`** 这个 option 时, yargs 在 parse 阶段把 `--no-open` 解析为 `--open=false`, 但因为 `--open` 本身未声明, yargs 进入"strict mode"路径打印 help 并 `process.exit(1)`. 同样坑位: `--no-foo` / `--no-bar` 都会触发, 跟具体子命令无关. **改用正向 flag 名 (如 `--dev` / `--skip-open` / `--manual-open`) 绕过**, 不依赖 `--no-` 前缀.
+- **复现**:
+  ```bash
+  opencode web --no-open --port 24098
+  # → 打印 Options 帮助, code=1 退出 (期望: server 起来, --no-open 抑制浏览器自动打开)
+  ```
+- **解决方案 (numas)**: opencode `web` 命令改用 `--dev` 命名 (含义: dev 模式, caller 自行开浏览器) + dev.js `--cwd <path>` 透传 workspace URL + server ready 后自己 `spawn open "http://localhost:PORT/?directory=<encoded>"`. `--cwd` 不传时 `dev.js` 不加 `--dev`, opencode 走原"自动开浏览器"路径 (向后兼容).
+- **关键代码位置**:
+  - `opencode/packages/opencode/src/cli/cmd/web.ts` — `.option("dev", { type: "boolean", default: false })` + `if (!devMode) { setTimeout(spawn /bin/sh -c "open $url &", 1500) }`.
+  - `dev.js` — `parseFlag('--cwd', process.env.NUMAS_CWD)` + CWD 校验 + `webArgs.push('--dev')` + 启动后 `http.get /health` 轮询 ready 后 `spawn open $targetUrl` (URL 已 `encodeURI`).
+- **排查方法**:
+  1. **症状锁链**: `web` 命令带新 boolean flag 启动就退出 → 第一反应是 yargs 解析问题, 不是 binary bug. 看启动 log 有没有 "Options: -h, --help ..." 帮助文本 + "exit code 1" → 确诊 yargs 跳 help.
+  2. **二等分法**: 单独 `opencode web --help` 对比正常 help; 加新 flag 后看 help 输出里**这个 flag 有没有出现** — 出现但退出 = yargs 接受但别的逻辑退出; **不出现** = yargs 误判为未识别 flag, 是 auto-negation.
+  3. **测试方法**: yargs 自动生成 `opencode web --no-anything` 都会触发 (把 `--no-anything` 当作未声明 boolean 的否定). 简单排查: `opencode web --no-help --port 24098` 同样会跳 help → 锁定是 yargs auto-negation, 不是 `--no-open` 特有.
+  4. **避开方法**: 不用 `--no-` 前缀的 flag 名, 用正向语义 (true = 启用某个 dev 行为). 例: `--dev` (dev 模式) / `--skip-open` (跳过自动开) / `--manual-open` (caller 自己开). 历史 opencode 命令里 `--no-mdns` 是因为 `mdns` 真的在 options 里声明过 (network.ts:33-37), auto-negation 命中已知字段, 不跳 help.
+
 #### 27. chat webview 是 codeblitz 内联组件, 可用 `useInjectable` 拿框架服务 (如 `IMessageService`)
 
 - **现象**: 想在 chat webview 弹 codeblitz 原生 toast 通知 (`IMessageService.info`), 担心 webview 隔离无法访问 DI. 实际 `extensions/chat/module.ts` 用 `registerComponent` 把 `Chat` 组件注册到 `SlotLocation.right`, 是 **内联 React 组件 (跟其他 panel 一样在 codeblitz React tree 渲染)**, 完整继承框架 DI 容器, 可直接 `useInjectable`.
@@ -608,3 +627,52 @@ AI **仍需 `question`**:
   | 父目录 header + logical 子 cwd (原 200 路径) | 200 | 200 (不回归) |
   | 真越界 (`/etc`) | 400 | 400 (沙箱守住) |
 - **排查方法**: 1) `path.relative` debug: pty handler 加 `console.log` 打 `logicalInstance` / `logicalCwd` / `relative`, 跑 curl 看输出; 2) 跟 #24 fs watcher 模式一样, server 内部用 real, 对前端暴露走 logical (boundary check / spawn cwd / PWD env); 3) LogicalDirectoryRegistry 查不到时 (`real === logical` 的 workspace) 走 fallback, 跟历史行为一致; 4) 部署 patched image 必须重建 `numas:patched` 重新打, `kubectl cp` 改的 binary 不会跨 pod 重建带过去 (镜像 fs 只读), 走 `kubectl rollout restart deployment` + 改 image 拉新 tag.
+
+#### 31. V1 file handlers (/file, /find, /file/content) + FileSystemSearch 仍用 real-relative, 在 symlink workspace 下与 explorer 文件树对不齐
+
+- **现象**: #21/#24/#25/#30 修了 V2 `/api/fs/*`、watcher、pty, **但 V1 实验性 `/file` `/file/content` `/find` `/find/file` 端点 (`packages/opencode/src/server/routes/instance/httpapi/handlers/file.ts`) 和 `FileSystemSearch` (ripgrepLayer) 仍用 real-relative**。症状: symlink workspace 下 list 返 `absolute` 用 real base 拼 (跟 explorer logical 对不上, gitignore `ignored` 字段走 hybrid 路径算 relative 越界), content 用 `InstanceState.context.directory` (real) + user logical path resolve 出 hybrid 路径 existsSafe 失败返空内容, findText/ripgrep output 是 cwd-relative real 跟 logical 对不上. grep/glob/find 在 caller 层用 `path.relative(location.directory, ...)` (location.directory 是 real) 算 real-relative entry.path, fuzzysort state 全是 real-relative, symlink workspace 下 fuzzy 结果无法跟 explorer tree 匹配.
+- **根因 (4 处)**:
+  1. `file.ts:list` line 67 用 `(yield* InstanceState.context).directory` (real) 算 `path.resolve(real, item.path)` 拼 hybrid absolute, `path.relative(real, hybrid)` 越界;
+  2. `file.ts:content` line 97-100 boundary check 走 real, `fs.existsSafe(real/hybrid)` 在 symlink workspace 下 hybrid 路径不存在;
+  3. `file.ts:findText` line 28-30 `ripgrep.grep({ cwd: realInstanceDir, ... })` 输出是 cwd-relative (real-relative), 直接返 `match.entry.path` 没用 logical 维度;
+  4. `core/src/filesystem/search.ts` (ripgrepLayer) line 73-100 `path.relative(location.directory, ...)` 用 real 算 relative, state.files 灌入也是 real-relative.
+- **修法**:
+  - 抽共享工具到 `core/src/fs-util.ts`: `FSUtil.realToLogical(file, realRoot, logicalRoot?)` — 共享给 watcher (callback real→logical 事件) 与 FileSystemSearch (ripgrep output 转换) 与 V1 file handler. 边界检测用 `path.relative + startsWith("..")` 兜底字符串前缀误匹配. `file === realRoot` 时直接返 logicalRoot. watcher.ts 删除私有 `logicalToRealPath` (原实现名反了, 注释说明已挪到 FSUtil 共享).
+  - V1 file.ts: 用 `LogicalDirectoryRegistry.get(realDir) ?? realDir` 反查 logical (`logicalInstanceDir(realDir)` helper), boundary check 跟 `path.resolve` 都走 logical; `list` 用 logical base 算 `absolute` 字段, gitignore/ignore 也用 logical 读; `findText` 把 ripgrep 输出 `path.resolve(realCwd, rel)` → `realToLogical(abs, realCwd, logicalInstance)` → `path.relative(logicalInstance, abs)`.
+  - FileSystemSearch (ripgrepLayer): 内部 `cwd` 仍用 real (跟 watcher / pty 一致, inotify 跟 symlink 容易 miss), 但 caller 层把 output 转 logical: `toLogicalRelative(cwdRel) = path.relative(logicalRoot, FSUtil.realToLogical(path.resolve(cwd, rel), realRoot, logicalRoot))`. 转换对子目录查询 (`input.path` 是非 `.`) 也正确, 因为 `path.resolve(cwd, rel)` 拼回 real abs.
+  - V2 server handlers (`server/handlers/fs.ts:fs.watch`) line 138-143 已有 `filterRootLogical` 转换, 配套不动.
+- **改动文件**:
+  - `packages/core/src/fs-util.ts` — 新增 `FSUtil.realToLogical(file, realRoot, logicalRoot?)`, 共享工具.
+  - `packages/core/src/filesystem/watcher.ts` — 删私有 `logicalToRealPath`, 改调 `FSUtil.realToLogical`. 注释说明已挪到 FSUtil 共享.
+  - `packages/core/src/filesystem/search.ts` — ripgrepLayer `onEntry` / `glob` / `grep` 三处加 `toLogicalRelative` 转换; `find` 不变 (state 已转). 内部 `realRoot = location.directory`, `logicalRoot = location.logicalDirectory ?? realRoot`.
+  - `packages/opencode/src/server/routes/instance/httpapi/handlers/file.ts` — `logicalInstanceDir(realDir)` helper, `findText` / `list` / `content` 三处用 logical 维度. 注释引用 AGENTS.md #21/24/30.
+  - `packages/core/test/filesystem/search.test.ts` — 加 `describe("FSUtil.realToLogical")` 6 个纯函数 unit test (logical 缺省 / logical==real / 子树内 / 子树外含同名前缀 / root 自身 / nested child).
+  - `packages/opencode/test/server/httpapi-file.test.ts` — 加 `describe("logical path semantics")` 4 个 handler 集成测: list 绝对路径拼 logical、content boundary 越界拒绝、findText 输出 logical-relative、非 symlink fallback real. 不用真 symlink (见排查方法 4).
+- **排查方法**:
+  1. **「in-process 测真 symlink 莫名 ENOENT」 的真相**: `test/server/httpapi-file.test.ts` 一开始用 init hook (`fs.rename(tmp, real_xxx) + fs.symlink(real_xxx, tmp)`) 造真 symlink workspace, in-process webHandler request 期间 `fs.lstat(logicalInstance)` 报 ENOENT 但 `realInstanceDir` 是 OK 的, 即 logical symlink 被某 cleanup 路径误删. 同进程同 fs 视角, **测试主体 (Bun.write 之后立即 lstat) 能 stat 到 symlink**, 但 webHandler in-process 不行 — 说明 opencode layer build / InstanceStore load / fileSystem 中间件链里**有 fs.rm(symlink) 之类副作用**. 当前 fixture 实现 `tmpdir()` line 104 `fs.realpath(dirpath)` 早于 init 拿 tmp.path, [Symbol.asyncDispose] 用 realpath 调 `fs.rm` 删, 不会影响 in-process (afterEach 之后才跑). **最可能**: `Layer.provideMerge(Observability.layer)` 链上某 NodeFileSystem 初始化副作用, 或 `InstanceStore.load` 内部对 `directory` 物理化时调用 `fs.realpath` 命中某种 macOS symlink resolution cache 异常. **结论**: handler 行为只依赖 `LogicalDirectoryRegistry` 反查 + 字符串拼接, 不需要真 symlink. 测试改用**手动注入 `LogicalDirectoryRegistry.set(real, logical)`** 模拟 symlink workspace 的 side-channel 状态, 避开真 symlink 生命周期陷阱.
+  2. **「fs.exists 在 macOS 上跟 symlink 但 in-process 报 ENOENT」 排查失败原因**: 单测 `bun -e ...` + `Effect.runPromise(pipe(NodeFileSystem.layer))` 跑同一个 path 返回 true, 但同 process 的 webHandler 返回 false. **唯一差异**是 webHandler 跑了 `Layer.provideMerge(Observability.layer)` 等一系列 layer. 怀疑是 `@effect/platform-node` 的 stat cache (effect FileSystem.stat 有内部 `nodeStat` effectify cache) 跟 symlink path 解析时命中 ENOENT 后缓存. 但查 `NodeFileSystem.js` line 33-44 (`access`) 和 line 310 (`stat`) 都是直接 effectify 无 cache, 排除. **剩下最大嫌疑**: opencode layer build 期间某处 `fs.rm(logical)` (待定位, 不在本次修复范围).
+  3. **`path.resolve(cwd, cwdRel)` 在子目录查询时**必须先 resolve 回 real abs, 再 `realToLogical` 整段映射到 logical abs, **不能**直接 `realToLogical(cwdRel, location.directory, ...)` — `cwdRel` 是 cwd-relative, `location.directory` 不一定是 cwd, `path.relative` 越界触发 fallback 原样返回. 必须 `path.resolve(cwd, cwdRel)` 拼 abs 才能让 realToLogical 安全替换 prefix.
+  4. **`FileSystem.FileSystem` (effect) 的 `exists` 在 effect v4 beta 实现**: 看 `node_modules/.bun/@effect+platform-node-shared/.../NodeFileSystem.js` line 32-44, `exists` 内部是 `NFS.access(path, F_OK)`, 不带 `O_NOFOLLOW`, 跟 symlink 跟随到 target. macOS 上对 symlink logical 路径应该 true. 但 in-process 测试 in-process 跑同一 path 报 false — 见排查方法 2.
+
+#### 33. symlink workspace 下 sumi `CustomFileSystemProvider.rename` 报 "rename across different cwd not supported" — `anchors.directory` 是 real, 跟 logical 形态 mismatch
+
+- **现象**: symlink workspace (e.g. `/Users/foo/data/实验1` → `/Users/foo/real/实验1`), 浏览器 explorer 拖拽 `111/222` → 工作根, codeblitz explorer 弹错 `FileSystemError.Unknown('rename across different cwd not supported')`. console 显示 `from.relPath=1.txt from.headerPath=/Users/foo/data/实验1 to.relPath=1.txt to.headerPath=/Users/foo/data/实验1/222` (注意 from/to 都被压成 `1.txt`, headerPath 形态不一致).
+- **根因 (前端 sumi 错位)**:
+  1. opencode server 端 `InstanceStore.load` 走 `FSUtil.resolve` realpath 化 workspace (跟 §2.3 一致), 所以 `anchors.directory` = `/Users/foo/real/实验1` (**real**).
+  2. browser explorer 拖拽时 `oldUri.fsPath = /Users/foo/data/实验1/222/1.txt` (**logical**, 浏览器不知道 symlink, 也不该知道).
+  3. sumi `provider.ts:resolveFsPath` 算 relPath 时: `a = normalizeCwdPath(logicalAbs) = /Users/foo/data/实验1/222/1.txt`, `c = anchors.directory = /Users/foo/real/实验1`. `a.startsWith(c + '/')` → **false** (real ≠ logical 字符串 mismatch), 落进 line 95-100 "file outside workspace" 兜底, 返 `{ relPath: '1.txt', headerPath: '/Users/foo/data/实验1/222' }`.
+  4. `from.headerPath = /Users/foo/data/实验1` (line 91 兜底), `to.headerPath = /Users/foo/data/实验1/222` (line 97), **两者不同** → 抛 "rename across different cwd not supported".
+- **错误架构**: **server 端 fs/* 全部返 logical 路径** (AGENTS.md #21/24/30/31 修过), 但 sumi 前端用 `anchors.directory` (real) 算 relPath — 这是越界的. 前端不该消化 symlink → real 转换, **该用 `effectiveCwd()` (URL `?directory=` 同源 logical) 作 ws 边界**.
+- **解决方案 (sumi 修法)**:
+  - `provider.ts:rename` 重写: 不再用 `resolveFsPath` 算 relPath, 走 `toHostPath` 拿 logical abs, 再 `absToRel(logicalAbs, effectiveCwd())` 算 relPath. header 也用 `effectiveCwd()` (logical) 而非 `anchors.directory` (real).
+  - 删 "rename across different cwd not supported" 抛错 — 改成 `absToRel` 返 null 时抛 "rename 路径不在 workspace 内" (新错误带 abs+ws, 便于排查).
+  - 加 `_resolveFsAbs(uri)` 私有 helper: `uri.fsPath` → `toHostPath` (已经在 home 锚点内) → logical absolute string.
+  - `absToRel` import from `infra/path` (line 49 `import { absToRel, ... } from '../../infra/path'`).
+- **改动文件**:
+  - `sumi/src/service/filesystem/provider.ts` — `rename` 重写 + `_resolveFsAbs` 新私有方法 + `absToRel` import.
+- **排查方法**:
+  1. **「from/to headerPath 不一致但 file 形态又对」**: console.log `[fs-provider] rename {from, to}` 看 headerPath 是不是 workspace 子目录 (e.g. `/.../222`), 那就是 resolveFsPath line 95-100 误判. 修法: 别用 resolveFsPath, 走 `toHostPath + absToRel(..., effectiveCwd())`.
+  2. **「anchors.directory vs effectiveCwd 差什么」**: `anchors.directory` = opencode /path 响应的 real (InstanceStore 物理化). `effectiveCwd()` = URL `?directory=` 同源 logical. symlink workspace 下两者 **不同**, 任何 `absToRel(abs, anchors.directory)` 在 logical workspace 内都会越界. **前端拿 ws 永远走 `effectiveCwd()`** (URL 是 logical source-of-truth).
+  3. **「from/to 都变 basename 了」**: resolveFsPath line 95-100 把 a 跟 c 当字符串比较, mismatch 时丢 workspace 前缀只返 basename, 同时 headerPath 装的是 parent dir. 这是 caller 把 headerPath 当 "workspace 边界" 用的根本 bug — 改 caller 让它用 logical 形态算 relPath, 别用 headerPath 维度.
+  4. **「playwright drag 在 codeblitz tree 不可靠」**: playwright `dragTo` 用 `page.mouse.down/move/up`, 很多 React DnD / codeblitz tree 走 react-dnd 监听 HTML5 `dragstart/dragover/drop`, 普通 mouse drag 不触发. 改用 `page.evaluate` 在 `dragstart/drop` 节点上 `dispatchEvent(new DragEvent(...))` 模拟 (DataTransfer 传空 dt, codeblitz React handler 自己读 `e.dataTransfer.getData` 或 DOM 反查 uri). 终点用 `elementFromPoint(x, y)` 找, 命中 `kt-modal-wrap` 等 overlay 是正常, codeblitz 会按坐标在 tree 里找最近 treeitem.
+  5. **「opencode 端 `/api/fs/rename` 接受 logical rel 路径」**: server `filesystem.ts:rename` 走 `resolve(input.from)` (line 246, #21 修复后走 logical `path.resolve` 不 realpath), `from.absolute = path.resolve(logical_ws, '111/222') = /Users/foo/data/实验1/111/222` logical abs, chdir 穿透 symlink, `fs.rename` Node API 自己 realpath 物理化 — 成功. **不需要 server 端任何改动**.

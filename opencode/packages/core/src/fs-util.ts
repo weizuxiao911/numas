@@ -271,4 +271,24 @@ export namespace FSUtil {
     const result = relative(parent, child)
     return result === "" || (!isAbsolute(result) && result !== ".." && !result.startsWith(`..${sep}`))
   }
+
+  // numas: 把 real 路径还原成 logical 路径. 当且仅当:
+  //   1) realRoot 与 logicalRoot 不相等 (workspace 是 symlink)
+  //   2) file 在 realRoot 子树内 (避免误改 workspace 外的同名前缀)
+  // 才替换前缀. 否则原样返回 (无 symlink / 路径在 workspace 外).
+  // 用 path.relative + startsWith("..") 检测, 避免字符串前缀误匹配
+  // (e.g. /app/222 vs /app/222x). 共享给 watcher.ts (callback real→logical 事件)
+  // 与 FileSystemSearch (ripgrep 输出 real-relative → logical-relative) 与 V1 file
+  // handler (file.ts:findText/list/content 边界校验和路径展示).
+  export function realToLogical(file: string, realRoot: string, logicalRoot: string | undefined): string {
+    if (!logicalRoot || logicalRoot === realRoot) return file
+    // numas: file === realRoot 时 path.relative 得 "" (空字符串), 应当映射到 logicalRoot
+    // 自身; file 在 realRoot 外 (path.relative 得 "..xxx" 或 absolute) 保持原值, 不替上游
+    // 改前缀, 让上层 (e.g. LocationServiceMap / VCS) 自行过滤. 字符串前缀误匹配 (e.g.
+    // /app/222 vs /app/222x) 用 path.relative + startsWith("..") 兜底, 不依赖 startsWith.
+    if (file === realRoot) return logicalRoot
+    const rel = relative(realRoot, file)
+    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return file
+    return join(logicalRoot, rel)
+  }
 }

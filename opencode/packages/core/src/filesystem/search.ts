@@ -32,15 +32,37 @@ export const ripgrepLayer = Layer.effect(
       directories: [] as string[],
     }
     const directories = new Set<string>()
+    // numas: ripgrep cwd 必须用 real path (location.directory 已是 FSUtil.resolve 物理化)
+    // — 容器内 /home/community/222 -> /app/222 走 symlink 时, inotify 跟着 symlink 容易 miss
+    // (跟 watcher 同模式, AGENTS.md #21/24). 但 ripgrep 输出的 entry.path 是 real-relative
+    // (基于 cwd), 与前端 logical 文件树对不上. 在 caller 层把 real-relative 转 logical-relative:
+    //   1) state.files / state.directories (供 find 用)
+    //   2) glob/grep 返回的 entry.path / match.entry.path
+    // 共享 FSUtil.realToLogical 工具, 跟 watcher 同一个安全检测 (path.relative + startsWith("..")).
+    // 转换链路: ripgrep output (cwd-relative) → path.resolve(cwd, rel) (real abs) →
+    //   realToLogical (logical abs) → path.relative(logicalDirectory, abs) (logical-relative).
+    // 子目录查询时 cwd 是 location.directory 的子目录, 多一步 join.
+    // find 的 cwd 固定是 location.directory, 它的 toLogicalRelative 走 locationDirectoryBase 这个
+    // 专门函数, 不跟 glob/grep 共享可变 cwd 变量, 避免闭包陷阱.
+    const realRoot = location.directory
+    const logicalRoot = location.logicalDirectory ?? realRoot
+    const toLogicalRelativeFrom = (cwdAbs: string, cwdRel: string) => {
+      const realAbs = path.resolve(cwdAbs, cwdRel)
+      const logicalAbs = FSUtil.realToLogical(realAbs, realRoot, logicalRoot)
+      return path.relative(logicalRoot, logicalAbs)
+    }
+    const toLocationLogicalRelative = (cwdRel: string) =>
+      toLogicalRelativeFrom(realRoot, cwdRel)
     yield* ripgrep
       .find({
-        cwd: location.directory,
+        cwd: realRoot,
         pattern: "*",
         limit: location.vcs ? Number.MAX_SAFE_INTEGER : 100_000,
         onEntry: (entry) =>
           Effect.sync(() => {
-            state.files.push(entry.path)
-            const parts = entry.path.split("/")
+            const logical = toLocationLogicalRelative(entry.path)
+            state.files.push(logical)
+            const parts = logical.split("/")
             parts.slice(0, -1).forEach((_, index) => directories.add(parts.slice(0, index + 1).join("/") + path.sep))
             state.directories = Array.from(directories)
           }),
@@ -63,7 +85,10 @@ export const ripgrepLayer = Layer.effect(
                 result.map((entry) =>
                   FileSystem.Entry.make({
                     ...entry,
-                    path: RelativePath.make(path.relative(location.directory, path.resolve(cwd, entry.path))),
+                    // numas: ripgrep cwd 是 real, entry.path 是 real-relative. 转 logical-relative
+                    // 才能跟 /api/fs/list 输出的 logical 文件树对齐 (filesystem.ts:resolve 走 logical,
+                    // AGENTS.md #21). 子目录下的查询结果 (info.type === "Directory") 也要走相同转换.
+                    path: RelativePath.make(toLogicalRelativeFrom(cwd, entry.path)),
                   }),
                 ),
               ),
@@ -90,7 +115,9 @@ export const ripgrepLayer = Layer.effect(
                     ...match,
                     entry: FileSystem.Entry.make({
                       ...match.entry,
-                      path: RelativePath.make(path.relative(location.directory, path.resolve(cwd, match.entry.path))),
+                      // numas: 同 glob, match.entry.path 是 cwd-relative; 先 resolve 回 real abs,
+                      // 再走 realToLogical 整段映射到 logical abs, 最后 relative 到 logicalDirectory.
+                      path: RelativePath.make(toLogicalRelativeFrom(cwd, match.entry.path)),
                     }),
                   }),
                 ),
@@ -100,6 +127,9 @@ export const ripgrepLayer = Layer.effect(
         }),
       find: (input) =>
         Effect.gen(function* () {
+          // numas: state.files / state.directories 已经在 onEntry 阶段做了 real→logical 转换
+          // (上面 onEntry 块), 这里直接用就行. fuzzysort 对 logical path 字符串排序, 与
+          // explorer 文件树匹配.
           const items =
             input.type === "file"
               ? state.files

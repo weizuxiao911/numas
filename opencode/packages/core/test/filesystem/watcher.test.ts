@@ -183,12 +183,22 @@ describeWatcher("Watcher", () => {
     ),
   )
 
-  it.live("skips non-git roots", () =>
+  // numas: numas 本地 IDE 用户工作目录常非 git 仓库, 改文件需要实时同步到 IDE, 必须
+  // 总启 fs watcher (不依赖 experimental flag). 旧测试名 "skips non-git roots" 的预期
+  // (非 git workspace 不订阅) 已被 numas 行为反转, 改成 "publishes events in non-git
+  // roots" 验证新行为.
+  it.live("publishes events in non-git roots", () =>
     withTmp((directory) =>
       Effect.gen(function* () {
         const fs = yield* FSUtil.Service
         const file = path.join(directory, "plain.txt")
-        yield* noUpdate((event) => event.file === file, fs.writeFileString(file, "plain"))
+        yield* ready(directory)
+        expect(
+          yield* nextUpdate((event) => event.file === file, fs.writeFileString(file, "plain")),
+        ).toEqual({
+          file,
+          event: "add",
+        })
       }),
     ),
   )

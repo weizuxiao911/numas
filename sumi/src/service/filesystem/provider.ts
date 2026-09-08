@@ -44,7 +44,7 @@ import { EXT_LIST_IMAGE, EXT_LIST_VIDEO } from '@opensumi/ide-file-service/lib/c
 
 import { appBaseUrl, cwdHeader, effectiveCwd, secureUrl, subscribeWorkspace } from '../../infra/url';
 import { apiGet, apiPost, apiReadBytes, apiReadHeadBytes, bytesToBase64 } from '../../infra/http';
-import { isWindowsDrive, normalizeCwdPath, toHostPath } from '../../infra/path';
+import { absToRel, isWindowsDrive, normalizeCwdPath, toHostPath } from '../../infra/path';
 import { whenHostAnchors } from '../../infra/host';
 
 // ---- helpers ----
@@ -388,19 +388,28 @@ export class CustomFileSystemProvider implements FileSystemProvider {
     newUri: import('@opensumi/ide-core-common').Uri,
     _options: { overwrite: boolean },
   ): Promise<void> {
-    const from = await resolveFsPath(oldUri);
-    const to = await resolveFsPath(newUri);
-    if (!from || !to) throw FileSystemError.FileNotFound(oldUri.toString());
-    // 同 header 才能跨 header 移动 (不同目录)
-    if (from.headerPath !== to.headerPath) {
-      throw FileSystemError.Unknown('rename across different cwd not supported');
+    // numas: 不能用 anchors.directory 算 relPath — workspace 是 symlink 时, anchors.directory
+    // 是 realpath 化的物理路径 (/Users/.../2026春季学期实验/实验1), 而 uri.fsPath 是 logical
+    // 路径 (/Users/.../data/实验1/222), absToRel(real, logical) → null.
+    // 改用 effectiveCwd() (URL ?directory= 同源 logical workspace) 作 ws 参数.
+    const ws = normalizeCwdPath(effectiveCwd() || '');
+    if (!ws) throw FileSystemError.Unknown('workspace 未就绪');
+    const fromAbs = await this._resolveFsAbs(oldUri);
+    const toAbs = await this._resolveFsAbs(newUri);
+    if (!fromAbs || !toAbs) throw FileSystemError.FileNotFound(oldUri.toString());
+    const fromRel = absToRel(fromAbs, ws);
+    const toRel = absToRel(toAbs, ws);
+    if (!fromRel || !toRel) {
+      throw new Error(
+        `rename 路径不在 workspace 内: from=${fromAbs} to=${toAbs} ws=${ws}`,
+      );
     }
     try {
-      await apiPost('/api/fs/rename', { from: from.relPath, to: to.relPath }, from.headerPath);
+      await apiPost('/api/fs/rename', { from: fromRel, to: toRel }, ws);
       // 防回环: rename 在 server 端表现为 from=unlink + to=add 两个事件, 都抑制
       const now = Date.now();
-      this.echoPaths.set(from.relPath, { at: now });
-      this.echoPaths.set(to.relPath, { at: now });
+      this.echoPaths.set(fromRel, { at: now });
+      this.echoPaths.set(toRel, { at: now });
     } catch (e: any) {
       const msg = (e?.message || '').toString();
       if (/exists|EEXIST/i.test(msg)) {
@@ -408,6 +417,16 @@ export class CustomFileSystemProvider implements FileSystemProvider {
       }
       throw FileSystemError.Unknown(msg || 'rename failed');
     }
+  }
+
+  /** OpenSumi URI → 真实宿主绝对路径 (跨平台统一). null = 虚拟路径无法锚定. */
+  private async _resolveFsAbs(uri: import('@opensumi/ide-core-common').Uri): Promise<string | null> {
+    let fsPath: string;
+    try { fsPath = uri.fsPath; } catch { return null; }
+    if (!fsPath) return null;
+    const anchors = await whenHostAnchors();
+    const host = toHostPath(fsPath, anchors);
+    return host || null;
   }
 
   /** 复制文件/目录树 (explorer 粘贴 COPY 走 fileServiceClient.copy → 此方法).

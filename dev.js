@@ -8,7 +8,10 @@
  *   2. opencode build (hash 增量 + NUMAS_WEB_DIST=sumi/dist)
  *   3. 启 opencode web @ <port> --cors * --registry <url> --extensions-dir registry/vsix
  *
- * CLI: --port / --registry / --fast (跳过 build/cp) / --force-build
+ * CLI: --port / --registry / --fast (跳过 build/cp) / --force-build / --cwd <path>
+ *      --cwd 透传 web UI ?directory= 默认 workspace (encodeURI), 用于启动后浏览器自动
+ *      跳到指定目录 (替代用户手改 URL). 内部用 --no-open 关掉 opencode 自动开浏览器,
+ *      避免双 tab (一个无 directory, 一个带 ?directory=).
  * 进程树: dev.js → opencode web (detached pgid=-pid), SIGINT 杀整组
  */
 
@@ -55,6 +58,23 @@ const REGISTRY = parseFlag('--registry', process.env.NUMAS_REGISTRY || '/extensi
 const EXTENSIONS_DIR = path.join(ROOT, 'registry', 'vsix');
 const FORCE_BUILD = process.argv.includes('--force-build');
 const FAST = process.argv.includes('--fast') || process.env.NUMAS_FAST === '1' || process.env.NUMAS_FAST === 'true';
+// numas: --cwd <path> 透传给 web UI 的 ?directory= URL query, 让浏览器启动后自动跳到
+// 指定 workspace. 跟 opencode web 命令的 --directory 是两条线: opencode web 不接
+// directory (workspace 走 per-request x-opencode-directory header), 这里只控制浏览器
+// 默认 URL. 内部用 --dev 关闭 opencode 自动开浏览器, 避免双 tab.
+const CWD = parseFlag('--cwd', process.env.NUMAS_CWD);
+if (CWD) {
+  try {
+    const resolved = fs.realpathSync(CWD);
+    if (!fs.statSync(resolved).isDirectory()) {
+      console.error(`[numas] --cwd 必须是目录: ${CWD}`);
+      process.exit(1);
+    }
+  } catch (e) {
+    console.error(`[numas] --cwd 路径不存在或不可读: ${CWD} (${e.message})`);
+    process.exit(1);
+  }
+}
 
 function walkSrc(root) {
   const out = [];
@@ -336,11 +356,14 @@ function killPort(port) {
 }
 
 
-console.log(`[numas] step 3/4: 启 opencode web (hostname=0.0.0.0, port=${PORT}, cors=*, registry=${REGISTRY})`);
+console.log(`[numas] step 3/4: 启 opencode web (hostname=0.0.0.0, port=${PORT}, cors=*, registry=${REGISTRY}${CWD ? `, dev=1, cwd=${CWD}` : ''})`);
 killPort(PORT);
 
 console.log(`[numas]   bin: ${finalBin}`);
-const opencodeProc = spawn(finalBin, [
+// numas: --cwd 给定时, 加 --dev 关闭 opencode 自动开浏览器, dev.js 自己在
+// ?directory= URL 上 spawn 'open', 避免双 tab (一个无 directory, 一个带 directory).
+// --dev 是 numas 扩展 flag, 普通 opencode 不识别;  不传 --cwd 时不加, 行为不变.
+const webArgs = [
   'web',
   '--hostname', '0.0.0.0',
   '--port', String(PORT),
@@ -348,7 +371,10 @@ const opencodeProc = spawn(finalBin, [
   '--registry', REGISTRY,
   '--extensions-dir', EXTENSIONS_DIR,
   '--web-ui', sumiDist,
-], {
+];
+if (CWD) webArgs.push('--dev');
+
+const opencodeProc = spawn(finalBin, webArgs, {
   stdio: 'inherit',
   detached: true,
   shell: false,
@@ -376,3 +402,43 @@ process.on('exit',    () => {
 
 // 自动开浏览器由 opencode web 命令内置 (1500ms 后 spawn /bin/sh -c "open $url &"),
 // dev.js 不重复, 避免多次 spawn opener 导致多个 tab.
+
+// numas: --cwd 模式下关闭了 opencode 自动开浏览器, dev.js 自己用拼好 ?directory=
+// 的 URL 打开. 等 /health ready 后 spawn 'open', 避免 race (sumi 没起完就开 404).
+// 短轮询 200ms, 超时 30s 自动放弃并提示用户手动访问.
+if (CWD) {
+  const targetUrl = `http://localhost:${PORT}/?directory=${encodeURI(CWD)}`;
+  console.log(`[numas] --cwd=${CWD}, 等待 server ready → 自动打开 ${targetUrl}`);
+  const t0 = Date.now();
+  const TIMEOUT = 30000;
+  const POLL_MS = 200;
+  const probe = () => {
+    if (Date.now() - t0 > TIMEOUT) {
+      console.error(`[numas] server 没起来 (${TIMEOUT}ms 超时), 手动访问: ${targetUrl}`);
+      return;
+    }
+    const http = require('http');
+    const req = http.get(`http://127.0.0.1:${PORT}/health`, (res) => {
+      res.resume();
+      if (res.statusCode === 200) {
+        try {
+          const child = spawn('/bin/sh', ['-c', `open "${targetUrl.replace(/"/g, '\\"')}" &`], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true,
+          });
+          child.on('error', () => {});
+          child.unref();
+          console.log(`[numas] 已 spawn 'open ${targetUrl}' (${((Date.now() - t0) / 1000).toFixed(1)}s 后)`);
+        } catch (e) {
+          console.warn(`[numas] 打开浏览器失败 (${e.message}), 手动访问: ${targetUrl}`);
+        }
+      } else {
+        setTimeout(probe, POLL_MS);
+      }
+    });
+    req.on('error', () => setTimeout(probe, POLL_MS));
+    req.setTimeout(POLL_MS, () => { req.destroy(); });
+  };
+  probe();
+}
