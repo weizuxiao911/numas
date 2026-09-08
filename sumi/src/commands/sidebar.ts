@@ -1,15 +1,16 @@
 /**
- * Sidebar 对外 API — extensions/sidebar/commands/sidebarApi
+ * Sidebar 对外 API — commands/sidebar.ts
  *
- * Sidebar 组件 (装 SOLO_SLOTS.Sidebar 槽) 激活后, 把面板自身交互能力注册到此处,
- * 供 chatbot 等其他拓展消费 (折叠状态同步 / 展开按钮调 toggle).
+ * 跨拓展共享的 sidebar 状态契约 (位于 commands 契约层,
+ * 见 docs/AI 工作台总体设计.md §3.1):
+ *   extensions → commands → service → codeblitz/opencode
  *
- * 模式跟 chat/commands/chatApi.ts 完全一致: 模块级单例 + 函数引用,
- * 不挂 window 全局, 不直接 import Sidebar.tsx, 仅单向暴露 SidebarApi.
+ * Sidebar 拓展 (业务承载) mount 时通过 registerSidebarApi 把自身交互能力
+ * 暴露到 commands/sidebar (api owner), 卸载时清空. 消费方 (ActionBar / 未来的拓展)
+ * 调 getSidebarApi() 拿快照 + 调方法, 不直连 Sidebar.tsx, 不破 §2.2 铁律.
  *
- * 用法:
- *   - Sidebar 组件 mount 时 registerSidebarApi({ collapsed, setCollapsed, toggle, expand, collapse })
- *   - ChatbotMain 调 getSidebarApi() 读 collapsed + 调 toggle() / expand() / collapse()
+ * 不挂 window 全局, 模块级单例 register/get.
+ * 历史曾放 extensions/sidebar/commands/sidebarApi, 后按文档精神统一迁到 commands/ 全局契约层.
  */
 
 export interface SidebarApi {

@@ -1,8 +1,12 @@
 /**
  * Chatbot 拓展 — extensions/chatbot/
  *
- * 装 SOLO 模式 Main 槽 (自定义 slot 'main', 见 config/slots.ts).
- * 对话主区: 消息流 + 输入区 (顶栏已拆到 extensions/action).
+ * 业务承载: SOLO 模式对话主区 (ChatbotView: 消息流 + 输入区).
+ *
+ * slot 装填 (vscode 模型):
+ *   - slot 是全局的, 给拓展插入的 (定义在 config/slots.ts)
+ *   - 拓展不引 config/, 直接以字符串声明要装哪个 slot
+ *   - 字符串字面量跟 SOLO_SLOTS 同值, 是协议约定, 不是模块引用
  */
 import { Injectable } from '@opensumi/di';
 import { Domain } from '@opensumi/ide-core-common';
@@ -13,9 +17,10 @@ import {
 } from '@opensumi/ide-core-browser/lib/layout';
 
 import { ChatbotMain } from './ChatbotMain';
-import { SOLO_SLOTS } from '../../config/slots';
 
 export const CHATBOT_PANEL_ID = 'chatbot';
+/** 我要装到 'main' slot (跟 config/slots.ts SOLO_SLOTS.Main 同值) */
+const TARGET_SLOT = 'main';
 
 @Injectable()
 @Domain(ComponentContribution)
@@ -32,7 +37,7 @@ export class ChatbotContribution implements ComponentContribution {
         iconClass: 'codicon codicon-comment-discussion',
         title: '对话',
       },
-      SOLO_SLOTS.Main,
+      TARGET_SLOT,
     );
   }
 }

@@ -17,7 +17,7 @@
 import React, { useEffect, useState } from 'react';
 
 import { getAppMode, setAppMode, type AppMode } from '../../App';
-import { getSidebarApi } from './commands';
+import { getSidebarApi } from '../../commands/sidebar';
 import { styles } from './styles';
 
 const ModeSwitch: React.FC = () => {

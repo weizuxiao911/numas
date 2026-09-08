@@ -1,8 +1,12 @@
 /**
  * Action 拓展 — extensions/action/
  *
- * 装 SOLO 模式 Action 槽 (自定义 slot 'action', 见 config/slots.ts).
- * 顶部工具栏: 模式切换 / sidebar 展开 / 项目选择.
+ * 业务承载: SOLO 模式顶部工具栏 (ModeSwitch / sidebar expand / ProjectPicker).
+ *
+ * slot 装填 (vscode 模型):
+ *   - slot 是全局的, 给拓展插入的 (定义在 config/slots.ts)
+ *   - 拓展不引 config/, 直接以字符串声明要装哪个 slot
+ *   - 字符串字面量跟 SOLO_SLOTS 同值, 是协议约定, 不是模块引用
  */
 import { Injectable } from '@opensumi/di';
 import { Domain } from '@opensumi/ide-core-common';
@@ -13,9 +17,10 @@ import {
 } from '@opensumi/ide-core-browser/lib/layout';
 
 import { ActionBar } from './ActionBar';
-import { SOLO_SLOTS } from '../../config/slots';
 
 export const ACTION_PANEL_ID = 'action';
+/** 我要装到 'action' slot (跟 config/slots.ts SOLO_SLOTS.Action 同值) */
+const TARGET_SLOT = 'action';
 
 @Injectable()
 @Domain(ComponentContribution)
@@ -32,7 +37,7 @@ export class ActionContribution implements ComponentContribution {
         iconClass: 'codicon codicon-settings',
         title: '操作栏',
       },
-      SOLO_SLOTS.Action,
+      TARGET_SLOT,
     );
   }
 }
