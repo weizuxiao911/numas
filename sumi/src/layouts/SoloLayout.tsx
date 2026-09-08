@@ -27,81 +27,67 @@ import { SOLO_SLOTS } from '../config/slots';
 import {
   registerSidebarApi,
   type SidebarApi,
-} from '../extensions/sidebar/commands/sidebarApi';
+} from '../commands/sidebar';
+import {
+  registerDrawerApi,
+  type DrawerApi,
+} from '../commands/drawer';
 
 const DEFAULT_SIDEBAR_W = 320;
-const MIN_SIDEBAR_W = 1;
+const MIN_SIDEBAR_W = 200;
 const MAX_SIDEBAR_W = 480;
-const COLLAPSED_W = 1;
-const SAVED_W_KEY = 'numas.solo.sidebarWidth';
-const SAVED_EXPANDED_W_KEY = 'numas.solo.sidebarExpandedWidth';
 
-function readSavedExpandedWidth(): number {
-  const v = localStorage.getItem(SAVED_EXPANDED_W_KEY);
-  if (!v) return DEFAULT_SIDEBAR_W;
-  const n = parseInt(v, 10);
-  if (!Number.isFinite(n)) return DEFAULT_SIDEBAR_W;
-  return Math.max(MIN_SIDEBAR_W, Math.min(MAX_SIDEBAR_W, n));
+/** drawer 打开时宽度 = viewport 50%, 拖拽时按 clientX 反算 */
+const DRAWER_RATIO = 0.5;
+
+function viewportRatioWidth(): number {
+  return Math.round(window.innerWidth * DRAWER_RATIO);
 }
 
 export function SoloLayout(): React.ReactElement {
-  const [sidebarW, setSidebarW] = useState<number>(() => {
-    const saved = localStorage.getItem(SAVED_W_KEY);
-    const n = saved ? parseInt(saved, 10) : DEFAULT_SIDEBAR_W;
-    if (!Number.isFinite(n)) return DEFAULT_SIDEBAR_W;
-    return Math.max(MIN_SIDEBAR_W, Math.min(MAX_SIDEBAR_W, n));
-  });
+  // sidebar 状态用 collapsed boolean 不用 1px hack (折叠 = 完全隐藏, 1px 占位难看)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [sidebarW, setSidebarW] = useState<number>(DEFAULT_SIDEBAR_W);
   const dragRef = useRef<{ startX: number; startW: number } | null>(null);
-  // 折叠时记住展开态的 width, 展开时恢复
-  const expandedWRef = useRef<number>(readSavedExpandedWidth());
-
-  useEffect(() => {
-    localStorage.setItem(SAVED_W_KEY, String(sidebarW));
-    if (sidebarW > COLLAPSED_W) {
-      expandedWRef.current = sidebarW;
-      localStorage.setItem(SAVED_EXPANDED_W_KEY, String(sidebarW));
-    }
-  }, [sidebarW]);
+  // 折叠时记住展开态的 width, 展开时恢复 (运行时 ref, reload 丢失)
+  const expandedWRef = useRef<number>(DEFAULT_SIDEBAR_W);
 
   const subscribersRef = useRef<Array<(s: { collapsed: boolean; width: number }) => void>>([]);
   const api = useMemo<SidebarApi>(() => {
-    const notify = (nextW: number) => {
-      const snap = { collapsed: nextW <= COLLAPSED_W, width: nextW };
+    const notify = (nextCollapsed: boolean, nextW: number) => {
+      const snap = { collapsed: nextCollapsed, width: nextW };
       subscribersRef.current.forEach((cb) => cb(snap));
     };
     return {
-      get collapsed() { return sidebarW <= COLLAPSED_W; },
+      get collapsed() { return sidebarCollapsed; },
       get width() { return sidebarW; },
       collapse: () => {
-        const next = COLLAPSED_W;
-        if (sidebarW > COLLAPSED_W) {
-          expandedWRef.current = sidebarW;
-          localStorage.setItem(SAVED_EXPANDED_W_KEY, String(sidebarW));
-        }
-        setSidebarW(next);
-        notify(next);
+        if (!sidebarCollapsed) expandedWRef.current = sidebarW;
+        setSidebarCollapsed(true);
+        notify(true, sidebarW);
       },
       expand: () => {
         const next = expandedWRef.current;
         setSidebarW(next);
-        notify(next);
+        setSidebarCollapsed(false);
+        notify(false, next);
       },
       toggle: () => {
-        if (sidebarW <= COLLAPSED_W) {
+        if (sidebarCollapsed) {
           const next = expandedWRef.current;
           setSidebarW(next);
-          notify(next);
+          setSidebarCollapsed(false);
+          notify(false, next);
         } else {
           expandedWRef.current = sidebarW;
-          localStorage.setItem(SAVED_EXPANDED_W_KEY, String(sidebarW));
-          setSidebarW(COLLAPSED_W);
-          notify(COLLAPSED_W);
+          setSidebarCollapsed(true);
+          notify(true, sidebarW);
         }
       },
       setWidth: (n: number) => {
         const clamped = Math.max(MIN_SIDEBAR_W, Math.min(MAX_SIDEBAR_W, n));
         setSidebarW(clamped);
-        notify(clamped);
+        notify(sidebarCollapsed, clamped);
       },
       onChange: (cb) => {
         subscribersRef.current.push(cb);
@@ -111,7 +97,7 @@ export function SoloLayout(): React.ReactElement {
       },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sidebarW]);
+  }, [sidebarCollapsed, sidebarW]);
 
   useEffect(() => {
     registerSidebarApi(api);
@@ -146,15 +132,107 @@ export function SoloLayout(): React.ReactElement {
     [sidebarW],
   );
 
+  /* ─────────────── drawer state ─────────────── */
+  // 默认: drawer 关闭, drawerW=0
+  const [drawerOpen, setDrawerOpen] = useState<boolean>(false);
+  const [drawerW, setDrawerW] = useState<number>(0);
+
+  const drawerSubsRef = useRef<Array<(s: { open: boolean; width: number }) => void>>([]);
+  const drawerApi = useMemo<DrawerApi>(() => {
+    const notify = () => {
+      drawerSubsRef.current.forEach((cb) => cb({ open: drawerOpen, width: drawerW }));
+    };
+    return {
+      get open() { return drawerOpen; },
+      get width() { return drawerW; },
+      open: (w?: number) => {
+        const nextW = Math.max(120, w ?? (drawerW > 0 ? drawerW : viewportRatioWidth()));
+        setDrawerW(nextW);
+        setDrawerOpen(true);
+        notify();
+      },
+      close: () => {
+        setDrawerOpen(false);
+        notify();
+      },
+      toggle: () => {
+        if (drawerOpen) {
+          setDrawerOpen(false);
+        } else {
+          if (drawerW <= 0) setDrawerW(viewportRatioWidth());
+          setDrawerOpen(true);
+        }
+        notify();
+      },
+      setWidth: (n: number) => {
+        const next = Math.max(120, Math.min(window.innerWidth - 200, n));
+        setDrawerW(next);
+        notify();
+      },
+      onChange: (cb) => {
+        drawerSubsRef.current.push(cb);
+        return () => {
+          drawerSubsRef.current = drawerSubsRef.current.filter((s) => s !== cb);
+        };
+      },
+    };
+  }, [drawerOpen, drawerW]);
+
+  useEffect(() => {
+    registerDrawerApi(drawerApi);
+    return () => registerDrawerApi(null);
+  }, [drawerApi]);
+
+  // drawer 打开时: 视口变化同步到 50% + 自动折叠 sidebar 让出空间
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onResize = () => setDrawerW(viewportRatioWidth());
+    window.addEventListener('resize', onResize);
+    if (!sidebarCollapsed) {
+      expandedWRef.current = sidebarW;
+      setSidebarCollapsed(true);
+    }
+    return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerOpen]);
+
+  const drawerDragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const onDrawerResizerDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      drawerDragRef.current = { startX: e.clientX, startW: drawerW };
+      const onMove = (ev: MouseEvent) => {
+        if (!drawerDragRef.current) return;
+        const dx = drawerDragRef.current.startX - ev.clientX;
+        const next = Math.max(120, Math.min(window.innerWidth - 200, drawerDragRef.current.startW + dx));
+        setDrawerW(next);
+      };
+      const onUp = () => {
+        drawerDragRef.current = null;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    },
+    [drawerW],
+  );
+
   return (
     <div className="app-solo">
-      <div
-        className="app-solo__sidebar"
-        style={{ ['--sidebar-w' as any]: `${sidebarW}px` }}
-      >
-        <SlotRenderer slot={SOLO_SLOTS.Sidebar} />
-      </div>
-      {sidebarW > COLLAPSED_W && (
+      {!sidebarCollapsed && (
+        <div
+          className="app-solo__sidebar"
+          style={{ ['--sidebar-w' as any]: `${sidebarW}px` }}
+        >
+          <SlotRenderer slot={SOLO_SLOTS.Sidebar} />
+        </div>
+      )}
+      {!sidebarCollapsed && (
         <div className="app-solo__resizer" onMouseDown={onResizerDown} role="separator" aria-orientation="vertical" />
       )}
       {/* 中列: action (顶部工具栏) + main (对话主区), 上下结构 */}
@@ -166,8 +244,19 @@ export function SoloLayout(): React.ReactElement {
           <SlotRenderer slot={SOLO_SLOTS.Main} />
         </div>
       </div>
-      {/* 右侧抽屉: 暂无拓展注册, 默认宽 0 完全隐藏 */}
-      <div className="app-solo__drawer">
+      {/* 右侧抽屉: 关闭 0px, 打开时按 drawerW 拉宽 (可拖拽) */}
+      <div
+        className={`app-solo__drawer${drawerOpen ? ' is-open' : ''}`}
+        style={{ ['--drawer-w' as any]: `${drawerOpen ? drawerW : 0}px` }}
+      >
+        {drawerOpen && (
+          <div
+            className="app-solo__drawer-resizer"
+            onMouseDown={onDrawerResizerDown}
+            role="separator"
+            aria-orientation="vertical"
+          />
+        )}
         <SlotRenderer slot={SOLO_SLOTS.Drawer} />
       </div>
       <WorkspacePicker />

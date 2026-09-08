@@ -70,14 +70,35 @@
   flex-direction: column;
 }
 
-/* 右侧抽屉: 默认宽 0 / 完全隐藏, 后续拓展注册时按需撑开 */
+/* 右侧抽屉: 关闭时宽 0 完全隐藏, 打开时由 --drawer-w 控制
+   左侧挨一个 resizer, 跟 sidebar 拖动条同款 (1px 主线) */
 .app-solo__drawer {
-  flex: 0 0 0;
-  width: 0;
+  flex: 0 0 var(--drawer-w, 0);
+  width: var(--drawer-w, 0);
   min-width: 0;
-  background: transparent;
+  background: var(--editor-background);
+  display: flex;
+  flex-direction: row;
   transition: flex-basis var(--solo-duration) var(--solo-ease),
               width var(--solo-duration) var(--solo-ease);
+}
+.app-solo__drawer-resizer {
+  flex: 0 0 var(--resizer-w);
+  width: var(--resizer-w);
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+}
+.app-solo__drawer-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--editor-border);
+  transform: translateX(-0.5px);
 }
 
 /* 拖动条: 朴素 1px 主线, 折叠时跟 sidebar 一起收, 动效跟 sidebar 同步 */
