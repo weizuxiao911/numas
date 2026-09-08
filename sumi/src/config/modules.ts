@@ -18,6 +18,7 @@ import { TerminalModule } from '../service/pty';
 import { EditorModule } from '../service/editor';
 import { StateModule } from '../service/state';
 import { PortsModule } from '../service/ports';
+import { LayoutModule } from '../service/layout';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
@@ -35,6 +36,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     EditorModule,          // 编辑器能力 (open / openWith)
     StateModule,           // codeblitz 状态 (workspace / recent)
     PortsModule,           // 本地服务端口发现 (面板 + 事件)
+    LayoutModule,          // SOLO 布局状态 (sidebar / drawer 折叠 + 宽度 + 命令)
 
     // contribution 层 (lifecycle / UI 状态)
     EditorRestoreFallbackModule, // 官方 workbench tab 恢复的延迟兜底 (早期 handlesUri 未就绪)

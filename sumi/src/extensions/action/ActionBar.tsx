@@ -8,7 +8,7 @@
  *
  * 折叠态 sidebar 行为: 镜像 sidebar 顶的 mode-switch + expand 按钮
  *   (替代 sidebar 内部 mode-row 不可见). 跨拓展状态共享走
- *   sidebar/commands/sidebarApi — 单向消费, 不破 §2.2 铁律.
+ *   service/layout (LayoutToken) + executeCommand — 单向消费, 不破 §2.2 铁律.
  *
  * 镜像设计意图: 用户点 action 的 mode-switch 切 IDE, reload 后 mode-switch 出现在 sidebar 顶.
  *   视觉上"按钮没飞"是因为 reload 后 SoloLayout 重新 mount, mode-switch 跟 action 里的视觉位置
@@ -16,13 +16,13 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
+import { CommandService } from '@opensumi/ide-core-common';
 
 import { getAppMode, setAppMode, type AppMode } from '../../App';
 import { getWorkspace } from '../../infra/url';
-import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { StateToken, type IStateService } from '../../service/state';
-import { getSidebarApi } from '../../commands/sidebar';
-import { getDrawerApi } from '../../commands/drawer';
+import { LayoutToken, LAYOUT_COMMANDS, type ILayoutService } from '../../service/layout';
 import { styles } from './styles';
 import { ProjectPicker } from './ProjectPicker';
 
@@ -70,13 +70,13 @@ const ModeSwitch: React.FC = () => {
   );
 };
 
-const ExpandToggle: React.FC = () => {
+const ExpandToggle: React.FC<{ layout: ILayoutService; commandService: CommandService }> = ({ layout, commandService }) => {
   return (
     <button
       type="button"
       className="app-action__expand"
       title="展开 sidebar"
-      onClick={() => getSidebarApi()?.expand()}
+      onClick={() => void commandService.executeCommand(LAYOUT_COMMANDS.sidebarExpand.id)}
     >
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5">
         <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -86,19 +86,17 @@ const ExpandToggle: React.FC = () => {
   );
 };
 
-const DrawerToggle: React.FC = () => {
-  const [open, setOpen] = useState<boolean>(() => getDrawerApi()?.open ?? false);
+const DrawerToggle: React.FC<{ layout: ILayoutService; commandService: CommandService }> = ({ layout, commandService }) => {
+  const [open, setOpen] = useState<boolean>(() => layout.state.drawer.open);
   useEffect(() => {
-    const api = getDrawerApi();
-    if (!api) return;
-    return api.onChange((s) => setOpen(s.open));
-  }, []);
+    return layout.subscribe((s) => setOpen(s.drawer.open));
+  }, [layout]);
   return (
     <button
       type="button"
       className="app-action__drawer"
       title={open ? '关闭抽屉' : '展开抽屉'}
-      onClick={() => getDrawerApi()?.toggle()}
+      onClick={() => void commandService.executeCommand(LAYOUT_COMMANDS.drawerToggle.id)}
     >
       {open ? (
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -136,16 +134,14 @@ const ProjectPickButton: React.FC<{ open: boolean; onToggle: () => void; label: 
 
 export const ActionBar: React.FC = () => {
   const state = useInjectable<IStateService>(StateToken);
+  const layout = useInjectable<ILayoutService>(LayoutToken);
+  const commandService = useInjectable<CommandService>(CommandService);
 
   // sidebar 折叠时才显示 mode-switch + expand (展开态它们在 sidebar 顶部)
-  const [mirrorVisible, setMirrorVisible] = useState<boolean>(
-    () => getSidebarApi()?.collapsed ?? false,
-  );
+  const [mirrorVisible, setMirrorVisible] = useState<boolean>(() => layout.state.sidebar.collapsed);
   useEffect(() => {
-    const api = getSidebarApi();
-    if (!api) return;
-    return api.onChange((s) => setMirrorVisible(s.collapsed));
-  }, []);
+    return layout.subscribe((s) => setMirrorVisible(s.sidebar.collapsed));
+  }, [layout]);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   // 按钮文字: 当前 workspace basename, 跟随 URL ?directory= 变化 (reload 后)
@@ -164,7 +160,7 @@ export const ActionBar: React.FC = () => {
           {mirrorVisible && (
             <>
               <ModeSwitch />
-              <ExpandToggle />
+              <ExpandToggle layout={layout} commandService={commandService} />
             </>
           )}
           {/* wrap: popover 的定位锚点 — 锚在按钮上而不是整条 action 栏上,
@@ -175,7 +171,7 @@ export const ActionBar: React.FC = () => {
           </div>
         </div>
         <div className="app-action__right">
-          <DrawerToggle />
+          <DrawerToggle commandService={commandService} layout={layout} />
         </div>
       </div>
     </>
