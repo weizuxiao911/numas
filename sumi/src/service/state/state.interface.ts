@@ -7,11 +7,18 @@
  * 持久化: 见 ./persistence.ts (localStorage adapter, 后续可换 IndexedDB).
  */
 
+export interface RecentWorkspace {
+  /** 路径 (绝对路径) */
+  path: string;
+  /** 最后打开时间 (ms epoch) */
+  lastOpenedAt: number;
+}
+
 export interface WorkspaceState {
   /** 当前工作空间路径 */
   workspace: string;
-  /** 最近用过的工作空间列表 (新 → 旧) */
-  recent: string[];
+  /** 最近用过的工作空间列表 (新 → 旧, 最多 10 条) */
+  recent: RecentWorkspace[];
 }
 
 export interface IStateService {

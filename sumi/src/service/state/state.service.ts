@@ -13,7 +13,7 @@ import { BrowserModule } from '@opensumi/ide-core-browser';
 import { getWorkspace, emitWorkspaceChanged } from '../../infra/url';
 import { normalizeCwdPath } from '../../infra/path';
 
-import type { IStateService, WorkspaceState } from './state.interface';
+import type { IStateService, RecentWorkspace, WorkspaceState } from './state.interface';
 import { StateToken } from './state.interface';
 import { loadRecent, saveRecent } from './persistence';
 
@@ -31,13 +31,14 @@ export class StateServiceImpl implements IStateService {
 
   getWorkspace(): WorkspaceState {
     this._workspace.workspace = getWorkspace();
-    return { ...this._workspace };
+    return { ...this._workspace, recent: [...this._workspace.recent] };
   }
 
   pushRecent(workspace: string): void {
     if (!workspace) return;
-    const list = this._workspace.recent.filter((c) => c !== workspace);
-    list.unshift(workspace);
+    const now = Date.now();
+    const list = this._workspace.recent.filter((r) => r.path !== workspace);
+    list.unshift({ path: workspace, lastOpenedAt: now });
     if (list.length > 10) list.length = 10;
     this._workspace.recent = list;
     saveRecent(list);

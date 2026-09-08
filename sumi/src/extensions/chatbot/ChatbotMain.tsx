@@ -19,8 +19,18 @@
 import React, { useEffect, useState } from 'react';
 
 import { getAppMode, setAppMode, type AppMode } from '../../App';
+import { getWorkspace } from '../../infra/url';
+import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
+import { StateToken, type IStateService } from '../../service/state';
 import { getSidebarApi } from '../sidebar/commands';
 import { styles } from './styles';
+import { ProjectPicker } from './ProjectPicker';
+
+function pathBasename(p: string): string {
+  if (!p) return '';
+  const parts = p.replace(/\\/g, '/').split('/').filter(Boolean);
+  return parts[parts.length - 1] || p;
+}
 
 const ModeSwitch: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(() => getAppMode());
@@ -76,7 +86,28 @@ const ExpandToggle: React.FC = () => {
   );
 };
 
+const ProjectPickButton: React.FC<{ open: boolean; onToggle: () => void; label: string }> = ({ open, onToggle, label }) => {
+  return (
+    <button
+      type="button"
+      className={`app-chatbot__header-pick${open ? ' is-open' : ''}`}
+      title="选择项目"
+      onClick={onToggle}
+    >
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      </svg>
+      <span className="app-chatbot__header-pick-label">{label}</span>
+      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </button>
+  );
+};
+
 export const ChatbotMain: React.FC = () => {
+  const state = useInjectable<IStateService>(StateToken);
+
   // 只在 mount 时读一次 collapsed, 不订阅变化 — 展开/折叠由用户主动点按钮驱动
   // (按钮各自 hardcode 图标不切 state, 这里只决定 header 是否显示)
   const [headerVisible, setHeaderVisible] = useState<boolean>(
@@ -87,6 +118,15 @@ export const ChatbotMain: React.FC = () => {
     if (!api) return;
     return api.onChange((s) => setHeaderVisible(s.collapsed));
   }, []);
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // 按钮文字: 当前 workspace basename, 跟随 URL ?directory= 变化 (reload 后)
+  const [workspace, setWorkspace] = useState<string>(() => getWorkspace());
+  useEffect(() => {
+    // 订阅 workspace 变更, 让按钮文字跟 URL 同步 (setWorkspace 会 reload, 这里主要兜底)
+    return state.subscribeWorkspace((next) => setWorkspace(next));
+  }, [state]);
+  const label = workspace ? pathBasename(workspace) : '选择项目';
 
   return (
     <>
@@ -99,6 +139,8 @@ export const ChatbotMain: React.FC = () => {
               <ExpandToggle />
             </>
           )}
+          <ProjectPickButton open={pickerOpen} onToggle={() => setPickerOpen((v) => !v)} label={label} />
+          <ProjectPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
         </div>
         <div className="app-chatbot__container" />
       </div>
