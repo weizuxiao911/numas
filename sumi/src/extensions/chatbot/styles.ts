@@ -157,7 +157,8 @@ export const styles = `
 /* header 改为相对定位容器, popover 绝对定位锚定 */
 .app-chatbot__header { position: relative; }
 
-/* ProjectPicker popover: 顶 8px 下拉 + fade in, 跟 header 顶 36px 按钮左对齐 */
+/* ProjectPicker popover: 顶 8px 下拉 + fade in, 跟 header 顶 36px 按钮左对齐
+   无 border, 仅 soft shadow + bg 区分 */
 .app-project-picker {
   position: absolute;
   top: calc(100% + 8px);
@@ -167,9 +168,9 @@ export const styles = `
   max-width: 480px;
   background: color-mix(in srgb, var(--editor-background) 92%, var(--editor-foreground) 8%);
   color: var(--ai-fg);
-  border: 1px solid var(--ai-border);
+  border: 0;
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
   padding: 6px;
   font-family: var(--font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif);
   font-size: 12px;
@@ -248,7 +249,7 @@ export const styles = `
   height: 1px;
   margin: 4px 6px;
   background: var(--ai-border);
-  opacity: 0.5;
+  opacity: 0.25;
 }
 
 .app-project-picker__list {
