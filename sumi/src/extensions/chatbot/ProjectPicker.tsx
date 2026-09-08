@@ -141,7 +141,6 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({ open, onClose }) =
   return (
     <div ref={rootRef} className="app-project-picker" role="dialog" aria-label="选择项目">
       <div className="app-project-picker__body">
-        <div className="app-project-picker__section-label">操作</div>
         <div className="app-project-picker__actions">
           {ACTIONS.map((a) => (
             <button
@@ -161,7 +160,6 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({ open, onClose }) =
 
         <div className="app-project-picker__divider" />
 
-        <div className="app-project-picker__section-label">最近</div>
         {recent.length === 0 ? (
           <div className="app-project-picker__empty">最近无项目</div>
         ) : (

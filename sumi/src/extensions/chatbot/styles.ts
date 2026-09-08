@@ -191,15 +191,6 @@ export const styles = `
   overflow-y: auto;
 }
 
-.app-project-picker__section-label {
-  padding: 6px 10px 2px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--ai-fg-muted);
-  text-transform: uppercase;
-}
-
 .app-project-picker__actions {
   display: flex;
   flex-direction: column;
