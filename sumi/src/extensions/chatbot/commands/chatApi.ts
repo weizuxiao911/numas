@@ -40,6 +40,12 @@ export interface ChatPanelApi {
   send(text: string): void | Promise<void>;
   /** 切换会话 */
   changeSession(sid: string): void;
+  /** 当前会话 id */
+  getCurrentSessionID(): string;
+  /** 当前 cwd 的顶层会话列表 (排除 subagent) */
+  listSessions(): Promise<any[]>;
+  /** 删除会话 */
+  deleteSession(sid: string): void | Promise<void>;
   /** 把上下文挂到当前对话输入栏 (不发送) */
   addContext(item: ChatContextItem): AddContextResult;
 }

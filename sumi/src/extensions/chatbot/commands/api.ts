@@ -109,12 +109,13 @@ export function isWithinCwd(dir: string | undefined, cwd: string): boolean {
 
 /** 历史会话列表 — 仅当前工作目录及其子目录 (不向上层获取).
  *  v2.session.list 只返回当前项目会话; 这里再按 directory 前缀过滤,
- *  确保只看到 cwd 及子目录下创建的会话, 排除父级/兄弟目录. */
+ *  确保只看到 cwd 及子目录下创建的会话, 排除父级/兄弟目录.
+ *  roots=true: 只列顶层会话 (parent_id IS NULL), 排除 subagent/委派子会话. */
 export async function aiListSessions(): Promise<any[]> {
   await waitForAiReady();
   const client = getAiClient()!;
   const cwd = await aiGetCwd().catch(() => '');
-  const { data, error } = await (client as any).session.list();
+  const { data, error } = await (client as any).session.list({ roots: true });
   if (error) throw error;
   const list: any[] = Array.isArray(data) ? data : (Array.isArray((data as any)?.data) ? (data as any).data : []);
   // cwd 未知时返回空, 避免泄漏上层/其他目录会话
