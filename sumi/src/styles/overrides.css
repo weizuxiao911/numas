@@ -862,8 +862,8 @@ div[data-viewlet-id="sessions-default"] [class*="titlebar"] {
   content: none;
 }
 
-/* ============ Numas Splash (URL 无 ?directory= 时的显式动画 loading) ============ */
-.numas-splash {
+/* ============ Splash (启动期 loading 遮罩) ============ */
+.app-splash {
   position: fixed;
   inset: 0;
   z-index: 2147483647;
@@ -876,39 +876,338 @@ div[data-viewlet-id="sessions-default"] [class*="titlebar"] {
   color: #e6e6e6;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
-.numas-splash-logo {
+.app-splash-logo {
   font-size: 56px;
   line-height: 1;
-  animation: numas-breathe 1.6s ease-in-out infinite;
+  animation: app-breathe 1.6s ease-in-out infinite;
 }
-.numas-splash-spinner {
+.app-splash-spinner {
   width: 34px;
   height: 34px;
   border-radius: 50%;
   border: 3px solid rgba(255, 255, 255, 0.18);
   border-top-color: #4c8dff;
-  animation: numas-spin 0.9s linear infinite;
+  animation: app-spin 0.9s linear infinite;
 }
-.numas-splash-title {
+.app-splash-title {
   font-size: 22px;
   font-weight: 600;
   letter-spacing: 0.5px;
 }
-.numas-splash-text {
+.app-splash-text {
   font-size: 13px;
   color: rgba(230, 230, 230, 0.65);
-  animation: numas-fade 1.4s ease-in-out infinite;
+  animation: app-fade 1.4s ease-in-out infinite;
 }
-@keyframes numas-spin {
+@keyframes app-spin {
   to { transform: rotate(360deg); }
 }
-@keyframes numas-breathe {
+@keyframes app-breathe {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.12); }
 }
-@keyframes numas-fade {
+@keyframes app-fade {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
 
 
+
+/* ==================== splash + home ==================== */
+
+.app-splash,
+.app-home {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--app-panel-bg, #1a1b26);
+  color: var(--editor-foreground, #c0caf5);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+}
+
+.app-splash__inner,
+.app-home__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 560px;
+  padding: 24px;
+}
+
+.app-splash__logo,
+.app-home__logo {
+  width: 72px; height: 72px;
+  border-radius: 18px;
+  background: var(--button-background, #6d5ef5);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 36px; font-weight: 700;
+  box-shadow: 0 8px 24px rgba(109, 94, 245, 0.3);
+  margin-bottom: 8px;
+}
+
+.app-splash__spinner {
+  width: 28px; height: 28px;
+  border: 3px solid rgba(109, 94, 245, 0.2);
+  border-top-color: #6d5ef5;
+  border-radius: 50%;
+  animation: app-spin 0.8s linear infinite;
+}
+
+@keyframes app-spin {
+  to { transform: rotate(360deg); }
+}
+
+.app-splash__title,
+.app-home__title {
+  margin: 0; font-size: 28px; font-weight: 700;
+}
+
+.app-splash__text,
+.app-home__subtitle {
+  margin: 0; font-size: 14px; opacity: 0.7;
+}
+
+.app-home__extensions {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: flex; flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.app-home__ext {
+  display: flex; justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.app-home__ext-name { font-weight: 500; }
+.app-home__ext-version { opacity: 0.6; font-family: ui-monospace, monospace; }
+
+.app-home__enter {
+  margin-top: 28px;
+  padding: 12px 28px;
+  background: #6d5ef5;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.app-home__enter:hover { background: #5848d4; }
+.app-home__enter:active { transform: translateY(1px); }
+
+/* ==================== chat 模式 (workbuddy 仿) ==================== */
+
+.app-chat {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  background: var(--app-panel-bg, #ffffff);
+  color: var(--editor-foreground, #1f2328);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  overflow: hidden;
+}
+
+/* --- sidebar --- */
+.app-chat-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: #f7f7f9;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 12px;
+  gap: 4px;
+}
+
+.app-chat-sidebar__head {
+  display: flex; justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.app-chat-sidebar__app,
+.app-chat-sidebar__search {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 6px;
+  font-size: 16px; cursor: pointer; color: inherit;
+}
+.app-chat-sidebar__app:hover,
+.app-chat-sidebar__search:hover { background: rgba(0, 0, 0, 0.04); }
+
+.app-chat-sidebar__brand {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; margin-bottom: 8px;
+}
+.app-chat-sidebar__logo {
+  width: 24px; height: 24px; border-radius: 6px;
+  background: #22c55e; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+.app-chat-sidebar__name { font-weight: 600; font-size: 14px; }
+
+.app-chat-sidebar__new {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 12px; margin-bottom: 12px;
+  background: #e8e8eb; border: none; border-radius: 8px;
+  font-size: 14px; font-weight: 500; cursor: pointer; text-align: left;
+  color: inherit;
+}
+.app-chat-sidebar__new:hover { background: #dedee2; }
+.app-chat-sidebar__new-icon { font-size: 18px; line-height: 1; }
+
+.app-chat-sidebar__nav {
+  display: flex; flex-direction: column;
+  gap: 2px; margin-bottom: 16px;
+}
+.app-chat-sidebar__nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  background: transparent; border: none; border-radius: 6px;
+  font-size: 13.5px; cursor: pointer; text-align: left;
+  color: inherit;
+}
+.app-chat-sidebar__nav-item:hover { background: rgba(0, 0, 0, 0.04); }
+.app-chat-sidebar__nav-icon { font-size: 16px; opacity: 0.8; }
+.app-chat-sidebar__nav-label { flex: 1; }
+.app-chat-sidebar__nav-badge {
+  font-size: 11px; opacity: 0.5;
+}
+
+.app-chat-sidebar__recent { flex: 1; overflow-y: auto; }
+.app-chat-sidebar__recent-title {
+  font-size: 12px; opacity: 0.5; padding: 8px 10px 4px;
+}
+.app-chat-sidebar__recent-list { list-style: none; margin: 0; padding: 0; }
+.app-chat-sidebar__recent-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 6px;
+  font-size: 13px; cursor: pointer;
+}
+.app-chat-sidebar__recent-item:hover { background: rgba(0, 0, 0, 0.04); }
+.app-chat-sidebar__recent-tag {
+  font-size: 10px; padding: 1px 6px;
+  background: #dbeafe; color: #1e40af;
+  border-radius: 3px;
+}
+.app-chat-sidebar__recent-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-chat-sidebar__recent-ago { font-size: 11px; opacity: 0.5; flex-shrink: 0; }
+
+.app-chat-sidebar__foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; margin-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+.app-chat-sidebar__avatar {
+  width: 24px; height: 24px; border-radius: 6px;
+  background: #22c55e; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+}
+.app-chat-sidebar__user { flex: 1; font-size: 13px; }
+.app-chat-sidebar__bell {
+  background: transparent; border: none; cursor: pointer; font-size: 14px; padding: 4px;
+}
+
+/* --- main --- */
+.app-chat-main {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: #fafafa;
+  padding: 24px;
+}
+.app-chat-main__inner {
+  width: 100%; max-width: 720px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 20px;
+}
+.app-chat-main__title {
+  margin: 0; font-size: 36px; font-weight: 700;
+  color: #1f2328;
+}
+.app-chat-main__subtitle {
+  margin: 0; font-size: 14px; color: #6b7280;
+}
+
+.app-chat-main__modes {
+  display: flex; gap: 8px; padding: 4px;
+  background: #e5e7eb; border-radius: 999px;
+}
+.app-chat-main__mode {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 16px;
+  background: transparent; border: none; border-radius: 999px;
+  font-size: 13px; cursor: pointer; color: inherit;
+}
+.app-chat-main__mode--active {
+  background: #1f2328; color: #fff;
+}
+.app-chat-main__mode-icon { font-size: 14px; }
+
+.app-chat-main__suggestions {
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  max-width: 600px;
+}
+.app-chat-main__suggestion {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 999px;
+  font-size: 13px; cursor: pointer; color: #1f2328;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.app-chat-main__suggestion:hover { border-color: #6d5ef5; }
+.app-chat-main__suggestion-icon { font-size: 14px; }
+
+.app-chat-main__input {
+  width: 100%; margin-top: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 12px;
+}
+.app-chat-main__input-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.app-chat-main__input-icon {
+  width: 28px; height: 28px;
+  background: transparent; border: 1px solid #d1d5db; border-radius: 6px;
+  font-size: 16px; cursor: pointer; color: #6b7280;
+}
+.app-chat-main__input-icon:hover { background: #f3f4f6; }
+.app-chat-main__input-field {
+  flex: 1;
+  border: none; outline: none; background: transparent;
+  font-size: 14px; color: #1f2328;
+  font-family: inherit;
+  padding: 6px 4px;
+}
+.app-chat-main__input-field::placeholder { color: #9ca3af; }
+.app-chat-main__input-model {
+  border: 1px solid #d1d5db; border-radius: 6px;
+  padding: 4px 8px; font-size: 12px; background: #fff;
+  cursor: pointer;
+}
+.app-chat-main__input-send {
+  width: 32px; height: 32px;
+  background: #1f2328; color: #fff;
+  border: none; border-radius: 50%;
+  font-size: 16px; cursor: pointer;
+}
+.app-chat-main__input-send:hover { background: #000; }
+
+/* dark mode: chat 也跟随 */

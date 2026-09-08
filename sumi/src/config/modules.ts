@@ -1,24 +1,14 @@
 /**
  * 内置模块注册表 — core/config/modules.ts
  *
- * DI 注册: 框架级 builtin modules + 内置拓展 + service 实现模块 (各 {Name}Module).
- * 顺序: codeblitz 默认模块先 (TerminalNextModule / TaskModule), 我们 service 在中间,
- *       拓展 + FsProviderModule 最后 (FsProviderModule 要覆盖 codeblitz 默认 fs provider).
+ * DI 注册: 内置 service 模块 + vsix 拓展模块 + contribution.
+ * 顺序: 我们 service 先, FsProviderModule / FileDocModule 最后.
+ *
+ * codeblitz 官方模块 (TerminalNextModule / TaskModule) 不在此处导入,
+ * 走框架 defaultModules 自动注入 (App.tsx: getDefaultAppConfig().modules).
+ *
+ * vsix 拓展模块 (SessionModule / ChatbotModule) 在此注册, 装 left / main 槽.
  */
-
-import { TerminalNextModule } from '@opensumi/ide-terminal-next/lib/browser';
-import { TaskModule } from '@opensumi/ide-task/lib/browser';
-
-import { ActionsModule } from '../extensions/actions';
-import { ChatModule } from '../extensions/chat';
-import { ContextModule } from '../extensions/context';
-import { WorkspaceModule } from '../extensions/workspace';
-import { FilePickerModule } from '../extensions/filepicker';
-import { PdfReaderModule } from '../extensions/pdf';
-import { OpenTypeModule } from '../extensions/opentype';
-import { PortsExtensionModule } from '../extensions/ports';
-import { MarkdownPreviewModule } from '../extensions/markdown';
-import { BuiltinBrowserModule } from '../extensions/browser';
 
 import { AgentModule } from '../service/opencode';
 import { ExtensionModule } from '../service/extension';
@@ -31,12 +21,11 @@ import { PortsModule } from '../service/ports';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
+import { SessionModule } from '../extensions/session';
+import { ChatbotModule } from '../extensions/chatbot';
+
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
   return [
-    // codeblitz 默认 (Terminal / Task 等)
-    TerminalNextModule,
-    TaskModule,
-
     // service 层 (DI 单例)
     AgentModule,           // opencode AI 智能体能力
     ExtensionModule,       // vsix 拓展 (registry @ :7790)
@@ -49,20 +38,11 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     // contribution 层 (lifecycle / UI 状态)
     EditorRestoreFallbackModule, // 官方 workbench tab 恢复的延迟兜底 (早期 handlesUri 未就绪)
 
-    // 内置 UI 拓展
-    ActionsModule,
-    ChatModule,
-    ContextModule,          // 文件树/编辑器/终端选区「添加到对话」(依赖 ChatPanelApi.addContext)
-    WorkspaceModule,
-    FilePickerModule,
-    PdfReaderModule,
-    OpenTypeModule,
-    PortsExtensionModule,  // 端口面板 (底部 tab, 服务发现提示)
-    MarkdownPreviewModule, // markdown 预览 (双击 .md 默认渲染预览, 可切 code)
-    BuiltinBrowserModule,  // 内置浏览器 (main 编辑器标签, iframe + debugger API)
+    // vsix 拓展 (UI 组件, 走 ComponentContribution 装 codeblitz slot)
+    SessionModule,         // 会话列表 (left 槽)
+    ChatbotModule,         // 对话主区 (main 槽)
 
     // 自定义 file scheme provider (覆盖 codeblitz 默认 DiskFileSystemProvider)
-    // 放最后: codeblitz 默认 fsProviders 先就位, 我们 fsProviders.delete + registerProvider
     FsProviderModule,
 
     // file scheme 文档 provider (权重 30 > codeblitz 20): editor 读/保存改走主线程 FSC → HTTP

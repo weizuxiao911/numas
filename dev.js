@@ -6,13 +6,19 @@
  *   0. 依赖安装 (sumi: npm install,  opencode: bun install;  首次/依赖变才装)
  *   1. sumi build (hash 增量) → mirror cp → opencode/packages/app/dist
  *   2. opencode build (hash 增量 + NUMAS_WEB_DIST=sumi/dist)
- *   3. 启 opencode web @ <port> --cors * --registry <url> --extensions-dir registry/vsix
+ *   3. 启 opencode serve @ <port> --cors * --registry <url> --extensions-dir registry/vsix
  *
- * CLI: --port / --registry / --fast (跳过 build/cp) / --force-build / --cwd <path>
+ * CLI: --port / --registry / --fast (跳过 build/cp) / --force-build / --sumi / --opencode / --cwd <path>
+ *      --sumi / --opencode 各自强制 rebuild 那个 (不走 hash 增量), 不加走 hash 增量.
+ *      --force-build = 两者都强制 + 重装依赖.
  *      --cwd 透传 web UI ?directory= 默认 workspace (encodeURI), 用于启动后浏览器自动
- *      跳到指定目录 (替代用户手改 URL). 内部用 --no-open 关掉 opencode 自动开浏览器,
- *      避免双 tab (一个无 directory, 一个带 ?directory=).
- * 进程树: dev.js → opencode web (detached pgid=-pid), SIGINT 杀整组
+ *      跳到指定目录 (替代用户手改 URL).
+ * 进程树: dev.js → opencode serve (detached pgid=-pid), SIGINT 杀整组
+ *
+ * 2026-09 改: web → serve. web 命令内置 `open $url` 自动开浏览器, 不能完全关掉
+ * (yargs --no-open auto-negation 会跳 help 退出, 见 AGENTS.md #32); serve 是 headless
+ * 模式, 不做任何浏览器副作用. dev.js 启动后只打 URL, 由用户手动访问浏览器
+ * (按用户要求, 不再 spawn 'open' 也不开 browser).
  */
 
 const { spawn, spawnSync } = require('node:child_process');
@@ -57,11 +63,13 @@ const PORT = parseFlagInt('--port', parseInt(process.env.NUMAS_PORT || '24096', 
 const REGISTRY = parseFlag('--registry', process.env.NUMAS_REGISTRY || '/extensions');
 const EXTENSIONS_DIR = path.join(ROOT, 'registry', 'vsix');
 const FORCE_BUILD = process.argv.includes('--force-build');
+const FORCE_SUMI = process.argv.includes('--sumi');
+const FORCE_OPENCODE = process.argv.includes('--opencode');
 const FAST = process.argv.includes('--fast') || process.env.NUMAS_FAST === '1' || process.env.NUMAS_FAST === 'true';
-// numas: --cwd <path> 透传给 web UI 的 ?directory= URL query, 让浏览器启动后自动跳到
-// 指定 workspace. 跟 opencode web 命令的 --directory 是两条线: opencode web 不接
-// directory (workspace 走 per-request x-opencode-directory header), 这里只控制浏览器
-// 默认 URL. 内部用 --dev 关闭 opencode 自动开浏览器, 避免双 tab.
+// numas: --cwd <path> 透传给 web UI 的 ?directory= URL query, 让用户启动后手动访问指定
+// workspace. 跟 opencode serve 命令无关 (workspace 走 per-request x-opencode-directory
+// header), 这里只控制打出来的提示 URL. serve 是 headless, dev.js 不再 spawn 'open'
+// (按用户要求), 只打印 URL 等用户手动访问.
 const CWD = parseFlag('--cwd', process.env.NUMAS_CWD);
 if (CWD) {
   try {
@@ -109,7 +117,7 @@ function sumiBuildHash() {
   return h.digest('hex');
 }
 function sumiBuildUpToDate() {
-  if (FORCE_BUILD) return false;
+  if (FORCE_BUILD || FORCE_SUMI) return false;
   if (!fs.existsSync(sumiBuildMarker)) return false;
   try { return fs.readFileSync(sumiBuildMarker, 'utf8').trim() === sumiBuildHash(); } catch { return false; }
 }
@@ -286,7 +294,7 @@ function opencodeBuildHash() {
   return h.digest('hex');
 }
 function opencodeBuildUpToDate() {
-  if (FORCE_BUILD) return false;
+  if (FORCE_BUILD || FORCE_OPENCODE) return false;
   if (!fs.existsSync(OPENCODE_BIN) && !fs.existsSync(OPENCODE_BIN_WIN)) return false;
   if (!fs.existsSync(opencodeBuildMarker)) return false;
   try { return fs.readFileSync(opencodeBuildMarker, 'utf8').trim() === opencodeBuildHash(); } catch { return false; }
@@ -326,7 +334,7 @@ if (!fs.existsSync(finalBin)) {
 }
 
 // ============================================================================
-// 3. 启 opencode web @ <port> --cors * --registry <url> --extensions-dir
+// 3. 启 opencode serve @ <port> --cors * --registry <url> --extensions-dir
 // ============================================================================
 function killPort(port) {
   try {
@@ -356,15 +364,13 @@ function killPort(port) {
 }
 
 
-console.log(`[numas] step 3/4: 启 opencode web (hostname=0.0.0.0, port=${PORT}, cors=*, registry=${REGISTRY}${CWD ? `, dev=1, cwd=${CWD}` : ''})`);
+console.log(`[numas] step 3/4: 启 opencode serve (hostname=0.0.0.0, port=${PORT}, cors=*, registry=${REGISTRY}${CWD ? `, cwd=${CWD}` : ''})`);
 killPort(PORT);
 
 console.log(`[numas]   bin: ${finalBin}`);
-// numas: --cwd 给定时, 加 --dev 关闭 opencode 自动开浏览器, dev.js 自己在
-// ?directory= URL 上 spawn 'open', 避免双 tab (一个无 directory, 一个带 directory).
-// --dev 是 numas 扩展 flag, 普通 opencode 不识别;  不传 --cwd 时不加, 行为不变.
-const webArgs = [
-  'web',
+// serve 是 headless (无 UI 命令), dev.js 不再做任何浏览器副作用, 仅打印 URL.
+const serveArgs = [
+  'serve',
   '--hostname', '0.0.0.0',
   '--port', String(PORT),
   '--cors', '*',
@@ -372,9 +378,8 @@ const webArgs = [
   '--extensions-dir', EXTENSIONS_DIR,
   '--web-ui', sumiDist,
 ];
-if (CWD) webArgs.push('--dev');
 
-const opencodeProc = spawn(finalBin, webArgs, {
+const opencodeProc = spawn(finalBin, serveArgs, {
   stdio: 'inherit',
   detached: true,
   shell: false,
@@ -400,45 +405,31 @@ process.on('exit',    () => {
   try { process.kill(-opencodeProc.pid, 'SIGTERM'); } catch { /* */ }
 });
 
-// 自动开浏览器由 opencode web 命令内置 (1500ms 后 spawn /bin/sh -c "open $url &"),
-// dev.js 不重复, 避免多次 spawn opener 导致多个 tab.
-
-// numas: --cwd 模式下关闭了 opencode 自动开浏览器, dev.js 自己用拼好 ?directory=
-// 的 URL 打开. 等 /health ready 后 spawn 'open', 避免 race (sumi 没起完就开 404).
-// 短轮询 200ms, 超时 30s 自动放弃并提示用户手动访问.
-if (CWD) {
-  const targetUrl = `http://localhost:${PORT}/?directory=${encodeURI(CWD)}`;
-  console.log(`[numas] --cwd=${CWD}, 等待 server ready → 自动打开 ${targetUrl}`);
-  const t0 = Date.now();
-  const TIMEOUT = 30000;
-  const POLL_MS = 200;
-  const probe = () => {
-    if (Date.now() - t0 > TIMEOUT) {
-      console.error(`[numas] server 没起来 (${TIMEOUT}ms 超时), 手动访问: ${targetUrl}`);
-      return;
+// 自动开浏览器: serve 是 headless, dev.js 原本统一负责, 现按用户要求
+// 不再 spawn 'open', 启动后只打 URL 让用户手动访问.
+// 保留 /health 探活让用户知道 server 何时就绪.
+const targetUrl = CWD
+  ? `http://localhost:${PORT}/?directory=${encodeURI(CWD)}`
+  : `http://localhost:${PORT}/`;
+console.log(`[numas] 等待 server ready → ${targetUrl}`);
+const t0 = Date.now();
+const TIMEOUT = 30000;
+const POLL_MS = 200;
+const probe = () => {
+  if (Date.now() - t0 > TIMEOUT) {
+    console.error(`[numas] server 没起来 (${TIMEOUT}ms 超时), 手动访问: ${targetUrl}`);
+    return;
+  }
+  const http = require('http');
+  const req = http.get(`http://127.0.0.1:${PORT}/health`, (res) => {
+    res.resume();
+    if (res.statusCode === 200) {
+      console.log(`[numas] server ready (${((Date.now() - t0) / 1000).toFixed(1)}s) → 手动访问: ${targetUrl}`);
+    } else {
+      setTimeout(probe, POLL_MS);
     }
-    const http = require('http');
-    const req = http.get(`http://127.0.0.1:${PORT}/health`, (res) => {
-      res.resume();
-      if (res.statusCode === 200) {
-        try {
-          const child = spawn('/bin/sh', ['-c', `open "${targetUrl.replace(/"/g, '\\"')}" &`], {
-            detached: true,
-            stdio: 'ignore',
-            windowsHide: true,
-          });
-          child.on('error', () => {});
-          child.unref();
-          console.log(`[numas] 已 spawn 'open ${targetUrl}' (${((Date.now() - t0) / 1000).toFixed(1)}s 后)`);
-        } catch (e) {
-          console.warn(`[numas] 打开浏览器失败 (${e.message}), 手动访问: ${targetUrl}`);
-        }
-      } else {
-        setTimeout(probe, POLL_MS);
-      }
-    });
-    req.on('error', () => setTimeout(probe, POLL_MS));
-    req.setTimeout(POLL_MS, () => { req.destroy(); });
-  };
-  probe();
-}
+  });
+  req.on('error', () => setTimeout(probe, POLL_MS));
+  req.setTimeout(POLL_MS, () => { req.destroy(); });
+};
+probe();

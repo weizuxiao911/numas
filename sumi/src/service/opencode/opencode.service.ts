@@ -139,25 +139,15 @@ export class OpencodeServiceImpl implements IOpencodeService, ClientAppContribut
       defaultShell: this._runtime.defaultShell,
     };
 
-    // 3. URL 兜底: 访问地址缺 ?directory= → 用 opencode /path 拿 home 重定向到 ?directory={home}
-    //    URL 一旦补上, 后续 reload / 跨 tab / 复制 URL 全部显式一致.
-    //    注: WORKSPACE_ROOT patch (codeblitz constant.js) 在 module load 时求值 — 必须 reload
-    //    让 patch 读到新 URL. (无 workspace → reload 一次; 有 → 跳过 reload)
-    if (typeof window !== 'undefined' && this._runtime.workspace) {
-      try {
-        const u = new URL(window.location.href);
-        const hadDir = u.searchParams.get('directory');
-        if (!hadDir) {
-          u.searchParams.set('directory', this._runtime.workspace);
-          window.history.replaceState(null, '', u.toString());
-          console.log('[opencode] URL 补 ?directory= + reload 让 WORKSPACE_ROOT patch 重新求值:', this._runtime.workspace);
-          // 派 workspace:changed 事件, 通知 React state / 订阅者刷新
-          emitWorkspaceChanged(this._runtime.workspace, '');
-          // 一次性 reload (rebuild codeblitz 根到新 workspace)
-          window.location.reload();
-          return;
-        }
-      } catch { /* ignore */ }
+    // 3. (2026-09 取消) URL 补 ?directory= + reload 逻辑已移除:
+    //    - opencode.serve 是 headless, /path.directory 拿到后直接用作 runtime.workspace
+    //      (上文已设 hostCwd), 不再主动改 URL 触发 reload.
+    //    - 历史原因 (WORKSPACE_ROOT patch 在 module load 时求值) 已被绕过:
+    //      启动后 initRuntime 拿到 /path 才调 setHostAnchors, codeblitz 早期 fs 请求
+    //      拿到的 home/directory 已经是真实路径, 不依赖 reload 重新求值.
+    //    - 仍然派 workspace:changed, 让 React 订阅者收到首启 runtime 路径.
+    if (this._runtime.workspace) {
+      emitWorkspaceChanged(this._runtime.workspace, '');
     }
 
     // 派发 runtime-ready
