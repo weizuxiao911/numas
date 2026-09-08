@@ -1,1 +1,1 @@
-export { ChatbotModule, ChatbotContribution } from './module';
+export { ChatbotModule, ChatbotContribution, CHATBOT_PANEL_ID } from './module';

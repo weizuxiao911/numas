@@ -1,16 +1,3 @@
-/**
- * App — src/App.tsx
- *
- * 顶层布局 (React):
- *   - 装 codeblitz AppRenderer (一个容器, 内部所有交互由 vsix 拓展实现)
- *   - chat 模式: layoutConfig 全空 modules, 不装 codeblitz 默认 slot (menubar / explorer / editor / terminal).
- *     vsix 拓展 (session / chatbot) 走 ComponentContribution 自动装到 left / main 槽.
- *   - workspace 模式: 不传 layoutConfig, 走 codeblitz 默认 IDE 5 槽位.
- *
- * 实现机制: vsix / opensumi ComponentContribution 把 React 组件注册到 codeblitz slot.
- * 业务 UI 全部走 vsix 拓展. React 顶层只决定是否传 layoutConfig / defaultPanels.
- */
-
 import React, { useState } from 'react';
 import { AppRenderer, getDefaultAppConfig } from '@codeblitzjs/ide-core';
 import { SlotLocation } from '@opensumi/ide-core-browser';
@@ -23,15 +10,36 @@ import { preferences } from './config/preferences';
 import { ExtensionServiceImpl } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
 import { runtimeConfig } from './config/runtime';
+import { SIDEBAR_PANEL_ID } from './extensions/sidebar';
+import { CHATBOT_PANEL_ID } from './extensions/chatbot';
+import { SOLO_SLOTS } from './config/slots';
+import { IdeLayout } from './layouts/IdeLayout';
+import { SoloLayout } from './layouts/SoloLayout';
 import './styles/overrides.css';
-
-type Mode = 'chat' | 'workspace';
+import './styles/app-shell.css';
 
 /**
- * chat 模式 layoutConfig: 所有槽位 modules 空, 阻止 codeblitz 装默认 slot.
- * 业务 UI 由 vsix ComponentContribution 装 (session → left, chatbot → main).
+ * 全局模式开关 — App.tsx 唯一事实源, 运行时可改
+ *
+ *   'solo' 单栏对话 (dashboard sidebar + chatbot composer, 自定义 slot)
+ *   'ide'  完整开发 (codeblitz 标准 SlotLocation: top/left/main/...)
+ *
+ * 用法:
+ *   - 改默认值: 改下面 _appMode 初始值
+ *   - 运行时改:  setAppMode('ide') — App 自动重渲染 (走 window 'app-mode-change' 事件)
+ *   - devtools:    window.__appSetMode('ide')
  */
-const CHAT_LAYOUT: IAppRendererProps['appConfig']['layoutConfig'] = {
+export type AppMode = 'solo' | 'ide';
+let _appMode: AppMode = 'solo';
+export const getAppMode = (): AppMode => _appMode;
+export const setAppMode = (m: AppMode): void => {
+  if (_appMode === m) return;
+  _appMode = m;
+  window.dispatchEvent(new CustomEvent('app-mode-change'));
+};
+
+/** 全锁槽位 — 不让 codeblitz 装默认 module, vsix 拓展自己装 */
+const layout = {
   [SlotLocation.top]: { modules: [] },
   [SlotLocation.action]: { modules: [] },
   [SlotLocation.left]: { modules: [] },
@@ -39,18 +47,35 @@ const CHAT_LAYOUT: IAppRendererProps['appConfig']['layoutConfig'] = {
   [SlotLocation.main]: { modules: [] },
   [SlotLocation.bottom]: { modules: [] },
   [SlotLocation.extra]: { modules: [] },
-} as any;
+};
 
-/**
- * chat 模式 defaultPanels: 冷启动展开 session sidebar (left) + chatbot main (主区).
- */
-const CHAT_DEFAULT_PANELS: IAppRendererProps['appConfig']['defaultPanels'] = {
-  [SlotLocation.left]: 'session-list',
-  [SlotLocation.main]: 'chatbot-main',
-} as any;
+/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开 dashboard + chatbot */
+const SOLO_MODE = {
+  layout,
+  panels: {
+    [SOLO_SLOTS.Sidebar]: SIDEBAR_PANEL_ID,
+    [SOLO_SLOTS.Composer]: CHATBOT_PANEL_ID,
+  },
+};
+
+/** IDE 模式 — 标准 SlotLocation, 不预设展开任何 panel */
+const IDE_MODE = {
+  layout,
+  panels: {},
+};
+
+const MODES: Record<AppMode, { layout: any; panels: any }> = {
+  solo: SOLO_MODE,
+  ide: IDE_MODE,
+};
+
+const LAYOUTS: Record<AppMode, React.ComponentType> = {
+  solo: SoloLayout,
+  ide: IdeLayout,
+};
 
 export const App: React.FC = () => {
-  const [mode] = useState<Mode>('chat');
+  const [mode, setMode] = useState<AppMode>(() => getAppMode());
   const defaultModules = getDefaultAppConfig().modules || [];
   const [meta, setMeta] = useState<ExtensionMetadata[]>([]);
 
@@ -59,12 +84,20 @@ export const App: React.FC = () => {
     svc.installMetadata().then(setMeta);
   }, []);
 
-  const isChat = mode === 'chat';
+  React.useEffect(() => {
+    const onChange = (): void => setMode(getAppMode());
+    window.addEventListener('app-mode-change', onChange);
+    return () => window.removeEventListener('app-mode-change', onChange);
+  }, []);
+
+  const cfg = MODES[mode];
+  const Layout = LAYOUTS[mode];
 
   const appConfig: IAppRendererProps['appConfig'] = {
     workspaceDir: '/',
-    layoutConfig: isChat ? CHAT_LAYOUT : undefined,
-    defaultPanels: isChat ? CHAT_DEFAULT_PANELS : undefined,
+    layoutConfig: cfg?.layout,
+    layoutComponent: Layout,
+    defaultPanels: cfg?.panels,
     componentCDNType: 'jsdelivr',
     defaultPreferences: preferences,
     extensionMetadata: meta as any,

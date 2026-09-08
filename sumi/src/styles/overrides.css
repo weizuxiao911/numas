@@ -1211,3 +1211,93 @@ div[data-viewlet-id="sessions-default"] [class*="titlebar"] {
 .app-chat-main__input-send:hover { background: #000; }
 
 /* dark mode: chat 也跟随 */
+
+
+
+
+/* ==================== app shell + mode bar ====================
+   顶层容器: 顶部 36px 模式切换条 + 主体 (codeblitz AppRenderer)
+*/
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background: var(--ai-bg, #fafafa);
+  overflow: hidden;
+}
+.app-shell__body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.app-shell__body > * {
+  height: 100%;
+  width: 100%;
+}
+
+.app-modebar {
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-size: 13px;
+  color: var(--ai-fg, #1f2328);
+  z-index: 10;
+  position: relative;
+}
+.app-modebar__brand {
+  display: flex; align-items: center; gap: 8px;
+  user-select: none;
+  min-width: 0;
+}
+.app-modebar__logo {
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #6D5EF5 0%, #9080F8 100%);
+  border-radius: 6px;
+  color: #fff; font-size: 14px;
+  box-shadow: 0 2px 5px rgba(109, 94, 245, 0.32);
+}
+.app-modebar__name { font-weight: 600; font-size: 13px; }
+.app-modebar__tag { font-size: 11px; opacity: 0.55; }
+
+.app-modebar__modes {
+  display: flex;
+  margin-left: auto;
+  margin-right: auto;
+  background: rgba(15, 23, 42, 0.05);
+  border-radius: 7px;
+  padding: 2px;
+  gap: 2px;
+}
+.app-modebar__mode {
+  border: none; background: transparent;
+  font-size: 12px; font-weight: 500;
+  padding: 4px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.65;
+  transition: background 0.12s ease, opacity 0.12s ease;
+  letter-spacing: 0.04em;
+}
+.app-modebar__mode:hover { opacity: 1; }
+.app-modebar__mode--active {
+  background: #6D5EF5;
+  color: #fff;
+  opacity: 1;
+  box-shadow: 0 1px 3px rgba(109, 94, 245, 0.35);
+}
+
+.app-modebar__actions {
+  display: flex; align-items: center; gap: 8px;
+  min-width: 0;
+}
+

@@ -7,7 +7,7 @@
  * codeblitz 官方模块 (TerminalNextModule / TaskModule) 不在此处导入,
  * 走框架 defaultModules 自动注入 (App.tsx: getDefaultAppConfig().modules).
  *
- * vsix 拓展模块 (SessionModule / ChatbotModule) 在此注册, 装 left / main 槽.
+ * vsix 拓展模块 (DashboardModule / ChatbotModule) 在此注册, 装 left / main 槽.
  */
 
 import { AgentModule } from '../service/opencode';
@@ -21,7 +21,7 @@ import { PortsModule } from '../service/ports';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
-import { SessionModule } from '../extensions/session';
+import { SidebarModule } from '../extensions/sidebar';
 import { ChatbotModule } from '../extensions/chatbot';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
@@ -39,8 +39,8 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     EditorRestoreFallbackModule, // 官方 workbench tab 恢复的延迟兜底 (早期 handlesUri 未就绪)
 
     // vsix 拓展 (UI 组件, 走 ComponentContribution 装 codeblitz slot)
-    SessionModule,         // 会话列表 (left 槽)
-    ChatbotModule,         // 对话主区 (main 槽)
+    SidebarModule,         // 首页侧栏 (sidebar 槽)
+    ChatbotModule,         // 对话主区 (composer 槽)
 
     // 自定义 file scheme provider (覆盖 codeblitz 默认 DiskFileSystemProvider)
     FsProviderModule,
