@@ -2,21 +2,26 @@
  * Sidebar — Numas 首页侧栏 UI (vsix 拓展实现的 React 组件)
  *
  * 装 SOLO 模式 Sidebar 槽. 当前仅:
- *   - 模式切换器 (顶): 当前模式按钮 + 折叠按钮
+ *   - 模式切换器 (顶): 当前模式按钮
+ *   - 折叠按钮 (顶右)
+ *
+ * 折叠/展开 state 走 sidebar/commands/sidebarApi (跟 chat 拓展同模式,
+ * 模块级单例 + 函数引用, 不破 §2.2 跨拓展铁律).
  *
  * 分层铁律 (AGENTS.md §2.2):
  *   - 模式切换: 读 window.__appSetMode 暴露的 setAppMode, 调 → reload
  *     (codeblitz AppRenderer 不响应运行时 config 变化)
+ *   - 折叠/展开: 调 sidebarApi.collapse() / expand() / toggle()
  */
 
 import React, { useEffect, useState } from 'react';
 
 import { getAppMode, setAppMode, type AppMode } from '../../App';
+import { getSidebarApi } from './commands';
 import { styles } from './styles';
 
 const ModeSwitch: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(() => getAppMode());
-  const [leftVisible, setLeftVisible] = useState(true);
   useEffect(() => {
     const onChange = (): void => setMode(getAppMode());
     window.addEventListener('app-mode-change', onChange);
@@ -38,58 +43,47 @@ const ModeSwitch: React.FC = () => {
     </svg>
   );
   return (
-    <div className="app-sidebar__mode-row">
-      <button
-        type="button"
-        className="app-sidebar__mode-active"
-        title={`当前 ${isSolo ? 'Solo' : 'IDE'} 模式, 点击切换到 ${otherLabel}`}
-        onClick={() => {
-          setAppMode(otherMode);
-          setTimeout(() => window.location.reload(), 50);
-        }}
-      >
-        <span className="app-sidebar__mode-active-label">{isSolo ? 'SOLO' : 'IDE'}</span>
-        <span className="app-sidebar__mode-active-icon" aria-hidden>{Icon}</span>
-      </button>
-      <button
-        type="button"
-        className="app-sidebar__icon-btn app-sidebar__icon-btn--bare"
-        title={leftVisible ? '折叠' : '展开'}
-        onClick={() => {
-          setLeftVisible(v => !v);
-        }}
-      >
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <rect x="3" y="4" width="18" height="16" rx="2" />
-          {leftVisible
-            ? <rect x="3" y="4" width="6" height="16" fill="currentColor" stroke="none" />
-            : <line x1="9" y1="4" x2="9" y2="20" />}
-        </svg>
-      </button>
-    </div>
+    <button
+      type="button"
+      className="app-sidebar__mode-active"
+      title={`当前 ${isSolo ? 'Solo' : 'IDE'} 模式, 点击切换到 ${otherLabel}`}
+      onClick={() => {
+        setAppMode(otherMode);
+        setTimeout(() => window.location.reload(), 50);
+      }}
+    >
+      <span className="app-sidebar__mode-active-label">{isSolo ? 'SOLO' : 'IDE'}</span>
+      <span className="app-sidebar__mode-active-icon" aria-hidden>{Icon}</span>
+    </button>
   );
 };
 
-function formatAgo(ts: number): string {
-  if (!ts) return '';
-  const diff = Date.now() - ts;
-  const min = 60_000;
-  const hour = 60 * min;
-  const day = 24 * hour;
-  if (diff < min) return '刚刚';
-  if (diff < hour) return `${Math.floor(diff / min)} 分钟前`;
-  if (diff < day) return `${Math.floor(diff / hour)} 小时前`;
-  if (diff < 30 * day) return `${Math.floor(diff / day)} 天前`;
-  return new Date(ts).toLocaleDateString();
-}
+const CollapseToggle: React.FC = () => {
+  return (
+    <button
+      type="button"
+      className="app-sidebar__icon-btn app-sidebar__icon-btn--bare"
+      title="折叠 sidebar 到 1px"
+      onClick={() => getSidebarApi()?.collapse()}
+    >
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <rect x="3" y="4" width="6" height="16" fill="currentColor" stroke="none" />
+      </svg>
+    </button>
+  );
+};
 
 export const Sidebar: React.FC = () => {
   return (
     <>
       <style>{styles}</style>
       <div className="app-sidebar">
-      <ModeSwitch />
-    </div>
+        <div className="app-sidebar__mode-row">
+          <ModeSwitch />
+          <CollapseToggle />
+        </div>
+      </div>
     </>
   );
 };

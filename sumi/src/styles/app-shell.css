@@ -3,12 +3,13 @@
  * 包含: SOLO 模式 2 面板 + 自定义拖动条
  *
  * 主题色: 全部走 codeblitz/opensumi token, 不硬编码颜色
- * sidebar 右侧阴影: 始终显示 (细微分割感), 颜色由 --editor-foreground 派生,
- *   light 主题 fg 深 → 阴影深; dark 主题 fg 浅 → 阴影浅, 自动跟随主题.
- * 拖动条 hover 阴影变深, 提示可拖.
+ * 折叠/展开动效: sidebar 跟 resizer 都加 transition: width, 平滑向左折
  */
 .app-solo {
   --resizer-w: 6px;
+  /* sidebar 折叠动效: cubic-bezier 让"折"的动作自然, 跟 macOS 风格一致 */
+  --solo-ease: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --solo-duration: 200ms;
 
   display: flex;
   flex-direction: row;
@@ -30,9 +31,16 @@
   position: relative;
 }
 
+/* sidebar 折叠动效: 用 CSS variable --sidebar-w 控制宽 (由 SoloLayout 注入 inline style),
+   transition 跟踪 var 变化, 实现"折"动效. 折叠=1px, 展开=256/231/... */
 .app-solo__sidebar {
   z-index: 1;
   background: var(--editor-background);
+  flex: 0 0 var(--sidebar-w, 256px);
+  width: var(--sidebar-w, 256px);
+  transition: flex-basis var(--solo-duration) var(--solo-ease),
+              width var(--solo-duration) var(--solo-ease);
+  will-change: width;
 }
 .app-solo__composer {
   z-index: 1;
@@ -42,7 +50,7 @@
   background: color-mix(in srgb, var(--editor-background) 95%, var(--editor-foreground) 5%);
 }
 
-/* 拖动条: 朴素 1px 主线, 无任何光带/阴影/外发光 */
+/* 拖动条: 朴素 1px 主线, 折叠时跟 sidebar 一起收, 动效跟 sidebar 同步 */
 .app-solo__resizer {
   flex: 0 0 var(--resizer-w);
   width: var(--resizer-w);
@@ -50,6 +58,9 @@
   background: transparent;
   position: relative;
   z-index: 2;
+  transition: flex-basis var(--solo-duration) var(--solo-ease),
+              width var(--solo-duration) var(--solo-ease);
+  will-change: width;
 }
 .app-solo__resizer::before {
   content: '';
@@ -59,29 +70,5 @@
   left: 50%;
   width: 1px;
   background: var(--editor-border);
-  transform: translateX(-0.5px);
-}
-.app-solo__resizer:hover ~ .app-solo__composer,
-.app-solo__sidebar:has(+ .app-solo__resizer:hover) {
-  /* hover 拖动条时, 阴影不会变 — 这里只是占位, 真实 hover 效果在 .app-solo__resizer::before */
-}
-
-/* 拖动条: 始终显示, 颜色跟 sidebar 阴影一致 (theme-foreground 18% mix),
-   hover 时变深 (30% mix) + 发光提示可拖 */
-.app-solo__resizer {
-  flex: 0 0 var(--resizer-w);
-  width: var(--resizer-w);
-  cursor: col-resize;
-  background: transparent;
-  position: relative;
-  z-index: 2;
-}
-.app-solo__resizer::before {
-  content: '';
-  position: absolute;
-  top: 0; bottom: 0;
-  left: 50%;
-  width: 1px;
-  background: var(--separator);
   transform: translateX(-0.5px);
 }
