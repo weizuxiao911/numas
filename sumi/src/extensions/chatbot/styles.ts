@@ -158,7 +158,7 @@ export const styles = `
 .app-chatbot__header { position: relative; }
 
 /* ProjectPicker popover: 顶 8px 下拉 + fade in, 跟 header 顶 36px 按钮左对齐
-   无 border, 仅 soft shadow + bg 区分 */
+   无 border, 仅 soft shadow + 跟 sidebar 同样的纯 editor-bg (跟 composer 1 档色差) */
 .app-project-picker {
   position: absolute;
   top: calc(100% + 8px);
@@ -166,7 +166,7 @@ export const styles = `
   z-index: 1000;
   min-width: 360px;
   max-width: 480px;
-  background: color-mix(in srgb, var(--editor-background) 92%, var(--editor-foreground) 8%);
+  background: var(--editor-background);
   color: var(--ai-fg);
   border: 0;
   border-radius: 10px;
