@@ -1,8 +1,8 @@
 /**
  * Chatbot 拓展 — extensions/chatbot/
  *
- * 装 SOLO 模式 Composer 槽 (自定义 slot 'composer', 见 config/slots.ts).
- * 显示 chat 主区 (大标题 + tab + 建议 + 输入框).
+ * 装 SOLO 模式 Main 槽 (自定义 slot 'main', 见 config/slots.ts).
+ * 对话主区: 消息流 + 输入区 (顶栏已拆到 extensions/action).
  */
 import { Injectable } from '@opensumi/di';
 import { Domain } from '@opensumi/ide-core-common';
@@ -32,7 +32,7 @@ export class ChatbotContribution implements ComponentContribution {
         iconClass: 'codicon codicon-comment-discussion',
         title: '对话',
       },
-      SOLO_SLOTS.Composer,
+      SOLO_SLOTS.Main,
     );
   }
 }

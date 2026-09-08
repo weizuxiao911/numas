@@ -1,7 +1,7 @@
 /**
- * ProjectPicker — chatbot header "选择项目" 按钮 popover
+ * ProjectPicker — action 顶栏 "选择项目" 按钮 popover
  *
- * 触发: ChatbotMain 顶 "选择项目" 按钮.
+ * 触发: ActionBar 顶 "选择项目" 按钮.
  * 内容: 2 组动作 (选择目录 / 克隆仓库) + 最近项目列表.
  * 行为:
  *   - 选择目录 → 派 window 'workspace:request-show' 事件, 复用 WorkspacePicker 走 FilePicker
@@ -10,7 +10,7 @@
  *   - 点外部 / Esc → 关闭
  * 动效: 顶 8px 下拉 + fade in, 200ms cubic-bezier(0.16, 1, 0.3, 1).
  *
- * 不做 module / slot — ChatbotMain 内部 React 组件, 不破 §2.2 跨拓展铁律.
+ * 不做 module / slot — ActionBar 内部 React 组件, 不破 §2.2 跨拓展铁律.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
