@@ -104,6 +104,13 @@ export function SoloLayout(): React.ReactElement {
     return () => registerSidebarApi(null);
   }, [api]);
 
+  // 最新 sidebar api 引用: drawer 联动折叠时要走 api.collapse() (触发 notify),
+  // 不能直接 setSidebarCollapsed, 否则 ActionBar 的镜像订阅收不到变化
+  const sidebarApiRef = useRef<SidebarApi | null>(null);
+  useEffect(() => {
+    sidebarApiRef.current = api;
+  }, [api]);
+
   const onResizerDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -139,35 +146,37 @@ export function SoloLayout(): React.ReactElement {
 
   const drawerSubsRef = useRef<Array<(s: { open: boolean; width: number }) => void>>([]);
   const drawerApi = useMemo<DrawerApi>(() => {
-    const notify = () => {
-      drawerSubsRef.current.forEach((cb) => cb({ open: drawerOpen, width: drawerW }));
+    const notify = (nextOpen: boolean, nextW: number) => {
+      drawerSubsRef.current.forEach((cb) => cb({ open: nextOpen, width: nextW }));
     };
     return {
       get open() { return drawerOpen; },
       get width() { return drawerW; },
-      open: (w?: number) => {
+      setOpen: (w?: number) => {
         const nextW = Math.max(120, w ?? (drawerW > 0 ? drawerW : viewportRatioWidth()));
         setDrawerW(nextW);
         setDrawerOpen(true);
-        notify();
+        notify(true, nextW);
       },
       close: () => {
         setDrawerOpen(false);
-        notify();
+        notify(false, drawerW);
       },
       toggle: () => {
         if (drawerOpen) {
           setDrawerOpen(false);
+          notify(false, drawerW);
         } else {
-          if (drawerW <= 0) setDrawerW(viewportRatioWidth());
+          const nextW = drawerW <= 0 ? viewportRatioWidth() : drawerW;
+          if (drawerW <= 0) setDrawerW(nextW);
           setDrawerOpen(true);
+          notify(true, nextW);
         }
-        notify();
       },
       setWidth: (n: number) => {
         const next = Math.max(120, Math.min(window.innerWidth - 200, n));
         setDrawerW(next);
-        notify();
+        notify(drawerOpen, next);
       },
       onChange: (cb) => {
         drawerSubsRef.current.push(cb);
@@ -189,8 +198,7 @@ export function SoloLayout(): React.ReactElement {
     const onResize = () => setDrawerW(viewportRatioWidth());
     window.addEventListener('resize', onResize);
     if (!sidebarCollapsed) {
-      expandedWRef.current = sidebarW;
-      setSidebarCollapsed(true);
+      sidebarApiRef.current?.collapse();
     }
     return () => window.removeEventListener('resize', onResize);
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -21,7 +21,8 @@ import { getAppMode, setAppMode, type AppMode } from '../../App';
 import { getWorkspace } from '../../infra/url';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { StateToken, type IStateService } from '../../service/state';
-import { getSidebarApi } from '../sidebar/commands';
+import { getSidebarApi } from '../../commands/sidebar';
+import { getDrawerApi } from '../../commands/drawer';
 import { styles } from './styles';
 import { ProjectPicker } from './ProjectPicker';
 
@@ -85,6 +86,35 @@ const ExpandToggle: React.FC = () => {
   );
 };
 
+const DrawerToggle: React.FC = () => {
+  const [open, setOpen] = useState<boolean>(() => getDrawerApi()?.open ?? false);
+  useEffect(() => {
+    const api = getDrawerApi();
+    if (!api) return;
+    return api.onChange((s) => setOpen(s.open));
+  }, []);
+  return (
+    <button
+      type="button"
+      className="app-action__drawer"
+      title={open ? '关闭抽屉' : '展开抽屉'}
+      onClick={() => getDrawerApi()?.toggle()}
+    >
+      {open ? (
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <rect x="15" y="4" width="6" height="16" fill="currentColor" stroke="none" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <rect x="3" y="4" width="18" height="16" rx="2" />
+          <line x1="15" y1="4" x2="15" y2="20" />
+        </svg>
+      )}
+    </button>
+  );
+};
+
 const ProjectPickButton: React.FC<{ open: boolean; onToggle: () => void; label: string }> = ({ open, onToggle, label }) => {
   return (
     <button
@@ -130,17 +160,22 @@ export const ActionBar: React.FC = () => {
     <>
       <style>{styles}</style>
       <div className="app-action">
-        {mirrorVisible && (
-          <>
-            <ModeSwitch />
-            <ExpandToggle />
-          </>
-        )}
-        {/* wrap: popover 的定位锚点 — 锚在按钮上而不是整条 action 栏上,
-            这样折叠态 (前面多了 ModeSwitch + ExpandToggle) 也始终跟按钮左边缘对齐 */}
-        <div className="app-action__pick-wrap">
-          <ProjectPickButton open={pickerOpen} onToggle={() => setPickerOpen((v) => !v)} label={label} />
-          <ProjectPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+        <div className="app-action__left">
+          {mirrorVisible && (
+            <>
+              <ModeSwitch />
+              <ExpandToggle />
+            </>
+          )}
+          {/* wrap: popover 的定位锚点 — 锚在按钮上而不是整条 action 栏上,
+             这样折叠态 (前面多了 ModeSwitch + ExpandToggle) 也始终跟按钮左边缘对齐 */}
+          <div className="app-action__pick-wrap">
+            <ProjectPickButton open={pickerOpen} onToggle={() => setPickerOpen((v) => !v)} label={label} />
+            <ProjectPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+          </div>
+        </div>
+        <div className="app-action__right">
+          <DrawerToggle />
         </div>
       </div>
     </>

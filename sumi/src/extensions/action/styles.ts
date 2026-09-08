@@ -31,6 +31,22 @@ export const styles = `
   box-sizing: border-box;
 }
 
+/* 左右两栏: 左组 (mode/expand/pick) + 右组 (drawer 开关), space-between 分两端 */
+.app-action__left {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.app-action__right {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* 模式切换按钮: 跟 sidebar mode-active 同款 (高 36px)
    - 主题色实心 (--ai-accent 背景 + --ai-accent-fg 文字)
    - 内嵌反色 icon 块 */
@@ -124,6 +140,28 @@ export const styles = `
   text-overflow: ellipsis;
 }
 .app-action__pick > svg { flex: 0 0 auto; }
+
+/* 抽屉开关按钮: 36x36 裸 icon, 跟 sidebar 的 .app-sidebar__icon-btn--bare 同款
+   (透明 bg, muted fg, hover 浅色 + 加深 fg), 仅通过内部 icon 方向
+   (chevron-right ↔ chevron-left) 区分 "抽屉关闭" / "抽屉打开". */
+.app-action__drawer {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--ai-fg-muted);
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.app-action__drawer:hover {
+  background: var(--ai-hover);
+  color: var(--ai-fg);
+}
 
 /* 项目选择按钮的定位容器: popover 锚在这里 (而非整条 action 栏),
    保证折叠态 (前面有 ModeSwitch + ExpandToggle) 下 popover 仍跟按钮左对齐 */

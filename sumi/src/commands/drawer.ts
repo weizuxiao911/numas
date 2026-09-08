@@ -19,9 +19,12 @@ export interface DrawerState {
 }
 
 export interface DrawerApi {
+  /** 当前是否打开 */
   readonly open: boolean;
+  /** 当前宽度 (px) */
   readonly width: number;
-  open: (width?: number) => void;
+  /** 打开抽屉 (可选指定宽度, 默认保留当前宽或 50% viewport) */
+  setOpen: (width?: number) => void;
   close: () => void;
   toggle: () => void;
   setWidth: (n: number) => void;
