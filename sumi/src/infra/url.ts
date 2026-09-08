@@ -21,12 +21,17 @@ export function appBaseUrl(): string {
   return injected.replace(/\/+$/, '');
 }
 
-/** 读 URL `?directory=` query 参数 (显式 source, 优先于 localStorage). 跨平台: 路径 normalize 后返回. */
+/** 读 URL `?directory=` query 参数 (显式 source, 优先于 localStorage). 跨平台: 路径 normalize 后返回.
+ *  防御: ?directory=<path>?cache-buster 这种"裸 ?v=1" 拼法 (浏览器 URL API 不会自动 `&` 分隔)
+ *  会让 directory 值吞掉后续 query. 取首个 `?` 之前的部分作 workspace, 避免路径污染. */
 export function urlWorkspace(): string {
   if (typeof window === 'undefined') return '';
   try {
     const raw = new URL(window.location.href).searchParams.get('directory');
-    return raw ? normalizeCwdPath(raw) : '';
+    if (!raw) return '';
+    // 防御: 截断路径中意外的 `?` 后续 (cache-buster 拼错位置: ?directory=...&cache= 应是 & 不是 ?)
+    const cleaned = raw.split('?')[0]
+    return cleaned ? normalizeCwdPath(cleaned) : ''
   } catch {
     return '';
   }
