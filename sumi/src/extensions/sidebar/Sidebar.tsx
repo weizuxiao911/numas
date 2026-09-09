@@ -20,8 +20,7 @@ import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/inject
 import { SlotRenderer } from '@opensumi/ide-core-browser/lib/react-providers/slot';
 import { CommandService } from '@opensumi/ide-core-common';
 import { getAppMode, setAppMode, type AppMode } from '../../App';
-import { getWorkspace } from '../../infra/url';
-import { absToRel, pathBase } from '../../infra/path';
+import { StateToken, type IStateService } from '../../service/state';
 import { LAYOUT_COMMANDS } from '../../service/layout';
 import { styles } from './styles';
 
@@ -87,7 +86,7 @@ const NewSessionButton: React.FC = () => {
       type="button"
       className="app-sidebar__new-session"
       title="新建会话"
-      onClick={() => void commandService.executeCommand('numas.chatbot.newSession')}
+      onClick={() => void commandService.executeCommand('chatbot.newSession')}
     >
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 5v14M5 12h14" />
@@ -123,28 +122,18 @@ function sessionTimeLabel(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** 会话工作目录 → 相对当前 workspace 显示 (workspace 根 = basename, 子目录 = 相对路径) */
-function sessionDirLabel(s: any): string {
-  const dir = s?.directory;
-  if (!dir) return '';
-  const ws = getWorkspace();
-  const rel = ws ? absToRel(dir, ws) : null;
-  if (rel === '.') return pathBase(ws) || ws;
-  if (rel) return rel;
-  return dir;
-}
-
 /** 历史会话列表 — 当前 cwd 顶层会话 (排除 subagent), 点击切换 */
 const SessionList: React.FC = () => {
   const commandService = useInjectable<CommandService>(CommandService);
+  const state = useInjectable<IStateService>(StateToken);
   const [sessions, setSessions] = useState<any[]>([]);
   const [currentID, setCurrentID] = useState<string>('');
 
   const refresh = React.useCallback(async () => {
     try {
       const [list, cur] = await Promise.all([
-        commandService.executeCommand<any[]>('numas.chatbot.listSessions'),
-        commandService.executeCommand<string>('numas.chatbot.getCurrentSessionID'),
+        commandService.executeCommand<any[]>('chatbot.listSessions'),
+        commandService.executeCommand<string>('chatbot.getCurrentSessionID'),
       ]);
       setSessions(Array.isArray(list) ? list : []);
       if (typeof cur === 'string') setCurrentID(cur);
@@ -153,38 +142,41 @@ const SessionList: React.FC = () => {
 
   useEffect(() => {
     void refresh();
-    // workspace 切换 (reload) 后由 runtime-ready 兜底刷新; 新建会话后等会话列表变化
+    // 切项目 (workdir) 后立即刷新该项目会话; 同时轮询兜底新建/更新
     const id = window.setInterval(() => void refresh(), 4000);
+    const unsub = state.subscribeWorkdir(() => void refresh());
     const onReady = () => void refresh();
     window.addEventListener('runtime-ready', onReady);
     return () => {
       window.clearInterval(id);
+      unsub();
       window.removeEventListener('runtime-ready', onReady);
     };
-  }, [refresh]);
+  }, [refresh, state]);
 
   const onSelect = (sid: string) => {
-    void commandService.executeCommand('numas.chatbot.changeSession', sid);
+    void commandService.executeCommand('chatbot.changeSession', sid);
     setCurrentID(sid);
   };
   const onDelete = (sid: string) => {
-    void commandService.executeCommand('numas.chatbot.deleteSession', sid);
+    void commandService.executeCommand('chatbot.deleteSession', sid);
     setSessions((prev) => prev.filter((s) => s?.id !== sid));
   };
 
-  const sorted = [...sessions].sort((a, b) => sessionTime(b) - sessionTime(a));
+  // 单 workdir 模型: 不分组, 直接平铺当前项目会话, 按更新时间倒序.
+  const list = [...sessions].sort((a, b) => sessionTime(b) - sessionTime(a));
 
   return (
     <div className="app-sidebar__sessions">
       <div className="app-sidebar__sessions-head">
         <span className="app-sidebar__sessions-title">历史会话</span>
-        {sessions.length > 0 && <span className="app-sidebar__sessions-count">{sessions.length}</span>}
+        {list.length > 0 && <span className="app-sidebar__sessions-count">{list.length}</span>}
       </div>
       <div className="app-sidebar__sessions-body">
-        {sorted.length === 0 && (
+        {list.length === 0 && (
           <div className="app-sidebar__sessions-empty">暂无会话</div>
         )}
-        {sorted.map((s) => {
+        {list.map((s) => {
           const active = s?.id === currentID;
           return (
             <div
@@ -198,7 +190,6 @@ const SessionList: React.FC = () => {
             >
               <span className="app-sidebar__session-body">
                 <span className="app-sidebar__session-name">{sessionLabel(s)}</span>
-                {s?.directory && <span className="app-sidebar__session-dir" title={s.directory}>{sessionDirLabel(s)}</span>}
               </span>
               {!!sessionTime(s) && <span className="app-sidebar__session-time">{sessionTimeLabel(sessionTime(s))}</span>}
               <button
@@ -232,9 +223,11 @@ export const Sidebar: React.FC = () => {
           <NewSessionButton />
           <SessionList />
         </div>
-        {/* 底部设置区块 (内嵌 slot, settings 拓展挂这里) */}
-        <div className="app-sidebar__settings">
-          <SlotRenderer slot="settings" />
+        {/* 底部: 用户信息 (user slot) */}
+        <div className="app-sidebar__footer">
+          <div className="app-sidebar__footer-user">
+            <SlotRenderer slot="user" />
+          </div>
         </div>
       </div>
     </>

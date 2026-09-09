@@ -6,6 +6,7 @@ import '@codeblitzjs/ide-core/bundle/codeblitz.css';
 import '@codeblitzjs/ide-core/languages';
 
 import { getBuiltinModules } from './config/modules';
+import { isBootReady, resolveBoot } from './infra/url';
 import { preferences } from './config/preferences';
 import { ExtensionServiceImpl } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
@@ -13,7 +14,7 @@ import { runtimeConfig } from './config/runtime';
 import { SIDEBAR_PANEL_ID } from './extensions/sidebar';
 import { ACTION_PANEL_ID } from './extensions/action';
 import { CHATBOT_PANEL_ID } from './extensions/chatbot';
-import { SETTINGS_PANEL_ID } from './extensions/settings';
+import { USER_PANEL_ID } from './extensions/user';
 import { SOLO_SLOTS } from './config/slots';
 import { IdeLayout } from './layouts/IdeLayout';
 import { SoloLayout } from './layouts/SoloLayout';
@@ -58,7 +59,7 @@ const SOLO_MODE = {
     [SOLO_SLOTS.Sidebar]: SIDEBAR_PANEL_ID,
     [SOLO_SLOTS.Action]: ACTION_PANEL_ID,
     [SOLO_SLOTS.Main]: CHATBOT_PANEL_ID,
-    [SOLO_SLOTS.Settings]: SETTINGS_PANEL_ID,
+    [SOLO_SLOTS.User]: USER_PANEL_ID,
   },
 };
 
@@ -94,6 +95,16 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('app-mode-change', onChange);
   }, []);
 
+  // 启动门控: 消费 URL ?directory= (一次性) + 探一次 /path 拿 home 锚点后即放开.
+  // 未选项目也渲染 (显示「选择项目」空态); /path.directory 仅技术兜底, 不当已选项目.
+  const [wsReady, setWsReady] = React.useState<boolean>(() => isBootReady());
+  React.useEffect(() => {
+    if (wsReady) return;
+    let alive = true;
+    void resolveBoot().then(() => { if (alive) setWsReady(true); });
+    return () => { alive = false; };
+  }, [wsReady]);
+
   const cfg = MODES[mode];
   const Layout = LAYOUTS[mode];
 
@@ -110,6 +121,15 @@ export const App: React.FC = () => {
       ...getBuiltinModules(),
     ],
   };
+
+  if (!wsReady) {
+    return (
+      <div className="app-boot">
+        <div className="app-boot__spinner" aria-hidden />
+        <div className="app-boot__text">正在加载工作空间…</div>
+      </div>
+    );
+  }
 
   return (
     <AppRenderer

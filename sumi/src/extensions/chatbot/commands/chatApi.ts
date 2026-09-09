@@ -46,6 +46,10 @@ export interface ChatPanelApi {
   listSessions(): Promise<any[]>;
   /** 删除会话 */
   deleteSession(sid: string): void | Promise<void>;
+  /** 切换当前项目 (workspace 根或根下子目录): 有该项目会话则载入最新, 无则新建草稿 */
+  setProject?(dir: string): void | Promise<void>;
+  /** 当前项目路径 (= 当前会话 directory, 无会话时 workspace 根) */
+  getProject?(): string;
   /** 把上下文挂到当前对话输入栏 (不发送) */
   addContext(item: ChatContextItem): AddContextResult;
 }

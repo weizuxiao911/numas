@@ -29,23 +29,6 @@ export function getGlobalOpencodeRuntime() {
   return (window as any).__APP_OPENCODE_RUNTIME__ || {};
 }
 
-/** 当前工作目录 (跟 service/env.effectiveCwd 同一逻辑) — 传给 SDK 的 directory query
- *  SDK 已带 x-opencode-directory header, 显式传 directory 是冗余但更稳, 防止 SDK header
- *  失效 (e.g. APP_CWD 未设, runtime.cwd 还没注入) 时 opencode 走 home 解析 */
-function getAiDirectory(): string {
-  if (typeof localStorage !== 'undefined') {
-    const v = localStorage.getItem('APP_CWD');
-    if (v) return v;
-  }
-  return getGlobalOpencodeRuntime().cwd || '.';
-}
-
-/** x-opencode-directory header (跟 service/env.cwdHeader 同一逻辑) — 备用, 给 fetch 兜底 */
-function getAiCwdHeader(): Record<string, string> {
-  const cwd = getAiDirectory();
-  return cwd && cwd !== '.' ? { 'x-opencode-directory': encodeURI(cwd) } : {};
-}
-
 export function getAiClient() {
   return getGlobalOpencodeClient();
 }
@@ -99,7 +82,7 @@ export async function aiGetCwd(): Promise<string> {
   return typeof data?.directory === 'string' ? data.directory : '';
 }
 
-/** 目录是否位于当前工作目录或其子目录内 (排除父级/兄弟目录) */
+/** 目录是否位于给定根或其子目录内 (排除父级/兄弟目录) */
 export function isWithinCwd(dir: string | undefined, cwd: string): boolean {
   if (!dir || !cwd) return false;
   const d = dir.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -107,19 +90,15 @@ export function isWithinCwd(dir: string | undefined, cwd: string): boolean {
   return d === c || d.startsWith(c + '/');
 }
 
-/** 历史会话列表 — 仅当前工作目录及其子目录 (不向上层获取).
- *  v2.session.list 只返回当前项目会话; 这里再按 directory 前缀过滤,
- *  确保只看到 cwd 及子目录下创建的会话, 排除父级/兄弟目录.
+/** 历史会话列表 — **只列当前 workdir (项目) 的顶层会话**, 不分组.
+ *  单 workdir 模型: SDK 全局 client 已随 workdir 重建, opencodeFetch 默认
+ *  x-opencode-directory header 就是当前项目, 无需任何覆盖.
  *  roots=true: 只列顶层会话 (parent_id IS NULL), 排除 subagent/委派子会话. */
 export async function aiListSessions(): Promise<any[]> {
   await waitForAiReady();
-  const client = getAiClient()!;
-  const cwd = await aiGetCwd().catch(() => '');
-  const { data, error } = await (client as any).session.list({ roots: true });
-  if (error) throw error;
-  const list: any[] = Array.isArray(data) ? data : (Array.isArray((data as any)?.data) ? (data as any).data : []);
-  // cwd 未知时返回空, 避免泄漏上层/其他目录会话
-  return cwd ? list.filter((s) => isWithinCwd(s?.directory, cwd)) : [];
+  const json: any = await opencodeFetch('/session?roots=true');
+  const list: any[] = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
+  return list;
 }
 
 /** 会话消息列表 — v2.session.messages({ sessionID }) */
@@ -201,26 +180,20 @@ export async function aiDeleteAllSessions(): Promise<number> {
   return deleted;
 }
 
-/** 会话内 agent 列表 — 用全局 SDK client (已带 cwd header), 拿全量 (内置 + project 自定义),
- *  返回可作为顶层对话角色的 agent: mode === 'primary' | 'all' (all = 可主可子);
- *  subagent 仅被 @ 调用, 不进 mode 选择器. 内部 agent (compaction/title/summary) 由 UI 层 HIDDEN_AGENTS 屏蔽.
- *
- *  关键: 必须传有效 cwd 作为 directory query (SDK 的 cwdHeader 是默认 cwd, 这里再显式传
- *  防止 window.location.pathname=/ 时 opencode 走 home 解析), 否则拿不到 .opencode/agents/*.md
- *  (之前用 ?directory=/ 走 query 不带 header, 只能拿到 native agent) */
+/** 会话内 agent 列表 — 用全局 SDK client (每请求动态带当前 workdir header), 拿全量
+ *  (内置 + project 自定义), 返回可作为顶层对话角色的 agent:
+ *  mode === 'primary' | 'all' (all = 可主可子); subagent 仅被 @ 调用, 不进 mode 选择器.
+ *  内部 agent (compaction/title/summary) 由 UI 层 HIDDEN_AGENTS 屏蔽.
+ *  目录只走 x-opencode-directory header, 不再传 directory query. */
 export async function aiListAgents(): Promise<any[]> {
   await waitForAiReady();
   const client = getAiClient();
   if (!client) {
-    // 兜底: SDK 未就绪, 走 opencodeFetch (拿 SDK baseUrl + cwdHeader)
+    // 兜底: SDK 未就绪, 走 opencodeFetch (同样按当前 workdir 注入 header)
     const list = await opencodeFetch<any[]>('/agent', { headers: { Accept: 'application/json' } });
     return filterVisibleAgents(list);
   }
-  const cwd = (typeof localStorage !== 'undefined' ? localStorage.getItem('APP_CWD') : '')
-    || (getGlobalOpencodeRuntime().cwd || '');
-  const r = await (client as any).app.agents({
-    query: cwd ? { directory: cwd } : undefined,
-  });
+  const r = await (client as any).app.agents();
   const list = (r as any)?.data ?? r;
   return filterVisibleAgents(Array.isArray(list) ? list : []);
 }
@@ -248,10 +221,8 @@ export interface SkillInfo {
 
 export async function aiListSkills(): Promise<SkillInfo[]> {
   await waitForAiReady();
-  // SDK v2 没包装 /skill 端点 (它是 v1 端点), fetch 兜底; 带 cwd header
-  const dir = getAiDirectory();
-  const url = `/skill?directory=${encodeURIComponent(dir)}`;
-  const list: any[] = await opencodeFetch<any[]>(url, { headers: { Accept: 'application/json' } });
+  // SDK v2 没包装 /skill 端点 (V1), fetch 兜底; 目录由 opencodeFetch 按当前 workdir 注入 header.
+  const list: any[] = await opencodeFetch<any[]>('/skill', { headers: { Accept: 'application/json' } });
   if (!Array.isArray(list)) return [];
   return list
     .filter((s) => s && s.name)
@@ -274,12 +245,11 @@ export async function aiListCommands(): Promise<CommandInfo[]> {
   await waitForAiReady();
   const client = getAiClient();
   if (!client) {
-    // 兜底: SDK 未就绪, 走 opencodeFetch
-    const dir = getAiDirectory();
-    const list = await opencodeFetch<any[]>(`/command?directory=${encodeURIComponent(dir)}`, { headers: { Accept: 'application/json' } });
+    // 兜底: SDK 未就绪, 走 opencodeFetch (按当前 workdir 注入 header)
+    const list = await opencodeFetch<any[]>('/command', { headers: { Accept: 'application/json' } });
     return mapCommands(list);
   }
-  const r = await (client as any).command.list({ query: { directory: getAiDirectory() } });
+  const r = await (client as any).command.list();
   const list = (r as any)?.data ?? r;
   return mapCommands(Array.isArray(list) ? list : []);
 }
@@ -447,15 +417,14 @@ async function fetchProvidersPayload(): Promise<{ all: any[]; connected: string[
   if (client) {
     // provider.list (v1) 返回 {all, connected, default}, 跟后端 /provider 一致
     // 注意: client.config.providers 是 v2 新 API, shape 不同 ({providers, default}), 不兼容
-    const r = await (client as any).provider.list({ query: { directory: getAiDirectory() } });
+    const r = await (client as any).provider.list();
     const json = (r as any)?.data ?? r;
     return {
       all: Array.isArray(json?.all) ? json.all : [],
       connected: Array.isArray(json?.connected) ? json.connected : [],
     };
   }
-  const dir = getAiDirectory();
-  const json = await opencodeFetch<any>(`/provider?directory=${encodeURIComponent(dir)}`, { headers: { Accept: 'application/json' } });
+  const json = await opencodeFetch<any>('/provider', { headers: { Accept: 'application/json' } });
   return {
     all: Array.isArray(json?.all) ? json.all : [],
     connected: Array.isArray(json?.connected) ? json.connected : [],
@@ -545,9 +514,8 @@ export interface OpencodeConfig {
 export async function aiGetConfig(): Promise<OpencodeConfig> {
   const client = getAiClient();
   if (client) {
-    const r = await (client as any).config.get({ query: { directory: getAiDirectory() } });
+    const r = await (client as any).config.get();
     return ((r as any)?.data ?? r) as OpencodeConfig;
   }
-  const dir = getAiDirectory();
-  return opencodeFetch<OpencodeConfig>(`/config?directory=${encodeURIComponent(dir)}`, { headers: { Accept: 'application/json' } });
+  return opencodeFetch<OpencodeConfig>('/config', { headers: { Accept: 'application/json' } });
 }

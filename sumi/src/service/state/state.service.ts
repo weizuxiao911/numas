@@ -2,74 +2,72 @@
  * service/state/state.service.ts
  *
  * StateServiceImpl — DI 单例.
- * 维护 codeblitz 状态 (workspace / recent / workspace 切换).
+ * 维护 codeblitz 状态: 当前工作目录 (workdir) + 最近选择.
  *
- * 持久化: localStorage via ./persistence.ts. 后续重设计用 IndexedDB 时只换 persistence.ts.
+ * 单目录模型: 只有 workdir (原 workspace 空间概念已移除).
+ * extensions 只经本 service 取目录, 禁止直连 infra.
+ *
+ * 持久化: workdir 走 infra/url 的 localStorage (NUMAS_WORKDIR),
+ * recent 走 ./persistence.ts. 后续换 IndexedDB 只换 persistence.ts.
  */
 
 import { Injectable } from '@opensumi/di';
 import { BrowserModule } from '@opensumi/ide-core-browser';
 
-import { getWorkspace, emitWorkspaceChanged } from '../../infra/url';
-import { normalizeCwdPath } from '../../infra/path';
-
+import {
+  getWorkdir,
+  setWorkdir as setWorkdirInfra,
+  isWorkdirSelected,
+  subscribeWorkdir,
+} from '../../infra/url';
 import type { IStateService, RecentWorkspace, WorkspaceState } from './state.interface';
 import { StateToken } from './state.interface';
 import { loadRecent, saveRecent } from './persistence';
 
 @Injectable()
 export class StateServiceImpl implements IStateService {
-  /** 当前 workspace (workspace + recent). 内存缓存 + 持久化. */
-  private _workspace: WorkspaceState;
+  private _recent: RecentWorkspace[];
 
   constructor() {
-    this._workspace = {
-      workspace: getWorkspace(),
-      recent: loadRecent(),
-    };
+    this._recent = loadRecent();
   }
 
-  getWorkspace(): WorkspaceState {
-    this._workspace.workspace = getWorkspace();
-    return { ...this._workspace, recent: [...this._workspace.recent] };
+  getState(): WorkspaceState {
+    return { workdir: getWorkdir(), recent: [...this._recent] };
   }
 
-  pushRecent(workspace: string): void {
-    if (!workspace) return;
-    const now = Date.now();
-    const list = this._workspace.recent.filter((r) => r.path !== workspace);
-    list.unshift({ path: workspace, lastOpenedAt: now });
+  getWorkdir(): string {
+    return getWorkdir();
+  }
+
+  isWorkdirSelected(): boolean {
+    return isWorkdirSelected();
+  }
+
+  setWorkdir(dir: string): void {
+    if (!dir) {
+      setWorkdirInfra('');
+      return;
+    }
+    setWorkdirInfra(dir);
+    this.pushRecent(dir);
+  }
+
+  getRecent(): RecentWorkspace[] {
+    return [...this._recent];
+  }
+
+  pushRecent(dir: string): void {
+    if (!dir) return;
+    const list = this._recent.filter((r) => r.path !== dir);
+    list.unshift({ path: dir, lastOpenedAt: Date.now() });
     if (list.length > 10) list.length = 10;
-    this._workspace.recent = list;
+    this._recent = list;
     saveRecent(list);
   }
 
-  setWorkspace(dir: string): void {
-    if (!dir) return;
-    const norm = normalizeCwdPath(dir);
-    if (!norm) return;
-    const prev = getWorkspace();
-    if (prev === norm) return;
-    // 唯一 source: URL `?directory=` (replaceState 不刷新)
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.set('directory', norm);
-      window.history.replaceState(null, '', u.toString());
-    } catch { /* ignore */ }
-    this.pushRecent(norm);
-    emitWorkspaceChanged(norm, prev);
-    // 刷新: 让 FileTreeService 等重建
-    window.location.reload();
-  }
-
-  subscribeWorkspace(cb: (next: string, prev: string) => void): () => void {
-    if (typeof window === 'undefined') return () => {};
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ next: string; prev: string }>).detail;
-      if (detail) cb(detail.next, detail.prev);
-    };
-    window.addEventListener('workspace:changed', handler);
-    return () => window.removeEventListener('workspace:changed', handler);
+  subscribeWorkdir(cb: (next: string) => void): () => void {
+    return subscribeWorkdir(cb);
   }
 }
 

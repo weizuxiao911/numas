@@ -20,11 +20,10 @@ import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/inject
 import { CommandService } from '@opensumi/ide-core-common';
 
 import { getAppMode, setAppMode, type AppMode } from '../../App';
-import { getWorkspace } from '../../infra/url';
 import { StateToken, type IStateService } from '../../service/state';
 import { LayoutToken, LAYOUT_COMMANDS, type ILayoutService } from '../../service/layout';
+import { requestFilePicker } from '../filepicker/FilePicker';
 import { styles } from './styles';
-import { ProjectPicker } from './ProjectPicker';
 
 function pathBasename(p: string): string {
   if (!p) return '';
@@ -113,21 +112,32 @@ const DrawerToggle: React.FC<{ layout: ILayoutService; commandService: CommandSe
   );
 };
 
-const ProjectPickButton: React.FC<{ open: boolean; onToggle: () => void; label: string }> = ({ open, onToggle, label }) => {
+const ProjectPickButton: React.FC<{ label: string; commandService: CommandService; state: IStateService }> = ({ label, commandService, state }) => {
+  const onClick = () => {
+    // 单 workdir 模型: 点击直接弹 filepicker 自由选任意目录 (即 workdir 根).
+    const start = state.getWorkdir() || '';
+    requestFilePicker({
+      mode: 'open',
+      initialPath: start || undefined,
+      onPick: (items) => {
+        const dir = items[0];
+        if (!dir) return;
+        // 跨拓展只走全局命令 (AGENTS §2.2)
+        void commandService.executeCommand('chatbot.setProject', dir.path);
+      },
+    });
+  };
   return (
     <button
       type="button"
-      className={`app-action__pick${open ? ' is-open' : ''}`}
+      className="app-action__pick"
       title="选择项目"
-      onClick={onToggle}
+      onClick={onClick}
     >
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       </svg>
       <span className="app-action__pick-label">{label}</span>
-      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <polyline points="6 9 12 15 18 9" />
-      </svg>
     </button>
   );
 };
@@ -143,14 +153,11 @@ export const ActionBar: React.FC = () => {
     return layout.subscribe((s) => setMirrorVisible(s.sidebar.collapsed));
   }, [layout]);
 
-  const [pickerOpen, setPickerOpen] = useState(false);
-  // 按钮文字: 当前 workspace basename, 跟随 URL ?directory= 变化 (reload 后)
-  const [workspace, setWorkspace] = useState<string>(() => getWorkspace());
+  const [project, setProject] = useState<string>(() => state.getWorkdir());
   useEffect(() => {
-    // 订阅 workspace 变更, 让按钮文字跟 URL 同步 (setWorkspace 会 reload, 这里主要兜底)
-    return state.subscribeWorkspace((next) => setWorkspace(next));
+    return state.subscribeWorkdir((next) => setProject(next));
   }, [state]);
-  const label = workspace ? pathBasename(workspace) : '选择项目';
+  const label = project ? pathBasename(project) : '选择项目';
 
   return (
     <>
@@ -163,12 +170,7 @@ export const ActionBar: React.FC = () => {
               <ExpandToggle layout={layout} commandService={commandService} />
             </>
           )}
-          {/* wrap: popover 的定位锚点 — 锚在按钮上而不是整条 action 栏上,
-             这样折叠态 (前面多了 ModeSwitch + ExpandToggle) 也始终跟按钮左边缘对齐 */}
-          <div className="app-action__pick-wrap">
-            <ProjectPickButton open={pickerOpen} onToggle={() => setPickerOpen((v) => !v)} label={label} />
-            <ProjectPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
-          </div>
+          <ProjectPickButton label={label} commandService={commandService} state={state} />
         </div>
         <div className="app-action__right">
           <DrawerToggle commandService={commandService} layout={layout} />

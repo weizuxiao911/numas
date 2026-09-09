@@ -29,7 +29,7 @@ import { notification } from '@opensumi/ide-components/lib/notification';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 
 import { normalizeCwdPath } from '../../infra/path';
-import { getWorkspace } from '../../infra/url';
+import { getFallbackDirectory, resolveFallback } from '../../infra/url';
 import { FsToken, type IFileSystem } from '../../service/filesystem';
 
 interface DirEntry { name: string; path: string; type: 'file' | 'directory'; }
@@ -124,13 +124,17 @@ export const FilePicker: React.FC = () => {
       rootRef.current = cfg.root || '';
       setOpen(true);
       setEntries([]); setChecked(new Map()); setOpenPick(null); setQuery('');
-      setTimeout(() => {
-        // 初始目录: config.initialPath 优先, 否则当前工作目录 (均在 root 内)
-        // 必须 normalizeCwdPath: Windows 历史 APP_CWD 可能是 '/D:/...' 错误形态,
-        // 直接当浏览起点 → listDir header '/D:/...' → server 按 POSIX 根解析 → 500
-        const stored = (() => { try { return normalizeCwdPath(localStorage.getItem('APP_CWD') || ''); } catch { return ''; } })();
-        const fallback = normalizeCwdPath(getWorkspace());
-        const start = normalizeCwdPath(cfg.initialPath || '') || stored || fallback || '/';
+      setTimeout(async () => {
+        // 初始目录: config.initialPath 优先, 否则当前 workdir; 都没选时用 /path 的 directory
+        // 兜底 (getFallbackDirectory, 服务端启动 cwd). 必须 normalizeCwdPath: Windows 历史
+        // APP_CWD 可能是 '/D:/...' 错误形态, 直接当浏览起点 → listDir header '/D:/...'
+        // → server 按 POSIX 根解析 → 500.
+        // fallback 尚未就绪 (App 启动 resolveBoot 异步探测 /path) 时先等它, 避免落到 '/'.
+        if (!getFallbackDirectory()) {
+          try { await resolveFallback(); } catch { /* 拿不到就 '/': 后端不可用 */ }
+        }
+        const fallback = normalizeCwdPath(getFallbackDirectory());
+        const start = normalizeCwdPath(cfg.initialPath || '') || fallback || '/';
         doBrowse(withinRoot(start) ? start : (rootRef.current || start));
       }, 100);
     };

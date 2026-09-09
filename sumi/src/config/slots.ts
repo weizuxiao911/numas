@@ -14,6 +14,7 @@
  *   - Action:  Action 拓展 (extensions/action) — 模式切换 / sidebar 展开 / 项目选择
  *   - Main:    Chatbot 拓展 (extensions/chatbot) — 消息流 + 输入区
  *   - Drawer:  右侧抽屉, 暂无拓展 (默认宽 0 / 完全隐藏)
+ *   - User: 内嵌在 sidebar 底部 (用户信息)
  *
  * 拓展注册时用同样 slot name (registerComponent 第 4 个参数 location).
  * SoloLayout 里 SlotRenderer slot={SOLO_SLOTS.X} 渲染.
@@ -29,8 +30,8 @@ export const SOLO_SLOTS = {
   Action: 'action',
   Main: 'main',
   Drawer: 'drawer',
-  /** 内嵌在 sidebar 底部的设置区块 (头像/昵称/铃铛/工作空间选择) */
-  Settings: 'settings',
+  /** 内嵌在 sidebar 底部: 用户信息 (头像 + 昵称, 登录入口) */
+  User: 'user',
 } as const;
 
 export type SoloSlot = (typeof SOLO_SLOTS)[keyof typeof SOLO_SLOTS];

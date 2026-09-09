@@ -3,6 +3,7 @@ import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/inject
 import { CommandService } from '@opensumi/ide-core-common';
 
 import { FsToken, type IFileSystem } from '@/service/filesystem';
+import { StateToken, type IStateService } from '@/service/state';
 
 import {
   aiListAgents,
@@ -17,6 +18,7 @@ import {
   aiListSessions,
   aiListMessages,
   aiDeleteSession,
+  isWithinCwd,
   isAiReady,
 } from '@/extensions/chatbot/commands/api';
 import { modelPrefs } from '@/extensions/chatbot/commands/modelPrefs';
@@ -77,11 +79,14 @@ function formatStatusTime(nextMs: number): string {
     : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-/** 在用户工作目录创建会话（directory 从 SDK path.get 取, 确保会话归属 workspace） */
-async function createSessionInWorkspace(client: any) {
+/** 在当前 workdir (项目) 创建会话.
+ *  workdir ∈ { workspace 自身 } ∪ { workspace 子目录 }, 由 action「选择项目」选定;
+ *  x-opencode-directory 只读 workdir, 所以 path.get().directory 即当前项目路径.
+ *  会话 directory = 项目路径 → sidebar 历史列表可按项目分组. */
+async function createSessionInWorkspace(client: any, directoryOverride?: string) {
   try {
-    const { data } = await client.path.get();
-    const directory = typeof data?.directory === 'string' ? data.directory : undefined;
+    const directory = directoryOverride
+      || (await client.path.get().then((r: any) => (typeof r?.data?.directory === 'string' ? r.data.directory : undefined)).catch(() => undefined));
     return await client.session.create(directory ? { location: { directory } } : {});
   } catch {
     return await client.session.create({});
@@ -100,6 +105,7 @@ async function createSessionInWorkspace(client: any) {
 export const ChatbotView: React.FC = () => {
   const commandService = useInjectable<CommandService>(CommandService);
   const fs = useInjectable<IFileSystem>(FsToken);
+  const state = useInjectable<IStateService>(StateToken);
 
   const [sessionID, setSessionID] = useState<string>('');
   const sessionIDRef = useRef(sessionID);
@@ -433,6 +439,7 @@ export const ChatbotView: React.FC = () => {
 
   // 启动恢复: 查历史会话列表 → 有则载入最新的会话, 无则新建草稿.
   // 不依赖 sessionStorage 恢复 id (残留失效 id 会触发 Session not found).
+  // workdir 由 localStorage 唯一决定; 未选项目保持空态, **不**从历史会话恢复.
   const restoredRef = useRef(false);
   useEffect(() => {
     if (!ready || !client || restoredRef.current) return;
@@ -730,13 +737,18 @@ export const ChatbotView: React.FC = () => {
     })();
   }, [client, sessionID, applySessionToUI]);
 
-  const onNewSession = useCallback(async () => {
+  const onNewSession = useCallback(async (scopeDir?: string) => {
     if (!ready || !client) return;
-    // 新建会话的前提: 最新会话已有消息. 若最新会话仍是空草稿 (无消息),
+    // 新建会话的前提: 同作用域最新会话已有消息. 若最新会话仍是空草稿 (无消息),
     // 则不重复创建 — 只有最新的一个允许是空的.
+    // scopeDir (切项目时传入): 草稿复用只在该项目子树内找, 避免跳到别的项目草稿;
+    // 不传则在整个空间内找 (手动「新建会话」).
     try {
       const list = await aiListSessions();
-      const latest = (list || []).reduce<any | null>(
+      const scoped = scopeDir
+        ? (list || []).filter((s) => isWithinCwd(s?.directory, scopeDir))
+        : (list || []);
+      const latest = scoped.reduce<any | null>(
         (a, b) => ((b?.time?.updated || 0) > (a?.time?.updated || 0) ? b : a),
         null,
       );
@@ -759,7 +771,8 @@ export const ChatbotView: React.FC = () => {
     // 不 abort 当前会话: 允许多会话并行生成, 切回后事件流自动续播
     cleanupDraft();
     try {
-      const res = await createSessionInWorkspace(client);
+      // 切项目时显式传项目目录, 保证新会话 directory 落在该项目 (而非依赖 path.get 的竞态)
+      const res = await createSessionInWorkspace(client, scopeDir);
       const sid = res?.data?.id;
       if (sid) {
         sessionIDRef.current = sid;
@@ -944,6 +957,35 @@ export const ChatbotView: React.FC = () => {
       send: (text) => { void sendPrompt(text); },
       changeSession: (sid) => onSwitchSession(sid),
       getCurrentSessionID: () => sessionIDRef.current,
+      getProject: () => state.getWorkdir(),
+      setProject: async (dir: string) => {
+        // 1) 切走前: 当前会话若仍是空草稿 (无消息), 删除它 — 每个项目只留一个空草稿.
+        //    必须在 setWorkdir 之前检查 (aiListMessages 走当前 workdir client).
+        const prevSid = sessionIDRef.current;
+        if (prevSid) {
+          try {
+            const prevMsgs = await aiListMessages(prevSid);
+            if (!Array.isArray(prevMsgs) || prevMsgs.length === 0) {
+              await aiDeleteSession(prevSid);
+              cleanupDraft();
+              sessionIDRef.current = '';
+            }
+          } catch { /* 查询失败不阻塞切项目 */ }
+        }
+        // 2) 切 workdir (同步派 workdir:changed → service 重建 SDK client, header 跟随)
+        state.setWorkdir(dir);
+        // 3) 新项目有历史会话 → 载入最新; 无 → 新建 (createSession 用新 workdir)
+        //    aiListSessions 已只返回当前 workdir (项目) 的顶层会话, 无需再过滤.
+        try {
+          const list = await aiListSessions();
+          const latest = (list || []).reduce<any | null>(
+            (a, b) => ((b?.time?.updated || 0) > (a?.time?.updated || 0) ? b : a),
+            null,
+          );
+          if (latest?.id) { onSwitchSession(latest.id); return; }
+          await onNewSession(dir);
+        } catch { /* 忽略: 切项目失败保持当前会话 */ }
+      },
       listSessions: async () => {
         // 历史会话列表: 全部会话 (含当前空草稿 / 空的新会话). 不做任何自动删除.
         // roots=true 已在 aiListSessions 内排除 subagent; 按当前 cwd 过滤.
@@ -963,7 +1005,7 @@ export const ChatbotView: React.FC = () => {
       addContext,
     });
     return () => registerChatPanelApi(null);
-  }, [sendPrompt, onSwitchSession, addContext, onNewSession]);
+  }, [sendPrompt, onSwitchSession, addContext, onNewSession, state]);
 
   const onSwitchAgent = useCallback(async (agent: string) => {
     setCurrentAgent(agent);

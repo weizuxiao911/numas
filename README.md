@@ -209,8 +209,10 @@ graph TD
 | 拓展 | 能力 |
 |---|---|
 | **actions** | SOLO 顶栏 (模式切换 / sidebar 展开镜像 / 项目选择 / 抽屉开关), 跨拓展走 `numas.sidebar.*` / `numas.drawer.*` 全局命令 |
-| **sidebar** | SOLO 左侧栏 (模式切换 + 折叠按钮 + 新建会话 + 历史会话列表: 标题 + 相对工作目录 + 时间, 点击切换 / 删除, 排除 subagent 会话) |
-| **chatbot** | SOLO 对话主区 (消息流 + 输入区 + 模型/智能体/附件), 跨拓展契约 `numas.chatbot.*` (newSession / listSessions / changeSession / deleteSession) |
+| **sidebar** | SOLO 左侧栏 (模式切换 + 折叠按钮 + 新建会话 + 历史会话列表**按项目分组** + 底部 `user` / `workspace` 两个内嵌 slot) |
+| **user** | sidebar 底部左: 用户信息 (品牌头像 + 昵称, 登录入口), 数据来自 `service/session` |
+| **workspacebar** | sidebar 底部右: 工作空间 (空间) 选择, layers 图标与「选择项目」文件夹图标区分 |
+| **chatbot** | SOLO 对话主区 (消息流 + 输入区 + 模型/智能体/附件), 跨拓展契约 `numas.chatbot.*` (newSession / listSessions / changeSession / deleteSession / setProject / getProject) |
 | **ai 助手 (chat)** | 主聊天面板, 多 session / model / agent 切换, 工作目录切换, 附件上传, 走消息总线 |
 | **ask (无头)** | 通用 AI 通道 `ask(prompt, cb)`, 独立 session, 流式回调, 可取消, 看门狗超时 |
 | **filepicker** | 通用 filepicker modal, 监听 `filepicker:request` 事件 |
@@ -222,7 +224,7 @@ graph TD
 | **browser** | 内置浏览器 (URL 栏 + iframe 渲染 + PDF.js 渲染 + debugger API, localhost 强制反代同源) |
 | **markdown** | markdown 预览 (双击 .md/.markdown 默认渲染, 可切 code 文本编辑器) |
 
-注册入口: `sumi/src/config/modules.ts#getBuiltinModules` 统一注册 (14 个 Module)。
+注册入口: `sumi/src/config/modules.ts#getBuiltinModules` 统一注册 (15 个 Module)。
 
 **SOLO 布局状态** (`service/layout` DI 单例): sidebar 折叠/宽度 + drawer 开合/宽度。渲染方 (SoloLayout) 读状态渲染; 操作方 (ActionBar / Sidebar) 经全局命令 `executeCommand` 调 `numas.sidebar.collapse/expand/toggle`、`numas.drawer.open/close/toggle`, 状态订阅走 `LayoutToken.subscribe`。交互规则:
 - 默认 sidebar 展开, drawer 折叠
@@ -233,7 +235,19 @@ graph TD
 **会话恢复 + 新建** (`chatbot`):
 - 启动恢复: 查当前 cwd 的历史会话 → 有则载入最新的 (time.updated 最大), 无则新建草稿。无前端持久化缓存 (不依赖 sessionStorage)
 - 新建会话按钮: 仅当**最新会话已有消息**时才创建; 最新仍是空草稿则不重复创建 (跳到它), 避免堆积空会话
-- 历史会话列表: 显示全部会话 (含当前), 标题 + 相对工作目录 + 时间, 点击切换 / 删除
+- 历史会话列表: 显示空间下全部会话, **按项目 (会话 directory) 分组**, 组标题 = 相对空间的路径 (空间根显示 `.`), 当前项目组排最前; 组内标题 + 时间, 点击切换 / hover 删除
+
+**工作空间 (空间) 与项目 (workdir)** — codeblitz 级两个读方法, `service/state` 对外暴露, extensions 只经 DI 消费; 路径均为逻辑路径 (支持 symlink, realpath 归由 opencode 处理):
+- `getWorkspace()` **空间**: 解析链 URL `?directory=` → 后端 `/path` 响应的 `directory`; 由 sidebar 底部「工作空间」(layers 图标) 选定 (写 URL + recent, 触发 reload)
+- `getWorkdir()` **项目**: **必须是空间下的真子目录, 空间自身不能当项目**; 由 action「选择项目」在锁根 filepicker 内选定 (面包屑/向上不能离开空间根; 选到空间根会被拒绝)。不持久化, 从当前会话 directory 恢复 (仅当会话在空间真子目录内)
+- `x-opencode-directory`: 有项目时 = workdir, 未选项目时**临时回落空间根** (仍可对话); 切项目不 reload — opencode service 监听 `workdir:changed` 重建带新 header 的 SDK client
+- **列会话例外**: 历史会话要看到空间下全部项目并分组, 而 V2 路由只认 header (query.directory 实测被忽略), 故 `aiListSessions()` 用 `opencodeFetch` 显式覆盖 header = **空间根**; 其余请求 (发消息/fs/pty) 仍用 workdir
+- 启动门控: 空间解析完成前显示「正在加载工作空间…」, 不渲染 AppRenderer (避免按空目录初始化 fs/编辑器)
+
+**登录态** (`service/session` + `infra/cookie` + `infra/session-file`):
+- 取值链: 先读 cookie 的 `userId` / `token` / `partner` / `sign` → 四字段**齐全**才覆盖写 `<HOME>/.numas/cache/session.yaml` (任一缺失不写, 保留旧文件) → 之后一律以该文件为用户信息来源
+- HOME 取 `/path` 接口的 home 锚点 (不硬编码, 跨平台); 路径拼接走 `infra/path` 的 `pathJoin` / `pathDirname` / `pathBase`
+- 读写走既有 `headerPath` 机制 (**父目录作 `x-opencode-directory`, path 只给 basename**), 所以不触发 opencode fs 沙箱 (`contains(location.directory, …)`) — 与 codeblitz 写 `~/.codeblitz` 同一条路, 无需改后端或放宽越权
 
 ### 4.6 vsix 拓展 (registry 分发)
 

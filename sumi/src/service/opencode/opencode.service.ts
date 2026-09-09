@@ -17,7 +17,7 @@ import { BrowserModule, ClientAppContribution } from '@opensumi/ide-core-browser
 import { Domain } from '@opensumi/ide-core-common';
 import { createOpencodeClient } from '@opencode-ai/sdk/v2/client';
 
-import { appBaseUrl, cwdHeader, isPathNotFoundError, effectiveCwd, emitWorkspaceChanged } from '../../infra/url';
+import { appBaseUrl, workdirHeader, getEffectiveCwd } from '../../infra/url';
 import { normalizeCwdPath } from '../../infra/path';
 import { setHostAnchors } from '../../infra/host';
 import { isMac, isWindows, isLinux } from '../../infra/os';
@@ -26,17 +26,25 @@ import type { IOpencodeService, AgentSession, AgentMessage, AgentModel, AgentRun
 import { AgentToken } from './opencode.interface';
 
 let _client: any = null;
-// 跟踪 SDK client 创建时的 cwd, 切换 workspace 后必须重建 (header 跟随新 cwd)
-let _clientCwd = '';
 
 @Injectable()
 @Domain(ClientAppContribution)
 export class OpencodeServiceImpl implements IOpencodeService, ClientAppContribution {
   private _runtime: AgentRuntime | null = null;
 
-  /** 容器启动: 总是跑 initRuntime (有 APP_CWD 时也跑, 探测 cwd/shell/health) */
+  /** 容器启动: 总是跑 initRuntime (探测 cwd/shell/health) */
   onStart(): void {
     void this.initRuntime();
+    // 选项目 (workdir) 变化时不重建 SDK client (client 只建一次, 目录由每请求动态 header
+    // 拦截器注入); 这里仅同步裸 fetch 用的 runtime.cwd 桥接值.
+    if (typeof window !== 'undefined') {
+      const syncRuntimeCwd = () => {
+        const rt = (window as any).__APP_OPENCODE_RUNTIME__;
+        if (rt) rt.cwd = getEffectiveCwd();
+      };
+      syncRuntimeCwd();
+      window.addEventListener('workdir:changed', syncRuntimeCwd);
+    }
   }
 
   /**
@@ -48,7 +56,6 @@ export class OpencodeServiceImpl implements IOpencodeService, ClientAppContribut
     if (this._runtime) return;
     const base = appBaseUrl();
     if (!base) return;
-    const cwd = effectiveCwd();
     let sdk: any = null;
     try { sdk = this.getClient(); } catch { /* opencode 未起, 占位即可 */ }
 
@@ -57,98 +64,36 @@ export class OpencodeServiceImpl implements IOpencodeService, ClientAppContribut
     try { if (sdk) { const { data } = await sdk.global.health(); healthy = !!(data as any)?.healthy; } }
     catch { /* ignore */ }
 
-    // 2. /path + /pty/shells (per-request cwd header)
-    //    /path 返回:
-    //      directory: opencode 进程 workdir (用户启动 numas 时的 cwd) — 默认 workspace 源
-    //      worktree:  git worktree 根 (有 git 才有, 跟 workdir 一致或更浅)
-    //      home:      用户 home dir (仅 .config/.local 路径用, 不当 workspace)
-    //    默认 workspace 取 directory (workdir).
-    let hostCwd = '';
+    // 2. /path + /pty/shells — 只取 home 锚点 / 默认 shell, 不带业务目录.
+    //    /path 的 directory/worktree 只作宿主路径解析底 (setHostAnchors 内由 effectiveCwd
+    //    决定工作区根, 未选项目时为空), **不**成为已选项目.
     let hostHome = '';
     let defaultShell = '';
     try {
       if (sdk) {
-        const { data } = await sdk.path.get({ directory: cwd });
+        const { data } = await sdk.path.get();
         const resp = (data as any) || {};
-        const fallbackWs = (typeof resp.directory === 'string' && resp.directory)
-          || (typeof resp.worktree === 'string' && resp.worktree)
-          || '';
-        if (fallbackWs) hostCwd = normalizeCwdPath(fallbackWs);
         if (typeof resp.home === 'string' && resp.home) hostHome = normalizeCwdPath(resp.home);
-        // 锚点立即注入: 框架 storage 早期 (建 codeblitz 虚拟家目录 /home/.codeblitz) 在
-        // whenHostAnchors 等 home 锚点, 不能被下方 probeDefaultShell (/pty/shells 串行请求)
-        // 拖后 → /path 一返回就注入, 让早期 fs 请求拿到真实 home.
-        setHostAnchors({ directory: hostCwd || cwd, home: hostHome });
-        defaultShell = await probeDefaultShell(sdk, cwd);
+        // 锚点立即注入: 框架 storage 早期 (建 codeblitz 虚拟家目录 /home/.codeblitz) 等
+        // whenHostAnchors 的 home 锚点, 不能被 probeDefaultShell 串行请求拖后.
+        setHostAnchors({ home: hostHome });
+        defaultShell = await probeDefaultShell(sdk);
       }
     } catch { /* 忽略, 走默认 */ }
-
-    // 宿主路径锚点: 所有发往 opencode 的路径只能锚定这里 (directory/home),
-    // codeblitz 虚拟路径 (/home, /workspace, /home/AppData/Roaming) 由 toHostPath 映射.
-    // (sdk 为 null / /path 失败时的兜底; 成功时上面已注入, setHostAnchors 幂等合并)
-    setHostAnchors({ directory: hostCwd || cwd, home: hostHome });
-
-    // 2.1 hostCwd 兜底
-    if (!hostCwd && !cwd) {
-      try {
-        const base = appBaseUrl();
-        const res = await fetch(`${base.replace(/\/+$/, '')}/api/fs/list?path=.`, {
-          headers: { Accept: 'application/json' },
-        });
-        const json = await res.json();
-        const locDir = (json as any)?.location?.directory;
-        if (typeof locDir === 'string' && locDir) hostCwd = normalizeCwdPath(locDir);
-        if (hostCwd) console.log('[opencode] hostCwd 探测 (fs.list location.directory):', hostCwd);
-      } catch { /* ignore */ }
-    }
+    setHostAnchors({ home: hostHome });
 
     this._runtime = {
-      workspace: hostCwd || cwd,
+      workspace: hostHome,
       defaultShell: defaultShell || '/bin/bash',
       healthy,
     };
 
-    // 2.5 workspace 校验 (URL 指定的目录可能已被删)
-    if (cwd && cwd !== hostCwd) {
-      try {
-        const c = this.getClient();
-        if (c) await c.file.list({ path: '.', directory: cwd });
-      } catch (e: any) {
-        if (isPathNotFoundError(e)) {
-          // URL workspace 失效 → 移除 ?directory= 让 fallback 用 hostCwd
-          console.warn('[opencode] URL workspace 宿主机不存在, 移除 query 走 fallback:', cwd, e?.message);
-          try {
-            const u = new URL(window.location.href);
-            u.searchParams.delete('directory');
-            window.history.replaceState(null, '', u.toString());
-            window.location.reload();
-          } catch { /* ignore */ }
-          return;
-        }
-        console.warn('[opencode] URL workspace browse 失败 (短暂不可用), 保留:', cwd, e?.message);
-        this._runtime.workspace = cwd;
-      }
-    }
-
-    // 注入全局配置 (env / fs-uri / terminal 读这里).
-    // 注意: 不注入 cwd — 工作目录唯一 source-of-truth 是 URL ?directory (getWorkspace),
-    // __APP_CONFIG__.cwd 是 opencode 进程启动 workdir, 切 workspace 不更新 (stale), 曾导致
-    // editor 恢复/PDF sidecar 等按错目录操作. 需要当前目录一律走 infra/url getWorkspace().
+    // 注入全局配置 (env / fs-uri / terminal 读这里). 工作目录唯一 source 是 workdir
+    // (infra/url getWorkdir), 不注入 cwd.
     (window as any).__APP_CONFIG__ = {
       ...((window as any).__APP_CONFIG__ || {}),
       defaultShell: this._runtime.defaultShell,
     };
-
-    // 3. (2026-09 取消) URL 补 ?directory= + reload 逻辑已移除:
-    //    - opencode.serve 是 headless, /path.directory 拿到后直接用作 runtime.workspace
-    //      (上文已设 hostCwd), 不再主动改 URL 触发 reload.
-    //    - 历史原因 (WORKSPACE_ROOT patch 在 module load 时求值) 已被绕过:
-    //      启动后 initRuntime 拿到 /path 才调 setHostAnchors, codeblitz 早期 fs 请求
-    //      拿到的 home/directory 已经是真实路径, 不依赖 reload 重新求值.
-    //    - 仍然派 workspace:changed, 让 React 订阅者收到首启 runtime 路径.
-    if (this._runtime.workspace) {
-      emitWorkspaceChanged(this._runtime.workspace, '');
-    }
 
     // 派发 runtime-ready
     window.dispatchEvent(new CustomEvent('runtime-ready', { detail: this._runtime }));
@@ -160,39 +105,35 @@ export class OpencodeServiceImpl implements IOpencodeService, ClientAppContribut
     }
   }
 
-getClient(): any {
-    const cwd = effectiveCwd();
-    // 铁律 8: 必须传 directory 让 SDK 把 x-opencode-directory header 注入每个请求.
-    // SDK client 是单例, 切换 workspace 后必须重建, 否则 header 仍指向旧 cwd.
-    if (_client && _clientCwd === cwd) return _client;
-    if (_client) {
-      // 旧 client 还在但 cwd 已变 → 关闭旧 client (新 client 重建)
-      try { _client = null; } catch { /* ignore */ }
-    }
+ getClient(): any {
+    // SDK client 只建一次 (单例), 不随 workdir 切换重建.
+    // 目录只通过每请求动态注入的 x-opencode-directory header 传递 (不用 config.directory /
+    // ?directory= query): 注册一个 request interceptor, 发请求时实时读 getEffectiveCwd(),
+    // 这样选项目即时生效, 无需重建 client.
+    if (_client) return _client;
     const base = appBaseUrl();
     if (!base) return null;
     _client = createOpencodeClient({
       baseUrl: base,
-      directory: cwd,
-      headers: cwdHeader(),
       responseStyle: 'fields',
       throwOnError: true,
     });
-    // numas: 干掉 npm @opencode-ai/sdk 默认的 rewrite interceptor (对 GET 把 header 改写到
-    // ?directory= query 并删除 header). server 端 defaultDirectory 只读 x-opencode-directory
-    // header (铁律 8), GET 请求会因此 fall back 到 process.cwd() (numas), 切 workspace 后所有
-    // GET 端点 (path.get / file.list / session.list / provider.list 等) 都用错目录.
-    // 拦截器清空后 header 保持, server 端解析正确.
+    // numas: 清掉 SDK 默认 rewrite 拦截器 (对 GET 把 header 改写成 ?directory= query 并删 header).
+    // 目录只用 header 这一种方式, 见下方动态注入拦截器.
     try {
       const innerClient: any = (typeof _client?.client === 'object' && (_client as any).client) || _client;
       if (innerClient?.interceptors?.request?.clear) {
         innerClient.interceptors.request.clear();
-        console.log('[opencode] cleared SDK rewrite interceptor (header stays in request)');
+        // 每个请求发出前实时注入当前 workdir header (选项目不重建 client 即生效).
+        innerClient.interceptors.request.use((request: Request) => {
+          const headers = workdirHeader();
+          for (const [k, v] of Object.entries(headers)) request.headers.set(k, v);
+          return request;
+        });
       }
-    } catch (e) { console.warn('[opencode] clear interceptor failed:', e); }
-    _clientCwd = cwd;
+    } catch (e) { console.warn('[opencode] install dynamic directory header interceptor failed:', e); }
     (window as any).__APP_OPENCODE__ = _client;
-    (window as any).__APP_OPENCODE_RUNTIME__ = { baseUrl: base };
+    (window as any).__APP_OPENCODE_RUNTIME__ = { baseUrl: base, cwd: getEffectiveCwd() };
     return _client;
   }
 
@@ -282,7 +223,7 @@ getClient(): any {
 
   async listAgents(): Promise<unknown[]> {
     return this.withClient(async (c) => {
-      const cwd = effectiveCwd();
+      const cwd = getEffectiveCwd();
       const { data, error } = await c.app.agents({ query: { directory: cwd } });
       if (error) throw new Error(`listAgents failed: ${(error as any)?.message || 'unknown'}`);
       return Array.isArray(data) ? (data as unknown[]) : [];
@@ -291,7 +232,7 @@ getClient(): any {
 
   async listModels(): Promise<AgentModel[]> {
     return this.withClient(async (c) => {
-      const cwd = effectiveCwd();
+      const cwd = getEffectiveCwd();
       const { data, error } = await c.provider.list({ query: { directory: cwd } });
       if (error) throw new Error(`listModels failed: ${(error as any)?.message || 'unknown'}`);
       const json: any = data || {};
@@ -313,10 +254,10 @@ getClient(): any {
 }
 
 /** 探测宿主机默认 shell: 从 /pty/shells 取 (跨平台由宿主机 opencode 判定, 不猜浏览器 UA).
- *  macOS 偏好 zsh; Windows 偏好 pwsh; Linux 偏好 bash. */
-async function probeDefaultShell(sdk: any, cwd: string): Promise<string> {
+ *  macOS 偏好 zsh; Windows 偏好 pwsh; Linux 偏好 bash. 目录由 SDK 动态 header 决定. */
+async function probeDefaultShell(sdk: any): Promise<string> {
   try {
-    const { data } = await sdk.pty.shells({ directory: cwd });
+    const { data } = await sdk.pty.shells();
     const list = (data as any) as Array<{ name: string; path: string; acceptable: boolean }>;
     if (!Array.isArray(list) || !list.length) return '';
     const acc = list.filter((s) => s.acceptable);

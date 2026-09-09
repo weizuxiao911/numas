@@ -21,20 +21,24 @@ export const styles = `
   background: transparent;
   user-select: none;
 }
-/* 底部设置区块: 推到 sidebar 最底部 (flex column 剩余空间) */
-.app-sidebar__settings {
+/* 底部区块 (user / workspace slot 同一行): 占据剩余高度, 内容贴到 sidebar 最底部 */
+.app-sidebar__footer {
   flex: 1 1 auto;
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 0;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  padding: 6px;
+  box-sizing: border-box;
 }
-.app-sidebar__settings > * {
-  flex: 1 1 auto;
+.app-sidebar__footer-user { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-end; }
+/* slot 容器 (codeblitz SlotRenderer 包一层 resize-wrapper) 撑满 */
+.app-sidebar__footer-user > * {
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 0;
+  align-items: center;
+  min-width: 0;
+  width: 100%;
 }
 /* 拖动条 (SplitPanel 渲染) — 加宽 + 主题色, hover 突出 */
 .app-sidebar + .resize-handle-horizontal,
@@ -208,14 +212,34 @@ export const styles = `
   flex: 0 0 auto;
   max-width: 55%;
 }
-.app-sidebar__session-dir {
+/* 项目分组 (会话按 directory 分组, 组标题 = 相对 workspace 路径, 根 = '.') */
+.app-sidebar__group { margin-bottom: 6px; }
+.app-sidebar__group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 2px;
+  user-select: none;
+}
+.app-sidebar__group-name {
   flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
   font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--ai-fg-muted);
+  opacity: 0.85;
+}
+.app-sidebar__group-count {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--ai-fg-muted);
+  opacity: 0.7;
 }
 .app-sidebar__session-time {
   flex: 0 0 auto;

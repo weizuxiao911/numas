@@ -9,8 +9,8 @@
  *   - 字符串字面量跟 SOLO_SLOTS 同值, 是协议约定, 不是模块引用
  *
  * 跨拓展契约 (AGENTS §2.2 / 总体设计 §3.1 规则 4):
- *   - 全局命令 numas.chatbot.newSession: 其他拓展 (如 sidebar) 用
- *     CommandService.executeCommand('numas.chatbot.newSession') 触发新建会话,
+ *   - 全局命令 chatbot.newSession: 其他拓展 (如 sidebar) 用
+ *     CommandService.executeCommand('chatbot.newSession') 触发新建会话,
  *     不 import 本拓展内部实现. execute 时经 getChatPanelApi() 取当前注册的
  *     ChatbotView 能力 (mount 前为 null → no-op).
  */
@@ -31,11 +31,15 @@ const TARGET_SLOT = 'main';
 
 /** 全局命令 id (跨拓展, 供 executeCommand 调用) */
 export const CHATBOT_COMMANDS = {
-  newSession: { id: 'numas.chatbot.newSession', label: '新建会话' },
-  listSessions: { id: 'numas.chatbot.listSessions', label: '历史会话列表' },
-  changeSession: { id: 'numas.chatbot.changeSession', label: '切换会话' },
-  deleteSession: { id: 'numas.chatbot.deleteSession', label: '删除会话' },
-  getCurrentSessionID: { id: 'numas.chatbot.getCurrentSessionID', label: '当前会话 id' },
+  newSession: { id: 'chatbot.newSession', label: '新建会话' },
+  listSessions: { id: 'chatbot.listSessions', label: '历史会话列表' },
+  changeSession: { id: 'chatbot.changeSession', label: '切换会话' },
+  deleteSession: { id: 'chatbot.deleteSession', label: '删除会话' },
+  getCurrentSessionID: { id: 'chatbot.getCurrentSessionID', label: '当前会话 id' },
+  /** 切换当前项目 (workspace 根或根下子目录): 有该项目会话则载入最新, 无则新建草稿 */
+  setProject: { id: 'chatbot.setProject', label: '切换项目' },
+  /** 当前项目路径 (= 当前会话 directory, 无会话时为 workspace 根) */
+  getProject: { id: 'chatbot.getProject', label: '当前项目路径' },
 } as const;
 
 @Injectable()
@@ -76,6 +80,12 @@ export class ChatbotCommandContribution implements CommandContribution {
     });
     commands.registerCommand(CHATBOT_COMMANDS.getCurrentSessionID, {
       execute: () => getChatPanelApi()?.getCurrentSessionID?.() ?? '',
+    });
+    commands.registerCommand(CHATBOT_COMMANDS.setProject, {
+      execute: (dir: string) => getChatPanelApi()?.setProject?.(dir),
+    });
+    commands.registerCommand(CHATBOT_COMMANDS.getProject, {
+      execute: () => getChatPanelApi()?.getProject?.() ?? '',
     });
   }
 }
