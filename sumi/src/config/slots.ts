@@ -7,12 +7,12 @@
  *   ┌──────────┬─────────────────────────┬────────┐
  *   │ sidebar  │  action (顶部工具栏)      │        │
  *   │          ├─────────────────────────┤ drawer │
- *   │          │  main (对话主区)          │        │
+ *   │          │  chatbot (对话主区)       │        │
  *   └──────────┴─────────────────────────┴────────┘
  *
- *   - Sidebar: Sidebar 拓展 (extensions/sidebar)
- *   - Action:  Action 拓展 (extensions/action) — 模式切换 / sidebar 展开 / 项目选择
- *   - Main:    Chatbot 拓展 (extensions/chatbot) — 消息流 + 输入区
+ *   - Sidebar:  Sidebar 拓展 (extensions/sidebar)
+ *   - Action:   Action 拓展 (extensions/action) — 模式切换 / sidebar 展开 / 项目选择
+ *   - Chatbot:  Chatbot 拓展 (extensions/chatbot) — 消息流 + 输入区
  *   - Drawer:  右侧抽屉, 暂无拓展 (默认宽 0 / 完全隐藏)
  *   - User: 内嵌在 sidebar 底部 (用户信息)
  *
@@ -28,7 +28,7 @@
 export const SOLO_SLOTS = {
   Sidebar: 'sidebar',
   Action: 'action',
-  Main: 'main',
+  Chatbot: 'chatbot',
   Drawer: 'drawer',
   /** 内嵌在 sidebar 底部: 用户信息 (头像 + 昵称, 登录入口) */
   User: 'user',

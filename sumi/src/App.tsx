@@ -58,7 +58,7 @@ const SOLO_MODE = {
   panels: {
     [SOLO_SLOTS.Sidebar]: SIDEBAR_PANEL_ID,
     [SOLO_SLOTS.Action]: ACTION_PANEL_ID,
-    [SOLO_SLOTS.Main]: CHATBOT_PANEL_ID,
+    [SOLO_SLOTS.Chatbot]: CHATBOT_PANEL_ID,
     [SOLO_SLOTS.User]: USER_PANEL_ID,
   },
 };

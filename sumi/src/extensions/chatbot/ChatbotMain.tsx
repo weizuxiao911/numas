@@ -1,7 +1,7 @@
 /**
  * Chatbot — Numas SOLO 模式 main 槽 UI (vsix 拓展实现的 React 组件)
  *
- * 装 SOLO_SLOTS.Main (自定义 slot 'main', 见 config/slots.ts),
+ * 装 SOLO_SLOTS.Chatbot (自定义 slot 'chatbot', 见 config/slots.ts),
  * 位于中列, action (顶部工具栏) 下方.
  *
  * 只承载对话主区 (ChatbotView: 消息流 + 输入区).

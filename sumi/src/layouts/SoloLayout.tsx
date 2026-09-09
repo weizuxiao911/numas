@@ -115,7 +115,7 @@ export function SoloLayout(): React.ReactElement {
           <SlotRenderer slot={SOLO_SLOTS.Action} />
         </div>
         <div className="app-solo__main">
-          <SlotRenderer slot={SOLO_SLOTS.Main} />
+          <SlotRenderer slot={SOLO_SLOTS.Chatbot} />
         </div>
       </div>
       {/* 右侧抽屉: 关闭 0px, 打开时按 drawerW 拉宽 (可拖拽) */}
