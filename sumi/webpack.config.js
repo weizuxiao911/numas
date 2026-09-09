@@ -53,14 +53,21 @@ const config = {
         filename: '[name].[contenthash:8].js',
         publicPath: '/',
     },
-    cache: {
-        type: 'filesystem',
-        cacheDirectory: path_1.default.resolve(WEB, '.webpack-cache'),
-        // monaco-editor 等大依赖单独缓存, 避免每次 dev rebuild 都全量转译
-        buildDependencies: {
-            config: [__filename],
+    // cache 策略:
+    //   - dev (webpack serve): memory. filesystem pack 在 watch 重建时常被并发写/清理,
+    //     触发 `Caching failed for pack: ENOENT ... .webpack-cache/default-development/N.pack`
+    //     并把 dev server 进程带崩 (需人工 rm -rf .webpack-cache 重启). 内存缓存不落盘,
+    //     增量 rebuild 仍在 300ms 级, 换来 dev 不再崩.
+    //   - production build: filesystem, 保留大依赖 (monaco 等) 的跨次构建缓存收益.
+    cache: isDev
+        ? { type: 'memory' }
+        : {
+            type: 'filesystem',
+            cacheDirectory: path_1.default.resolve(WEB, '.webpack-cache'),
+            buildDependencies: {
+                config: [__filename],
+            },
         },
-    },
     watchOptions: {
         // 排除输出/缓存/运行期数据目录, 避免删除/重建目录时 watcher ENOENT 风暴杀掉 webpack
         ignored: [
