@@ -43,6 +43,31 @@ export function pathBase(p: string): string {
   return seg ? seg : p;
 }
 
+/** 跨平台 dirname (兼容 / 和 \\ 分隔; Windows 盘符根 'D:' 与 POSIX 根 '/' 返回自身).
+ *  §2.3: 禁止各处自己写正则切父目录, 统一走本函数. */
+export function pathDirname(p: string): string {
+  const s = normalizeCwdPath(p);
+  if (!s || s === '/') return s || '';
+  if (/^[A-Za-z]:$/.test(s)) return s;
+  const idx = s.lastIndexOf('/');
+  if (idx < 0) return '';
+  if (idx === 0) return '/';
+  const head = s.slice(0, idx);
+  return /^[A-Za-z]:$/.test(head) ? head : head;
+}
+
+/** 跨平台路径拼接 (POSIX 分隔符输出; 段内多余分隔符折叠).
+ *  §2.3: 禁止硬编码 '/' + join 拼绝对路径, 统一走本函数 (base 决定根形态). */
+export function pathJoin(base: string, ...segments: string[]): string {
+  const head = normalizeCwdPath(base);
+  const tail = segments
+    .flatMap((s) => normalizeSep(s || '').split('/'))
+    .filter((s) => s && s !== '.');
+  if (!tail.length) return head;
+  if (!head) return tail.join('/');
+  return `${head === '/' ? '' : head}/${tail.join('/')}`;
+}
+
 /** 宿主机绝对路径 → 相对 workspace 的相对路径.
  *  返回 null 表示路径不在 workspace 下 (server 端 FSUtil.contains 校验会失败).
  *  跨平台: macOS/Linux '/Users/foo' 跟 workspace '/Users/foo' → '.'; Windows 'C:\\foo' 跟 'C:/foo' → '.'. */
