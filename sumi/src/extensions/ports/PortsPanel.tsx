@@ -250,11 +250,11 @@ export const PortsPanel: React.FC = () => {
   }, [ports, forwards]);
 
   // 打开端口应用: 走 codeblitz 全局命令 (vscode 标准跨扩展契约, 命令 id 字符串即 API;
-  // 不直接 import 其它拓展). numas.browser.open = 内置浏览器打开; 传用户视角真实 URL
+  // 不直接 import 其它拓展). browser.open = 内置浏览器打开; 传用户视角真实 URL
   // (http://localhost:<port>/), 反代 (→ /proxy/<port>) 由内置浏览器 normalizeUrl 统一负责 —
   // 避免把已反代 URL (proxyUrl) 二次包裹成 /proxy/<port>/proxy/<port>/
   const openPort = useCallback((port: number) => {
-    void commandService.executeCommand('numas.browser.open', `http://localhost:${port}/`);
+    void commandService.executeCommand('browser.open', `http://localhost:${port}/`);
   }, [commandService]);
 
   /** 关闭进程 (杀监听该端口的服务); 成功后乐观移除行, 服务端会发 ports.closed 兜底 */

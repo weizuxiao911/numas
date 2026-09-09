@@ -7,7 +7,7 @@
  *   (`numas-browser://<urlHash>`; 无 URL 空窗口 = numas-browser://browser).
  *   同 URL 再 open → 聚焦已有 tab (编辑器按 URI 去重); 不同 URL → 独立 tab 各自 iframe.
  * - DI: BrowserToken → BrowserServiceImpl (内置拓展 useInjectable 调).
- * - 全局命令 numas.browser.* (CommandContribution): vsix / 其他拓展用 vscode 标准
+ * - 全局命令 browser.* (CommandContribution): vsix / 其他拓展用 vscode 标准
  *   executeCommand 调用 (open/navigate/reload/openExternal/executeJs/queryDom/activeUrl).
  */
 
@@ -37,13 +37,13 @@ const BROWSER_URI = browserUriFor();
 
 /** 全局命令 id (vscode/codeblitz 标准, 供 executeCommand 调用) */
 export const BROWSER_COMMANDS = {
-  open: { id: 'numas.browser.open', label: '内置浏览器: 打开' },
-  navigate: { id: 'numas.browser.navigate', label: '内置浏览器: 导航' },
-  reload: { id: 'numas.browser.reload', label: '内置浏览器: 刷新' },
-  openExternal: { id: 'numas.browser.openExternal', label: '内置浏览器: 在真实浏览器打开' },
-  executeJs: { id: 'numas.browser.executeJs', label: '内置浏览器: 执行 JS' },
-  queryDom: { id: 'numas.browser.queryDom', label: '内置浏览器: 查询 DOM' },
-  activeUrl: { id: 'numas.browser.activeUrl', label: '内置浏览器: 当前地址' },
+  open: { id: 'browser.open', label: '内置浏览器: 打开' },
+  navigate: { id: 'browser.navigate', label: '内置浏览器: 导航' },
+  reload: { id: 'browser.reload', label: '内置浏览器: 刷新' },
+  openExternal: { id: 'browser.openExternal', label: '内置浏览器: 在真实浏览器打开' },
+  executeJs: { id: 'browser.executeJs', label: '内置浏览器: 执行 JS' },
+  queryDom: { id: 'browser.queryDom', label: '内置浏览器: 查询 DOM' },
+  activeUrl: { id: 'browser.activeUrl', label: '内置浏览器: 当前地址' },
 } as const;
 
 @Injectable()

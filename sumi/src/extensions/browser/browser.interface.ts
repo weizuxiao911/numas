@@ -15,7 +15,7 @@
  *
  * 暴露方式 (双通道, 见 docs/内置浏览器扩展设计.md):
  *   - DI token BrowserToken: 内置拓展 useInjectable(BrowserToken) 直接调
- *   - 全局命令 numas.browser.*: vsix / 其他拓展用 vscode 标准 executeCommand 调
+ *   - 全局命令 browser.*: vsix / 其他拓展用 vscode 标准 executeCommand 调
  */
 
 /** 内置浏览器自定义 scheme (仿 welcome, 主编辑区标签) */

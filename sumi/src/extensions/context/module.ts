@@ -29,7 +29,7 @@ import {
 } from './dom-selection';
 
 export const ADD_TO_CONVERSATION_COMMAND = {
-  id: 'numas.addToConversation',
+  id: 'context.addToConversation',
   label: '添加到对话',
 };
 

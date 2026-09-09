@@ -7,9 +7,9 @@
  * 状态所有权在 service 单例 (LayoutServiceImpl), 渲染方 (SoloLayout) 与
  * 操作方 (ActionBar / Sidebar 拓展) 统一:
  *   - 读状态 / 订阅: useInjectable(LayoutToken) → subscribe / state
- *   - 操作: CommandService.executeCommand('numas.sidebar.collapse') 等
+ *   - 操作: CommandService.executeCommand('sidebar.collapse') 等
  *          (跨拓展 vscode 标准, 见 AGENTS §2.2 规则 4)
- * 命令 id 常量 (numas.sidebar.* / numas.drawer.*) 是跨拓展字符串契约,
+ * 命令 id 常量 (sidebar.* / drawer.*) 是跨拓展字符串契约,
  * 消费方不 import 本 interface 也能 executeCommand.
  */
 
@@ -34,12 +34,12 @@ export interface LayoutState {
 
 /** SOLO 布局命令 id (跨拓展契约, 字符串即 API) */
 export const LAYOUT_COMMANDS = {
-  sidebarCollapse: { id: 'numas.sidebar.collapse', label: '折叠侧栏' },
-  sidebarExpand: { id: 'numas.sidebar.expand', label: '展开侧栏' },
-  sidebarToggle: { id: 'numas.sidebar.toggle', label: '切换侧栏' },
-  drawerOpen: { id: 'numas.drawer.open', label: '打开抽屉' },
-  drawerClose: { id: 'numas.drawer.close', label: '关闭抽屉' },
-  drawerToggle: { id: 'numas.drawer.toggle', label: '切换抽屉' },
+  sidebarCollapse: { id: 'sidebar.collapse', label: '折叠侧栏' },
+  sidebarExpand: { id: 'sidebar.expand', label: '展开侧栏' },
+  sidebarToggle: { id: 'sidebar.toggle', label: '切换侧栏' },
+  drawerOpen: { id: 'drawer.open', label: '打开抽屉' },
+  drawerClose: { id: 'drawer.close', label: '关闭抽屉' },
+  drawerToggle: { id: 'drawer.toggle', label: '切换抽屉' },
 } as const;
 
 export interface ILayoutService {
