@@ -49,11 +49,19 @@ export const Markdown: React.FC<{ content: string; streaming?: boolean; expand?:
   const [html, setHtml] = useState('');
   useEffect(() => {
     let cancelled = false;
-    Promise.resolve(markedWithShiki.parse(strip(content || '')))
-      .then((h: string) => { if (!cancelled) setHtml(h); })
-      .catch(() => { if (!cancelled) setHtml(String(content || '')); });
+    const run = () => {
+      Promise.resolve(markedWithShiki.parse(strip(content || '')))
+        .then((h: string) => { if (!cancelled) setHtml(h); })
+        .catch(() => { if (!cancelled) setHtml(String(content || '')); });
+    };
+    // 流式中防抖 120ms: 避免每个 token 触发一次全量 parse + 代码高亮 (长消息/代码块卡顿根源)
+    if (streaming) {
+      const t = setTimeout(run, 120);
+      return () => { cancelled = true; clearTimeout(t); };
+    }
+    run();
     return () => { cancelled = true; };
-  }, [content]);
+  }, [content, streaming]);
 
   return (
     <div className={`chat-md${streaming ? ' chat-md--streaming' : ''}`}>
@@ -116,22 +124,7 @@ export const Markdown: React.FC<{ content: string; streaming?: boolean; expand?:
         }
         .chat-md__body a { color: var(--textLink-foreground, var(--vscode-textLink-foreground, var(--button-background))); text-decoration: none; }
         .chat-md__body a:hover { text-decoration: underline; }
-        /* 流式输出: 末尾闪烁光标 + 内容淡入 */
-        .chat-md--streaming .chat-md__body > *:last-child::after {
-          content: '';
-          display: inline-block;
-          width: 2px;
-          height: 1em;
-          margin-left: 2px;
-          vertical-align: text-bottom;
-          background: currentColor;
-          opacity: 0.75;
-          animation: chat-md-caret 1s step-end infinite;
-        }
-        @keyframes chat-md-caret {
-          0%, 50% { opacity: 0.75; }
-          50.01%, 100% { opacity: 0; }
-        }
+        /* 流式输出: 内容淡入 (无末尾闪烁光标) */
         .chat-md--streaming .chat-md__body {
           animation: chat-md-fade .18s ease-out;
         }

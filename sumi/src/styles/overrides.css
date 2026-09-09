@@ -206,6 +206,7 @@ body.design-light,
 body.vs-light,
 body.vs,
 .codeblitz-root.codeblitz-light {
+  --editor-background: #ffffff;
   --app-panel-bg: #ffffff;
   --app-panel-fg: #1f2328;
   --app-border: rgba(0, 0, 0, 0.1);
@@ -231,6 +232,14 @@ body.vs,
   --editorWidget-border: rgba(0, 0, 0, 0.12);
   --sideBar-background: #ffffff;
   --activityBar-background: #ffffff;
+
+  /* Solo 布局 (亮主题): sidebar 偏灰, 中间编辑区保持白, 二者对换 */
+  .app-solo__sidebar {
+    background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
+  }
+  .app-solo__center {
+    background: var(--editor-background, #ffffff) !important;
+  }
 }
 
 /* ============= Dark 主题: 撤销 light 写死, 让 --app-* 跟随 IDE 主题变量 ============= */

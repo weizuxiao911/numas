@@ -19,6 +19,22 @@ function parseMaybeJson(v: any): any {
   return v;
 }
 
+export function normalizeQuestions(raw: any): QuestionInfo[] | null {
+  const arr = Array.isArray(raw) ? raw : raw?.questions;
+  if (!Array.isArray(arr) || arr.length === 0) return null;
+  if (!arr.every((q: any) => q && typeof q.question === 'string' && Array.isArray(q.options))) return null;
+  return arr.map((q: any) => ({
+    question: q.question,
+    header: q.header,
+    multiple: q.multiple === true || q.type === 'multiple',
+    custom: q.custom !== false,
+    options: q.options.map((o: any) => ({
+      label: typeof o === 'string' ? o : (o.label ?? String(o)),
+      description: typeof o === 'object' ? (o.description ?? '') : '',
+    })),
+  }));
+}
+
 export function extractQuestions(part: any): QuestionInfo[] | null {
   const candidates = [
     part?.state?.output,
@@ -29,19 +45,8 @@ export function extractQuestions(part: any): QuestionInfo[] | null {
   for (const cand of candidates) {
     const v = parseMaybeJson(cand);
     if (!v) continue;
-    const qs = (v as any).questions ?? (Array.isArray(v) ? v : null);
-    if (Array.isArray(qs) && qs.length > 0 && qs.every((q: any) => q && typeof q.question === 'string' && Array.isArray(q.options))) {
-      return qs.map((q: any) => ({
-        question: q.question,
-        header: q.header,
-        multiple: q.multiple === true || q.type === 'multiple',
-        custom: q.custom !== false,
-        options: q.options.map((o: any) => ({
-          label: typeof o === 'string' ? o : (o.label ?? String(o)),
-          description: typeof o === 'object' ? (o.description ?? '') : '',
-        })),
-      }));
-    }
+    const qs = normalizeQuestions(v);
+    if (qs) return qs;
   }
   return null;
 }

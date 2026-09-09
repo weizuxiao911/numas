@@ -26,6 +26,9 @@ export interface Row {
   /** 当次对话模型 (assistant 消息 info 级, step-finish part 常缺 modelID 时兜底) */
   modelID?: string;
   providerID?: string;
+  /** 专家/模式名 (assistant 消息 info.agent / info.mode) */
+  agent?: string;
+  mode?: string;
 }
 
 export const HIDDEN_AGENTS = new Set(['compaction', 'title', 'summary']);
