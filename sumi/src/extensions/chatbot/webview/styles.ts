@@ -230,6 +230,7 @@ export const styles = `
 .chat__msg-body > .tool,
 .chat__msg-body > .todo,
 .chat__msg-body > .reason,
+.chat__msg-body > .sub,
 .chat__msg-body > .q {
   width: 100%; box-sizing: border-box;
 }
@@ -1201,11 +1202,14 @@ export const styles = `
 /* ========== Question card (OpenCode style) ========== */
 .q {
   margin: 4px 0;
-  background: var(--ai-input-bg);
+  background: var(--ai-glass-bg);
+  -webkit-backdrop-filter: var(--ai-glass-blur);
+  backdrop-filter: var(--ai-glass-blur);
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   min-width: 0;
+  box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 2px 8px color-mix(in srgb, #000 18%, transparent);
 }
 .q__head {
   display: flex; align-items: center; gap: 8px;
@@ -1406,11 +1410,14 @@ export const styles = `
 /* ========== Todo card (OpenCode style) ========== */
 .todo {
   margin: 4px 0;
-  background: var(--ai-input-bg);
+  background: var(--ai-glass-bg);
+  -webkit-backdrop-filter: var(--ai-glass-blur);
+  backdrop-filter: var(--ai-glass-blur);
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   min-width: 0;
+  box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 2px 8px color-mix(in srgb, #000 18%, transparent);
 }
 .todo__head {
   display: flex; align-items: center; gap: 8px;
@@ -1481,9 +1488,12 @@ export const styles = `
 /* ========== Sub-agent (委派子任务) ========== */
 .sub {
   margin: 4px 0;
-  background: var(--ai-input-bg);
-  border-radius: 8px;
-  border: 1px solid var(--ai-divider);
+  background: var(--ai-glass-bg);
+  -webkit-backdrop-filter: var(--ai-glass-blur);
+  backdrop-filter: var(--ai-glass-blur);
+  border-radius: 10px;
+  border: none;
+  box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 2px 8px color-mix(in srgb, #000 18%, transparent);
   overflow: hidden;
   min-width: 0;
   font-size: 12.5px;
@@ -1539,11 +1549,14 @@ export const styles = `
 /* ========== Reasoning (OpenCode style) ========== */
 .reason {
   margin: 4px 0;
-  background: var(--ai-input-bg);
+  background: var(--ai-glass-bg);
+  -webkit-backdrop-filter: var(--ai-glass-blur);
+  backdrop-filter: var(--ai-glass-blur);
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   min-width: 0;
+  box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 2px 8px color-mix(in srgb, #000 18%, transparent);
 }
 .reason__head {
   display: flex; align-items: center; gap: 8px;
