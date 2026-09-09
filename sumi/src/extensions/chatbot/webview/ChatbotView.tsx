@@ -18,7 +18,6 @@ import {
   aiListSessions,
   aiListMessages,
   aiDeleteSession,
-  isWithinCwd,
   isAiReady,
 } from '@/extensions/chatbot/commands/api';
 import { modelPrefs } from '@/extensions/chatbot/commands/modelPrefs';
@@ -107,9 +106,14 @@ export const ChatbotView: React.FC = () => {
   const fs = useInjectable<IFileSystem>(FsToken);
   const state = useInjectable<IStateService>(StateToken);
 
-  const [sessionID, setSessionID] = useState<string>('');
+  const [sessionID, setSessionIDRaw] = useState<string>('');
   const sessionIDRef = useRef(sessionID);
   sessionIDRef.current = sessionID;
+  // 包装 setSessionID: 派发 window CustomEvent 让 sidebar 同步高亮
+  const setSessionID = useCallback((sid: string) => {
+    setSessionIDRaw(sid);
+    window.dispatchEvent(new CustomEvent('chatbot:session-changed', { detail: { sessionID: sid } }));
+  }, []);
   const [rows, setRows] = useState<Row[]>([]);
   const [input, setInput] = useState('');
   // 会话状态按 sid 维护 (busy/retry/idle + retry 细节): SSE 事件即时更新 + 15s 对账全量校准;
@@ -234,19 +238,8 @@ export const ChatbotView: React.FC = () => {
     return () => clearTimeout(t);
   }, [ready]);
 
-  // 草稿会话: 打开面板且无 sessionID 时自动建一个; 若一直没发消息, 切换/删除/卸载时清理, 避免空会话污染历史
+  // 草稿会话管理: 切换/删除/卸载时清理未发过消息的空草稿, 避免污染历史
   const draftRef = useRef<{ sid: string; used: boolean } | null>(null);
-  const ensureDraft = useCallback(async () => {
-    if (!client || sessionIDRef.current || draftRef.current) return;
-    try {
-      const res = await createSessionInWorkspace(client);
-      const sid = res?.data?.id;
-      if (sid) {
-        draftRef.current = { sid, used: false };
-        setSessionID(sid);
-      }
-    } catch { /* 忽略, 交给用户手动新建 */ }
-  }, [client]);
   const cleanupDraft = useCallback(() => {
     const d = draftRef.current;
     draftRef.current = null;
@@ -424,22 +417,23 @@ export const ChatbotView: React.FC = () => {
         if (target === sessionIDRef.current) {
           sessionIDRef.current = '';
           setSessionID('');
-          void ensureDraft();
         }
         return;
       }
       setApiError(e);
     }
-  }, [client, setApiError, ensureDraft]);
+  }, [client, setApiError]);
 
   useEffect(() => {
     if (sessionID) loadMessages(sessionID);
     else setRows([]);
   }, [sessionID, loadMessages]);
 
-  // 启动恢复: 查历史会话列表 → 有则载入最新的会话, 无则新建草稿.
-  // 不依赖 sessionStorage 恢复 id (残留失效 id 会触发 Session not found).
-  // workdir 由 localStorage 唯一决定; 未选项目保持空态, **不**从历史会话恢复.
+  // 启动恢复: 默认加载当前 workdir 下的最新会话 (按 time.updated 倒序, 取首条非空草稿)
+  // 规则:
+  //   1. 无会话 → 不创建, 主区保持空 (用户点 "新建" 才建)
+  //   2. 有最新 → 加载它; 若为空草稿就接着找次新非空草稿; 都空就不加载
+  // 不自动创建任何会话, 避免空草稿污染历史.
   const restoredRef = useRef(false);
   useEffect(() => {
     if (!ready || !client || restoredRef.current) return;
@@ -447,20 +441,18 @@ export const ChatbotView: React.FC = () => {
     (async () => {
       try {
         const list = await aiListSessions();
-        // 最新会话 = time.updated 最大
-        const latest = (list || []).reduce<any | null>(
-          (a, b) => ((b?.time?.updated || 0) > (a?.time?.updated || 0) ? b : a),
-          null,
-        );
-        if (latest?.id) {
-          sessionIDRef.current = latest.id;
-          setSessionID(latest.id);
-        } else {
-          void ensureDraft();
+        if (!Array.isArray(list) || list.length === 0) return;
+        const sorted = [...list].sort((a, b) => (b?.time?.updated || 0) - (a?.time?.updated || 0));
+        for (const s of sorted) {
+          const m = await aiListMessages(s.id).catch(() => null);
+          if (Array.isArray(m) && m.length > 0) {
+            sessionIDRef.current = s.id;
+            setSessionID(s.id);
+            return;
+          }
         }
-      } catch {
-        void ensureDraft();
-      }
+        // 全是空草稿 → 不加载任何 (不自动创建)
+      } catch { /* 静默 */ }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, client]);
@@ -737,53 +729,18 @@ export const ChatbotView: React.FC = () => {
     })();
   }, [client, sessionID, applySessionToUI]);
 
-  const onNewSession = useCallback(async (scopeDir?: string) => {
-    if (!ready || !client) return;
-    // 新建会话的前提: 同作用域最新会话已有消息. 若最新会话仍是空草稿 (无消息),
-    // 则不重复创建 — 只有最新的一个允许是空的.
-    // scopeDir (切项目时传入): 草稿复用只在该项目子树内找, 避免跳到别的项目草稿;
-    // 不传则在整个空间内找 (手动「新建会话」).
-    try {
-      const list = await aiListSessions();
-      const scoped = scopeDir
-        ? (list || []).filter((s) => isWithinCwd(s?.directory, scopeDir))
-        : (list || []);
-      const latest = scoped.reduce<any | null>(
-        (a, b) => ((b?.time?.updated || 0) > (a?.time?.updated || 0) ? b : a),
-        null,
-      );
-      if (latest?.id) {
-        const msgs = await aiListMessages(latest.id);
-        if (!Array.isArray(msgs) || msgs.length === 0) {
-          // 最新会话是空草稿 → 跳到它 (不新建)
-          if (sessionIDRef.current !== latest.id) {
-            sessionIDRef.current = latest.id;
-            setSessionID(latest.id);
-          }
-          setRows([]);
-          setStatusBySession((prev) => ({ ...prev, [latest.id]: { type: 'idle' } }));
-          setError('');
-          setCurrentTitle('新会话');
-          return;
-        }
-      }
-    } catch { /* 查询失败则照常新建 */ }
-    // 不 abort 当前会话: 允许多会话并行生成, 切回后事件流自动续播
+  const onNewSession = useCallback(() => {
+    // 单纯「新建会话」按钮: 不创建任何会话, 只清空当前 sid + 重置 chatbot UI.
     cleanupDraft();
-    try {
-      // 切项目时显式传项目目录, 保证新会话 directory 落在该项目 (而非依赖 path.get 的竞态)
-      const res = await createSessionInWorkspace(client, scopeDir);
-      const sid = res?.data?.id;
-      if (sid) {
-        sessionIDRef.current = sid;
-        setSessionID(sid);
-        setRows([]);
-        setStatusBySession((prev) => ({ ...prev, [sid]: { type: 'idle' } }));
-        setError('');
-        setCurrentTitle('新会话');
-      }
-    } catch (e) { setApiError(e); }
-  }, [ready, client, cleanupDraft, setApiError]);
+    sessionIDRef.current = '';
+    setSessionID('');
+    setRows([]);
+    setError('');
+    setCurrentTitle('新会话');
+    setStatusBySession({});
+    setSessionErrors({});
+    setInput('');
+  }, [cleanupDraft, setSessionID, setError, setCurrentTitle, setStatusBySession, setSessionErrors, setInput]);
 
   const selectedModel = useMemo(() => {
     if (!currentModel) return null;
@@ -940,14 +897,18 @@ export const ChatbotView: React.FC = () => {
 
   const onSwitchSession = useCallback((sid: string) => {
     if (draftRef.current?.sid !== sid) cleanupDraft();
-    setSessionID(sid);
+    // 多次点击同一会话时 React bailout (setSessionID 同值不触发 useEffect [sessionID]),
+    // 不能依赖 useEffect 重拉消息; 直接调 loadMessages + 清 rows.
+    const firstSwitch = sessionIDRef.current !== sid;
     sessionIDRef.current = sid;
-    setRows([]);
+    setSessionID(sid);
+    if (firstSwitch) setRows([]);
+    void loadMessages(sid);
     // 切换后对账 busy (事件流可能有遗漏)
     void refreshSessionStatuses();
     // 切完会话回 input, 继续输入 (双 rAF 避开 React 提交 + Portal 卸载)
     requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus()));
-  }, [cleanupDraft, refreshSessionStatuses]);
+  }, [cleanupDraft, refreshSessionStatuses, loadMessages]);
 
   // 注册 ChatPanelApi (供 PDF AI讲解/文件树/选区等外部; 卸载注销)
   useEffect(() => {
@@ -959,32 +920,37 @@ export const ChatbotView: React.FC = () => {
       getCurrentSessionID: () => sessionIDRef.current,
       getProject: () => state.getWorkdir(),
       setProject: async (dir: string) => {
-        // 1) 切走前: 当前会话若仍是空草稿 (无消息), 删除它 — 每个项目只留一个空草稿.
-        //    必须在 setWorkdir 之前检查 (aiListMessages 走当前 workdir client).
+        // 1) 切走前: 当前会话若仍是空草稿 (无消息), 删除它 — 不留空草稿污染历史.
         const prevSid = sessionIDRef.current;
         if (prevSid) {
           try {
             const prevMsgs = await aiListMessages(prevSid);
             if (!Array.isArray(prevMsgs) || prevMsgs.length === 0) {
-              await aiDeleteSession(prevSid);
-              cleanupDraft();
-              sessionIDRef.current = '';
+              await aiDeleteSession(prevSid).catch(() => {});
             }
           } catch { /* 查询失败不阻塞切项目 */ }
         }
         // 2) 切 workdir (同步派 workdir:changed → service 重建 SDK client, header 跟随)
         state.setWorkdir(dir);
-        // 3) 新项目有历史会话 → 载入最新; 无 → 新建 (createSession 用新 workdir)
-        //    aiListSessions 已只返回当前 workdir (项目) 的顶层会话, 无需再过滤.
+        // 3) 找新项目下最新有消息会话加载; 没有就清空不建.
         try {
           const list = await aiListSessions();
-          const latest = (list || []).reduce<any | null>(
-            (a, b) => ((b?.time?.updated || 0) > (a?.time?.updated || 0) ? b : a),
-            null,
-          );
-          if (latest?.id) { onSwitchSession(latest.id); return; }
-          await onNewSession(dir);
-        } catch { /* 忽略: 切项目失败保持当前会话 */ }
+          if (Array.isArray(list) && list.length) {
+            const sorted = [...list].sort((a, b) => (b?.time?.updated || 0) - (a?.time?.updated || 0));
+            for (const s of sorted) {
+              const m = await aiListMessages(s.id).catch(() => null);
+              if (Array.isArray(m) && m.length > 0) {
+                onSwitchSession(s.id);
+                return;
+              }
+            }
+          }
+          // 新项目无任何有消息会话: 清空 chatbot UI
+          sessionIDRef.current = '';
+          setSessionID('');
+          setRows([]);
+          setError('');
+        } catch { /* 忽略 */ }
       },
       listSessions: async () => {
         // 历史会话列表: 全部会话 (含当前空草稿 / 空的新会话). 不做任何自动删除.
@@ -997,8 +963,14 @@ export const ChatbotView: React.FC = () => {
         try {
           await aiDeleteSession(sid);
           if (sessionIDRef.current === sid) {
-            // 删的是当前会话 → 新建一个空白会话顶替
-            await onNewSession();
+            // 删的是当前会话: 不创建新草稿, 直接清空 chatbot UI
+            sessionIDRef.current = '';
+            setSessionID('');
+            setRows([]);
+            setError('');
+            setCurrentTitle('新会话');
+            setStatusBySession((prev) => { const n = { ...prev }; delete n[sid]; return n; });
+            setSessionErrors((prev) => { const n = { ...prev }; delete n[sid]; return n; });
           }
         } catch { /* 忽略 */ }
       },
@@ -1242,7 +1214,7 @@ export const ChatbotView: React.FC = () => {
           break;
         }
         case 'new': {
-          await onNewSession();
+          onNewSession();
           break;
         }
         case 'skills': {

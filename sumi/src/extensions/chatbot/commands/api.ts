@@ -90,15 +90,21 @@ export function isWithinCwd(dir: string | undefined, cwd: string): boolean {
   return d === c || d.startsWith(c + '/');
 }
 
-/** 历史会话列表 — **只列当前 workdir (项目) 的顶层会话**, 不分组.
- *  单 workdir 模型: SDK 全局 client 已随 workdir 重建, opencodeFetch 默认
- *  x-opencode-directory header 就是当前项目, 无需任何覆盖.
+/** 历史会话列表 — 走 SDK session.list, 直接用用户选的 workdir 作为 directory 参数.
+ *  SDK V2 list 端点: GET /session?directory=<dir>&roots=true (query 自动拼).
  *  roots=true: 只列顶层会话 (parent_id IS NULL), 排除 subagent/委派子会话. */
 export async function aiListSessions(): Promise<any[]> {
   await waitForAiReady();
-  const json: any = await opencodeFetch('/session?roots=true');
-  const list: any[] = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
-  return list;
+  const client = getAiClient();
+  if (!client) return [];
+  const workdir = getGlobalOpencodeRuntime().cwd || '';
+  const r = workdir
+    ? await (client as any).session.list({ directory: workdir, roots: true })
+    : await (client as any).session.list({ roots: true });
+  const list: any[] = Array.isArray(r) ? r
+    : (Array.isArray(r?.data) ? r.data
+    : (Array.isArray(r?.data?.data) ? r.data.data : []));
+  return Array.isArray(list) ? list : [];
 }
 
 /** 会话消息列表 — v2.session.messages({ sessionID }) */

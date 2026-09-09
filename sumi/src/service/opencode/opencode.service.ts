@@ -118,16 +118,17 @@ export class OpencodeServiceImpl implements IOpencodeService, ClientAppContribut
       responseStyle: 'fields',
       throwOnError: true,
     });
-    // numas: 清掉 SDK 默认 rewrite 拦截器 (对 GET 把 header 改写成 ?directory= query 并删 header).
-    // 目录只用 header 这一种方式, 见下方动态注入拦截器.
+    // numas: 接管 SDK 请求: 设 x-opencode-directory header + 把 query 拼到 URL.
+    // SDK 默认 rewrite 拦截器会从 config.directory 转 header 为 query, numas 不传 directory,
+    // 默认拦截器被清掉后 SDK 既不设 header 也不拼 query, 显式接管两者.
     try {
       const innerClient: any = (typeof _client?.client === 'object' && (_client as any).client) || _client;
       if (innerClient?.interceptors?.request?.clear) {
         innerClient.interceptors.request.clear();
-        // 每个请求发出前实时注入当前 workdir header (选项目不重建 client 即生效).
-        innerClient.interceptors.request.use((request: Request) => {
-          const headers = workdirHeader();
-          for (const [k, v] of Object.entries(headers)) request.headers.set(k, v);
+        innerClient.interceptors.request.use(async (request: Request) => {
+          // 注入 x-opencode-directory header (browser fetch ISO-8859-1 限制, encodeURI)
+          for (const [k, v] of Object.entries(workdirHeader())) request.headers.set(k, v);
+          // query 已经在 SDK 内部 buildClientParams 拼到 url 上 (实测有效), 不再次处理.
           return request;
         });
       }

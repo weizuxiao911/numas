@@ -129,6 +129,20 @@ const SessionList: React.FC = () => {
   const [sessions, setSessions] = useState<any[]>([]);
   const [currentID, setCurrentID] = useState<string>('');
 
+  // 监听 chatbot 主区派发的 session:changed 事件, 同步当前选中项 (供侧栏高亮).
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      const sid = (e as CustomEvent<{ sessionID: string }>).detail?.sessionID || '';
+      setCurrentID(sid);
+    };
+    window.addEventListener('chatbot:session-changed', onChanged);
+    // 初始拉一次 (覆盖冷启动 ChatbotView 先 setSessionID 后才挂监听的情况)
+    void commandService.executeCommand<string>('chatbot.getCurrentSessionID')
+      .then((sid) => { if (typeof sid === 'string' && sid) setCurrentID(sid); })
+      .catch(() => {});
+    return () => window.removeEventListener('chatbot:session-changed', onChanged);
+  }, [commandService]);
+
   const refresh = React.useCallback(async () => {
     try {
       const [list, cur] = await Promise.all([
@@ -145,11 +159,15 @@ const SessionList: React.FC = () => {
     // 切项目 (workdir) 后立即刷新该项目会话; 同时轮询兜底新建/更新
     const id = window.setInterval(() => void refresh(), 4000);
     const unsub = state.subscribeWorkdir(() => void refresh());
+    // 切项目时主区派 chatbot:session-changed (切到新项目最新会话), 侧栏立即重拉列表
+    const onSessionChanged = () => void refresh();
+    window.addEventListener('chatbot:session-changed', onSessionChanged);
     const onReady = () => void refresh();
     window.addEventListener('runtime-ready', onReady);
     return () => {
       window.clearInterval(id);
       unsub();
+      window.removeEventListener('chatbot:session-changed', onSessionChanged);
       window.removeEventListener('runtime-ready', onReady);
     };
   }, [refresh, state]);
