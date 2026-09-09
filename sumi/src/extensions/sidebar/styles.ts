@@ -21,6 +21,21 @@ export const styles = `
   background: transparent;
   user-select: none;
 }
+/* 底部设置区块: 推到 sidebar 最底部 (flex column 剩余空间) */
+.app-sidebar__settings {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+}
+.app-sidebar__settings > * {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 0;
+}
 /* 拖动条 (SplitPanel 渲染) — 加宽 + 主题色, hover 突出 */
 .app-sidebar + .resize-handle-horizontal,
 .app-sidebar ~ .resize-handle-horizontal {
@@ -89,6 +104,8 @@ export const styles = `
 
 /* ============== 主体区: 新建会话按钮 + 历史会话 ============== */
 .app-sidebar__main {
+  flex: 0 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -221,8 +238,7 @@ export const styles = `
   opacity: 0;
   transition: opacity 0.12s, background 0.12s, color 0.12s;
 }
-.app-sidebar__session:hover .app-sidebar__session-del,
-.app-sidebar__session.is-active .app-sidebar__session-del {
+.app-sidebar__session:hover .app-sidebar__session-del {
   opacity: 1;
 }
 .app-sidebar__session-del:hover {

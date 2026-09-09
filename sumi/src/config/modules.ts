@@ -19,12 +19,14 @@ import { EditorModule } from '../service/editor';
 import { StateModule } from '../service/state';
 import { PortsModule } from '../service/ports';
 import { LayoutModule } from '../service/layout';
+import { BrandModule } from '../service/brand';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
 import { SidebarModule } from '../extensions/sidebar';
 import { ActionModule } from '../extensions/action';
 import { ChatbotModule } from '../extensions/chatbot';
+import { SettingsModule } from '../extensions/settings';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
   return [
@@ -37,6 +39,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     StateModule,           // codeblitz 状态 (workspace / recent)
     PortsModule,           // 本地服务端口发现 (面板 + 事件)
     LayoutModule,          // SOLO 布局状态 (sidebar / drawer 折叠 + 宽度 + 命令)
+    BrandModule,           // 品牌信息 (名称 / logo / slogan)
 
     // contribution 层 (lifecycle / UI 状态)
     EditorRestoreFallbackModule, // 官方 workbench tab 恢复的延迟兜底 (早期 handlesUri 未就绪)
@@ -45,6 +48,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     SidebarModule,         // 首页侧栏 (sidebar 槽)
     ActionModule,          // 顶部工具栏 (action 槽)
     ChatbotModule,         // 对话主区 (main 槽)
+    SettingsModule,        // 底部设置区块 (settings 槽, 内嵌 sidebar)
 
     // 自定义 file scheme provider (覆盖 codeblitz 默认 DiskFileSystemProvider)
     FsProviderModule,

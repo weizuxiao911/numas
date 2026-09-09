@@ -17,6 +17,7 @@
 import React, { useEffect, useState } from 'react';
 
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
+import { SlotRenderer } from '@opensumi/ide-core-browser/lib/react-providers/slot';
 import { CommandService } from '@opensumi/ide-core-common';
 import { getAppMode, setAppMode, type AppMode } from '../../App';
 import { getWorkspace } from '../../infra/url';
@@ -230,6 +231,10 @@ export const Sidebar: React.FC = () => {
         <div className="app-sidebar__main">
           <NewSessionButton />
           <SessionList />
+        </div>
+        {/* 底部设置区块 (内嵌 slot, settings 拓展挂这里) */}
+        <div className="app-sidebar__settings">
+          <SlotRenderer slot="settings" />
         </div>
       </div>
     </>

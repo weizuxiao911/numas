@@ -29,6 +29,8 @@ export const SOLO_SLOTS = {
   Action: 'action',
   Main: 'main',
   Drawer: 'drawer',
+  /** 内嵌在 sidebar 底部的设置区块 (头像/昵称/铃铛/工作空间选择) */
+  Settings: 'settings',
 } as const;
 
 export type SoloSlot = (typeof SOLO_SLOTS)[keyof typeof SOLO_SLOTS];

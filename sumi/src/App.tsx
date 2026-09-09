@@ -13,6 +13,7 @@ import { runtimeConfig } from './config/runtime';
 import { SIDEBAR_PANEL_ID } from './extensions/sidebar';
 import { ACTION_PANEL_ID } from './extensions/action';
 import { CHATBOT_PANEL_ID } from './extensions/chatbot';
+import { SETTINGS_PANEL_ID } from './extensions/settings';
 import { SOLO_SLOTS } from './config/slots';
 import { IdeLayout } from './layouts/IdeLayout';
 import { SoloLayout } from './layouts/SoloLayout';
@@ -57,6 +58,7 @@ const SOLO_MODE = {
     [SOLO_SLOTS.Sidebar]: SIDEBAR_PANEL_ID,
     [SOLO_SLOTS.Action]: ACTION_PANEL_ID,
     [SOLO_SLOTS.Main]: CHATBOT_PANEL_ID,
+    [SOLO_SLOTS.Settings]: SETTINGS_PANEL_ID,
   },
 };
 
