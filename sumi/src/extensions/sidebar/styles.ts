@@ -172,6 +172,10 @@ export const styles = `
   gap: 6px;
   overflow-y: auto;
   max-height: calc(100vh - 220px);
+  scrollbar-width: none;
+}
+.app-sidebar__sessions-body::-webkit-scrollbar {
+  display: none;
 }
 .app-sidebar__sessions-empty {
   padding: 8px 4px;

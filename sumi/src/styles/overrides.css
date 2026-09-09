@@ -1310,3 +1310,7 @@ div[data-viewlet-id="sessions-default"] [class*="titlebar"] {
   min-width: 0;
 }
 
+/* ===== 临时隐藏 sidebar 用户信息 (代码保留, 仅视觉隐藏) ===== */
+.app-user {
+  display: none !important;
+}
