@@ -332,6 +332,15 @@ export async function aiClearMessages(sessionID: string): Promise<number> {
   return deleted;
 }
 
+/** 撤销 (revert): 删除该消息及其后所有消息, 会话回到该消息之前 (官方「撤销此消息」语义) */
+export async function aiRevertMessage(sessionID: string, messageID: string): Promise<void> {
+  await waitForAiReady();
+  const client = getAiClient()!;
+  const { error } = await (client as any).v2.session.deleteMessage?.({ sessionID, messageID })
+    ?? await (client as any).session.deleteMessage({ sessionID, messageID });
+  if (error) throw error;
+}
+
 /** 回答 A2UI question — client.question.reply({ requestID, answers }) (v1 路径) */
 export async function aiReplyQuestion(
   sessionID: string,
@@ -360,10 +369,9 @@ export async function aiReplyPermission(
 ): Promise<void> {
   await waitForAiReady();
   const client = getAiClient()!;
-  const { error } = await (client as any).postSessionIdPermissionsPermissionId({
-    path: { id: sessionID, permissionID },
-    body: { response },
-  });
+  // client.permission.respond → POST /session/{sessionID}/permissions/{permissionID} body {response}
+  // (postSessionIdPermissionsPermissionId 为该命名空间不可用名, 勿用)
+  const { error } = await (client as any).permission.respond({ sessionID, permissionID, response });
   if (error) throw error;
 }
 
