@@ -24,7 +24,7 @@ import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/inject
 import { ITerminalController } from '@opensumi/ide-terminal-next/lib/common';
 
 import { WorkspacePicker } from '../extensions/workspace/WorkspacePicker';
-import { FilePicker } from '../extensions/filepicker/FilePicker';
+import { FilePicker } from '../extensions/file';
 import { SOLO_SLOTS } from '../config/slots';
 import { LayoutToken, type ILayoutService } from '../service/layout';
 import { getWorkdir, subscribeWorkdir } from '../infra/url';

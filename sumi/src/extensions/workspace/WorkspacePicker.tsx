@@ -17,7 +17,7 @@ import React, { useEffect } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 import { StateToken, type IStateService } from '../../service/state';
-import { requestFilePicker } from '../filepicker/FilePicker';
+import { requestFilePicker } from '../file';
 
 export const WorkspacePicker: React.FC = () => {
   const state = useInjectable<IStateService>(StateToken);

@@ -28,9 +28,9 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { notification } from '@opensumi/ide-components/lib/notification';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 
-import { normalizeCwdPath } from '../../infra/path';
-import { getFallbackDirectory, resolveFallback } from '../../infra/url';
-import { FsToken, type IFileSystem } from '../../service/filesystem';
+import { normalizeCwdPath } from '../../../infra/path';
+import { getFallbackDirectory, resolveFallback } from '../../../infra/url';
+import { FsToken, type IFileSystem } from '../../../service/filesystem';
 
 interface DirEntry { name: string; path: string; type: 'file' | 'directory'; }
 

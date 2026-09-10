@@ -17,7 +17,7 @@ import { FileTreeModelService } from '@opensumi/ide-file-tree-next/lib/browser/s
 import { RESOURCE_VIEW_ID } from '@opensumi/ide-file-tree-next/lib/common';
 import { IMessageService } from '@opensumi/ide-overlay';
 
-import { getWorkspace } from '../../infra/url';
+import { getWorkspace } from '../../../infra/url';
 import {
   baseName,
   dropTargetDirUri,

@@ -21,7 +21,7 @@ import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 
 import { SOLO_SLOTS } from '../config/slots';
 import { WorkspacePicker } from '../extensions/workspace/WorkspacePicker';
-import { FilePicker } from '../extensions/filepicker/FilePicker';
+import { FilePicker } from '../extensions/file';
 import { IdeRightTopbar } from './IdeRightTopbar';
 
 /** IDE 专属样式: 顶部栏左右布局 + 面板 toggle + 右栏折叠过渡 + flat 背景/去阴影 */
