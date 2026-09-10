@@ -1,5 +1,5 @@
 /**
- * Action 拓展 — extensions/action/
+ * Action 拓展 — extensions/solo/action/
  *
  * 业务承载: SOLO 模式顶部工具栏 (ModeSwitch / sidebar expand / ProjectPicker).
  *
@@ -19,8 +19,8 @@ import {
 import { ActionBar } from './ActionBar';
 
 export const ACTION_PANEL_ID = 'action';
-/** 我要装到 'action' slot (跟 config/slots.ts SOLO_SLOTS.Action 同值) */
-const TARGET_SLOT = 'action';
+/** 我要装到 'solo.main.action' slot (跟 config/slots.ts SOLO_SLOTS.MainAction 同值) */
+const TARGET_SLOT = 'solo.main.action';
 
 @Injectable()
 @Domain(ComponentContribution)

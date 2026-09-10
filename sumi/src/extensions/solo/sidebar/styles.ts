@@ -4,7 +4,9 @@
  * 由 Sidebar.tsx 顶部 <style>{styles}</style> 注入
  */
 export const styles = `
-.app-sidebar {
+/* 三段区域 (action / container) 共享主题变量与字体; 区域 padding 由 SoloLayout 列壳提供 */
+.app-sidebar-action,
+.app-sidebar-container {
   --ai-fg: var(--editor-foreground);
   --ai-fg-muted: var(--descriptionForeground);
   --ai-hover: var(--list-hoverBackground);
@@ -12,33 +14,20 @@ export const styles = `
   --ai-accent-fg: var(--button-foreground);
   --ai-border: var(--panel-border, var(--editorWidget-border));
 
-  display: flex; flex-direction: column;
-  height: 100%;
-  padding: 12px 10px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 13px;
   color: var(--ai-fg);
   background: transparent;
   user-select: none;
 }
-/* 底部区块 (user / workspace slot 同一行): 占据剩余高度, 内容贴到 sidebar 最底部 */
-.app-sidebar__footer {
-  flex: 1 1 auto;
+.app-sidebar-action { display: flex; flex-direction: column; }
+/* container: 新建会话按钮 + 历史会话 (占满中段) */
+.app-sidebar-container {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 6px;
-  width: 100%;
-  padding: 6px;
-  box-sizing: border-box;
-}
-.app-sidebar__footer-user { flex: 1 1 auto; min-width: 0; display: flex; align-items: flex-end; }
-/* slot 容器 (codeblitz SlotRenderer 包一层 resize-wrapper) 撑满 */
-.app-sidebar__footer-user > * {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 /* 拖动条 (SplitPanel 渲染) — 加宽 + 主题色, hover 突出 */
 .app-sidebar + .resize-handle-horizontal,
@@ -107,14 +96,6 @@ export const styles = `
 }
 
 /* ============== 主体区: 新建会话按钮 + 历史会话 ============== */
-.app-sidebar__main {
-  flex: 0 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 20px;
-}
 .app-sidebar__new-session {
   display: inline-flex;
   align-items: center;

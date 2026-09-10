@@ -24,8 +24,8 @@ import {
   aiDeleteSession,
   aiRevertMessage,
   isAiReady,
-} from '@/extensions/chatbot/commands/api';
-import { modelPrefs } from '@/extensions/chatbot/commands/modelPrefs';
+} from '@/extensions/solo/chatbot/commands/api';
+import { modelPrefs } from '@/extensions/solo/chatbot/commands/modelPrefs';
 import { getWorkspace, subscribeWorkspace } from '@/infra/url';
 import { onEvent } from '@/service/event/eventBus';
 import { PartRenderer } from './parts/PartRenderer';

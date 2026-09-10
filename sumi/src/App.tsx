@@ -11,10 +11,10 @@ import { preferences } from './config/preferences';
 import { ExtensionServiceImpl } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
 import { runtimeConfig } from './config/runtime';
-import { SIDEBAR_PANEL_ID } from './extensions/sidebar';
-import { ACTION_PANEL_ID } from './extensions/action';
-import { CHATBOT_PANEL_ID } from './extensions/chatbot';
-import { USER_PANEL_ID } from './extensions/user';
+import { SIDEBAR_PANEL_ID, SIDEBAR_ACTION_PANEL_ID } from './extensions/solo/sidebar';
+import { ACTION_PANEL_ID } from './extensions/solo/action';
+import { CHATBOT_PANEL_ID } from './extensions/solo/chatbot';
+import { USER_PANEL_ID } from './extensions/solo/user';
 import { SOLO_SLOTS } from './config/slots';
 import { IdeLayout } from './layouts/IdeLayout';
 import { SoloLayout } from './layouts/SoloLayout';
@@ -52,14 +52,15 @@ const layout = {
   [SlotLocation.extra]: { modules: [] },
 };
 
-/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开 dashboard + action + chatbot */
+/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开左列/中列各段 */
 const SOLO_MODE = {
   layout,
   panels: {
-    [SOLO_SLOTS.Sidebar]: SIDEBAR_PANEL_ID,
-    [SOLO_SLOTS.Action]: ACTION_PANEL_ID,
-    [SOLO_SLOTS.Chatbot]: CHATBOT_PANEL_ID,
-    [SOLO_SLOTS.User]: USER_PANEL_ID,
+    [SOLO_SLOTS.SidebarAction]: SIDEBAR_ACTION_PANEL_ID,
+    [SOLO_SLOTS.SidebarContainer]: SIDEBAR_PANEL_ID,
+    [SOLO_SLOTS.SidebarFooter]: USER_PANEL_ID,
+    [SOLO_SLOTS.MainAction]: ACTION_PANEL_ID,
+    [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
   },
 };
 

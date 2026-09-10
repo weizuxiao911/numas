@@ -1,5 +1,5 @@
 /**
- * UserBar 样式 — extensions/user/styles.ts
+ * UserBar 样式 — extensions/solo/user/styles.ts
  * 主题色走 codeblitz/opensumi token, 不硬编码; 无 border.
  */
 export const styles = `

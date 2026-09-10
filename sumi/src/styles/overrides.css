@@ -233,14 +233,14 @@ body.vs,
   --sideBar-background: #ffffff;
   --activityBar-background: #ffffff;
 
-  /* Solo 布局 (亮主题): sidebar 偏灰, 中间编辑区保持白, 二者对换 */
+  /* Solo 布局 (亮主题): sidebar/aside 偏灰, 中间主区保持白 */
   .app-solo__sidebar {
     background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
   }
-  .app-solo__drawer {
+  .app-solo__aside {
     background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
   }
-  .app-solo__center {
+  .app-solo__main {
     background: var(--editor-background, #ffffff) !important;
   }
 }

@@ -17,11 +17,10 @@
 import React, { useEffect, useState } from 'react';
 
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
-import { SlotRenderer } from '@opensumi/ide-core-browser/lib/react-providers/slot';
 import { CommandService } from '@opensumi/ide-core-common';
-import { getAppMode, setAppMode, type AppMode } from '../../App';
-import { StateToken, type IStateService } from '../../service/state';
-import { LAYOUT_COMMANDS } from '../../service/layout';
+import { getAppMode, setAppMode, type AppMode } from '../../../App';
+import { StateToken, type IStateService } from '../../../service/state';
+import { LAYOUT_COMMANDS } from '../../../service/layout';
 import { styles } from './styles';
 
 const ModeSwitch: React.FC = () => {
@@ -232,20 +231,23 @@ export const Sidebar: React.FC = () => {
   return (
     <>
       <style>{styles}</style>
-      <div className="app-sidebar">
+      <div className="app-sidebar-container">
+        <NewSessionButton />
+        <SessionList />
+      </div>
+    </>
+  );
+};
+
+/** 左列顶部活动栏 (solo.sidebar.action): 模式切换 + 折叠 */
+export const SidebarAction: React.FC = () => {
+  return (
+    <>
+      <style>{styles}</style>
+      <div className="app-sidebar-action">
         <div className="app-sidebar__mode-row">
           <ModeSwitch />
           <CollapseToggle />
-        </div>
-        <div className="app-sidebar__main">
-          <NewSessionButton />
-          <SessionList />
-        </div>
-        {/* 底部: 用户信息 (user slot) */}
-        <div className="app-sidebar__footer">
-          <div className="app-sidebar__footer-user">
-            <SlotRenderer slot="user" />
-          </div>
         </div>
       </div>
     </>

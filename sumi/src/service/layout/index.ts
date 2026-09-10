@@ -2,7 +2,7 @@ export type {
   ILayoutService,
   LayoutState,
   SidebarState,
-  DrawerState,
+  AsideState,
 } from './layout.interface';
 export { LayoutToken, LAYOUT_COMMANDS } from './layout.interface';
 export {

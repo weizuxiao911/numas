@@ -11,8 +11,8 @@ import { URI, FileStat } from '@opensumi/ide-core-common';
 import { FileTree } from '@opensumi/ide-file-tree-next/lib/browser/file-tree';
 import { EditorView } from '@opensumi/ide-editor/lib/browser/editor.view';
 
-import { getWorkspace, subscribeWorkspace } from '../../../infra/url';
-import { normalizeCwdPath } from '../../../infra/path';
+import { getWorkspace, subscribeWorkspace } from '../../../../infra/url';
+import { normalizeCwdPath } from '../../../../infra/path';
 
 const styles = `
 .dexplorer { display: flex; flex-direction: column; height: 100%; min-height: 0;

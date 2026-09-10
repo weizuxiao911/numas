@@ -1,6 +1,6 @@
 /**
  * App Shell 全局布局 — 由 App 顶层 import, 不在拓展内
- * 包含: SOLO 模式三列 (sidebar / center / drawer) + 自定义拖动条
+ * 包含: SOLO 模式三列 (sidebar / main / aside) + 自定义拖动条
  *
  * 主题色: 全部走 codeblitz/opensumi token, 不硬编码颜色
  * 折叠/展开动效: sidebar 跟 resizer 都加 transition: width, 平滑向左折
@@ -23,8 +23,8 @@
 }
 
 .app-solo__sidebar,
-.app-solo__center,
-.app-solo__drawer {
+.app-solo__main,
+.app-solo__aside {
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -43,38 +43,44 @@
               width var(--solo-duration) var(--solo-ease);
   will-change: width;
 }
+/* sidebar 三段: action (auto) / container (flex) / footer (auto); 区域 padding 由列壳提供 */
+.app-solo__sidebar-action { flex: 0 0 auto; min-width: 0; padding: 12px 10px 0; }
+.app-solo__sidebar-container { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 8px 10px 12px; }
+.app-solo__sidebar-footer { flex: 0 0 auto; min-width: 0; padding: 0 10px 12px; }
 
-/* 中列: action (顶部) + main (对话) 上下结构, 占满剩余宽度
+/* 中列 main: action / container / footer 三段, 占满剩余宽度
    跟 sidebar 半档色差: 混 2.5% 前景色, 自动随主题反相
     - 亮色主题: 前景色深, 中列略深于 sidebar (sidebar 更亮)
     - 暗色主题: 前景色浅, 中列略亮于 sidebar (sidebar 更暗)
    5% 时色差过大显得两块割裂, 降到 2.5% 只做轻微区分 */
-.app-solo__center {
+.app-solo__main {
   flex: 1 1 auto;
   min-width: 0;
   background: color-mix(in srgb, var(--editor-background) 97.5%, var(--editor-foreground) 2.5%);
   display: flex;
   flex-direction: column;
 }
-.app-solo__action {
+.app-solo__main-action {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.app-solo__main {
+.app-solo__main-container {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
 }
+.app-solo__main-footer { flex: 0 0 auto; min-width: 0; }
 
-/* 右侧抽屉: 关闭时宽 0 完全隐藏, 打开时由 --drawer-w 控制
-   左侧挨一个 resizer, 跟 sidebar 拖动条同款 (1px 主线) */
-.app-solo__drawer {
-  flex: 0 0 var(--drawer-w, 0);
-  width: var(--drawer-w, 0);
+/* 右列 aside: 关闭时宽 0 完全隐藏, 打开时由 --aside-w 控制
+   左侧挨一个 resizer, 跟 sidebar 拖动条同款 (1px 主线)
+   body 内三段: action / middle(sidebar|container) / footer */
+.app-solo__aside {
+  flex: 0 0 var(--aside-w, 0);
+  width: var(--aside-w, 0);
   min-width: 0;
   background: var(--editor-background);
   display: flex;
@@ -82,7 +88,7 @@
   transition: flex-basis var(--solo-duration) var(--solo-ease),
               width var(--solo-duration) var(--solo-ease);
 }
-.app-solo__drawer-resizer {
+.app-solo__aside-resizer {
   flex: 0 0 var(--resizer-w);
   width: var(--resizer-w);
   cursor: col-resize;
@@ -90,7 +96,7 @@
   position: relative;
   z-index: 2;
 }
-.app-solo__drawer-resizer::before {
+.app-solo__aside-resizer::before {
   content: '';
   position: absolute;
   top: 0;
@@ -100,6 +106,23 @@
   background: var(--editor-border);
   transform: translateX(-0.5px);
 }
+.app-solo__aside-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-solo__aside-action { flex: 0 0 auto; min-width: 0; }
+.app-solo__aside-middle {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+}
+.app-solo__aside-sidebar { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; }
+.app-solo__aside-container { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.app-solo__aside-footer { flex: 0 0 auto; min-width: 0; }
 
 /* 拖动条: 朴素 1px 主线, 折叠时跟 sidebar 一起收, 动效跟 sidebar 同步 */
 .app-solo__resizer {

@@ -1,7 +1,7 @@
 /**
  * ActionBar — Numas SOLO 模式 action 槽 UI (顶部工具栏)
  *
- * 装 SOLO_SLOTS.Action (自定义 slot 'action', 见 config/slots.ts),
+ * 装 SOLO_SLOTS.MainAction (自定义 slot 'action', 见 config/slots.ts),
  * 位于中列顶部, main (对话主区) 上方.
  *
  * 承载: 模式切换 (SOLO/IDE) / sidebar 展开 / 项目选择 (ProjectPicker popover).
@@ -19,10 +19,10 @@ import React, { useEffect, useState } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 
-import { getAppMode, setAppMode, type AppMode } from '../../App';
-import { StateToken, type IStateService } from '../../service/state';
-import { LayoutToken, LAYOUT_COMMANDS, type ILayoutService } from '../../service/layout';
-import { requestFilePicker } from '../filepicker/FilePicker';
+import { getAppMode, setAppMode, type AppMode } from '../../../App';
+import { StateToken, type IStateService } from '../../../service/state';
+import { LayoutToken, LAYOUT_COMMANDS, type ILayoutService } from '../../../service/layout';
+import { requestFilePicker } from '../../filepicker/FilePicker';
 import { styles } from './styles';
 
 function pathBasename(p: string): string {
@@ -85,17 +85,17 @@ const ExpandToggle: React.FC<{ layout: ILayoutService; commandService: CommandSe
   );
 };
 
-const DrawerToggle: React.FC<{ layout: ILayoutService; commandService: CommandService }> = ({ layout, commandService }) => {
-  const [open, setOpen] = useState<boolean>(() => layout.state.drawer.open);
+const AsideToggle: React.FC<{ layout: ILayoutService; commandService: CommandService }> = ({ layout, commandService }) => {
+  const [open, setOpen] = useState<boolean>(() => layout.state.aside.open);
   useEffect(() => {
-    return layout.subscribe((s) => setOpen(s.drawer.open));
+    return layout.subscribe((s) => setOpen(s.aside.open));
   }, [layout]);
   return (
     <button
       type="button"
-      className="app-action__drawer"
-      title={open ? '关闭抽屉' : '展开抽屉'}
-      onClick={() => void commandService.executeCommand(LAYOUT_COMMANDS.drawerToggle.id)}
+      className="app-action__aside"
+      title={open ? '关闭右列' : '展开右列'}
+      onClick={() => void commandService.executeCommand(LAYOUT_COMMANDS.asideToggle.id)}
     >
       {open ? (
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -173,7 +173,7 @@ export const ActionBar: React.FC = () => {
           <ProjectPickButton label={label} commandService={commandService} state={state} />
         </div>
         <div className="app-action__right">
-          <DrawerToggle commandService={commandService} layout={layout} />
+          <AsideToggle commandService={commandService} layout={layout} />
         </div>
       </div>
     </>

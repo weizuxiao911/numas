@@ -1,7 +1,7 @@
 /**
  * UserBar — SOLO sidebar 底部左侧「用户信息」(extensions/user)
  *
- * 装 'user' slot (Sidebar.tsx 底部一行的左半, 见 config/slots.ts SOLO_SLOTS.User).
+ * 装 'solo.sidebar.footer' slot (Sidebar.tsx 底部一行的左半, 见 config/slots.ts SOLO_SLOTS.SidebarFooter).
  *
  * 内容: [头像 (品牌 logo)] [昵称] — 整块可点击 (登录入口).
  * 数据:
@@ -14,8 +14,8 @@ import React, { useEffect, useState } from 'react';
 
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 
-import { BrandToken, type IBrandService } from '../../service/brand';
-import { SessionToken, type ISessionService, type SessionUser } from '../../service/session';
+import { BrandToken, type IBrandService } from '../../../service/brand';
+import { SessionToken, type ISessionService, type SessionUser } from '../../../service/session';
 import { styles } from './styles';
 
 export const UserBar: React.FC = () => {

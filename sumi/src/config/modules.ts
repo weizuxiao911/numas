@@ -24,11 +24,11 @@ import { SessionModule } from '../service/session';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
-import { SidebarModule } from '../extensions/sidebar';
-import { ActionModule } from '../extensions/action';
-import { ChatbotModule } from '../extensions/chatbot';
-import { UserModule } from '../extensions/user';
-import { DrawerExplorerModule } from '../extensions/drawer-explorer';
+import { SidebarModule } from '../extensions/solo/sidebar';
+import { ActionModule } from '../extensions/solo/action';
+import { ChatbotModule } from '../extensions/solo/chatbot';
+import { UserModule } from '../extensions/solo/user';
+import { AsideModule } from '../extensions/solo/aside';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
   return [
@@ -40,19 +40,19 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     EditorModule,          // 编辑器能力 (open / openWith)
     StateModule,           // codeblitz 状态 (workspace / recent)
     PortsModule,           // 本地服务端口发现 (面板 + 事件)
-    LayoutModule,          // SOLO 布局状态 (sidebar / drawer 折叠 + 宽度 + 命令)
+    LayoutModule,          // SOLO 布局状态 (sidebar / aside 折叠 + 宽度 + 命令)
     BrandModule,           // 品牌信息 (名称 / logo / slogan)
     SessionModule,         // 登录态 (cookie → session.yaml → 用户信息)
 
     // contribution 层 (lifecycle / UI 状态)
     EditorRestoreFallbackModule, // 官方 workbench tab 恢复的延迟兜底 (早期 handlesUri 未就绪)
 
-    // vsix 拓展 (UI 组件, 走 ComponentContribution 装 codeblitz slot)
-    SidebarModule,         // 首页侧栏 (sidebar 槽)
-    ActionModule,          // 顶部工具栏 (action 槽)
-    ChatbotModule,         // 对话主区 (main 槽)
-    UserModule,            // sidebar 底部左: 用户信息 (user slot)
-    DrawerExplorerModule,  // 抽屉: 官方 explorer (FileTree)
+    // vsix 拓展 (UI 组件, 走 ComponentContribution 装 solo slot)
+    SidebarModule,         // 左列 sidebar.action + sidebar.container
+    ActionModule,          // 中列 main.action
+    ChatbotModule,         // 中列 main.container (对话主区)
+    UserModule,            // 左列 sidebar.footer (用户信息)
+    AsideModule,  // 右列 aside.container (官方 explorer FileTree)
 
     // 自定义 file scheme provider (覆盖 codeblitz 默认 DiskFileSystemProvider)
     FsProviderModule,

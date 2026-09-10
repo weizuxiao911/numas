@@ -1,35 +1,34 @@
 /**
  * service/layout/layout.service.ts
  *
- * LayoutServiceImpl — DI 单例. 持有 SOLO 布局状态 (sidebar / drawer),
+ * LayoutServiceImpl — DI 单例. 持有 SOLO 布局状态 (sidebar / aside),
  * 提供订阅 + 操作命令. 渲染方 (SoloLayout) 读 state 渲染; 操作方
  * (ActionBar / Sidebar) 经 executeCommand 或直接调方法.
  *
  * 状态转移规则 (与 46fa122 / 754572d 对齐):
  *   - sidebar 折叠 = collapsed boolean (折叠时不渲染, 不用 1px 占位)
  *   - 折叠时记住展开宽度, 展开恢复
- *   - drawer 打开 → 自动折叠 sidebar 让出空间 (并记下展开宽度)
- *   - 关闭 drawer 不自动恢复 sidebar (用户自己 expand)
- *   - drawer 打开时视口 resize → 宽度同步 50%
+ *   - aside 打开 → 自动折叠 sidebar 让出空间 (并记下展开宽度)
+ *   - 关闭 aside 不自动恢复 sidebar (用户自己 expand)
+ *   - aside 打开时视口 resize → 宽度同步 70%
  */
 
 import { Injectable, Autowired } from '@opensumi/di';
 import { BrowserModule } from '@opensumi/ide-core-browser';
 import { Domain, CommandContribution, CommandRegistry } from '@opensumi/ide-core-common';
 
-import type { ILayoutService, LayoutState, SidebarState, DrawerState } from './layout.interface';
+import type { ILayoutService, LayoutState } from './layout.interface';
 import { LayoutToken, LAYOUT_COMMANDS } from './layout.interface';
 
-const DEFAULT_SIDEBAR_W = 320;
 const MIN_SIDEBAR_W = 200;
 const MAX_SIDEBAR_W = 480;
-const MIN_DRAWER_W = 120;
-/** drawer 打开时宽度 = viewport 70% */
-const DRAWER_RATIO = 0.7;
+const MIN_ASIDE_W = 120;
+/** aside 打开时宽度 = viewport 70% */
+const ASIDE_RATIO = 0.7;
 /** sidebar 默认宽度 = viewport 25% */
 const SIDEBAR_RATIO = 0.25;
 
-function viewportRatioWidth(ratio: number = DRAWER_RATIO): number {
+function viewportRatioWidth(ratio: number = ASIDE_RATIO): number {
   return Math.round(window.innerWidth * ratio);
 }
 
@@ -37,7 +36,7 @@ function viewportRatioWidth(ratio: number = DRAWER_RATIO): number {
 export class LayoutServiceImpl implements ILayoutService {
   private _state: LayoutState = {
     sidebar: { collapsed: false, width: viewportRatioWidth(SIDEBAR_RATIO) },
-    drawer: { open: false, width: 0 },
+    aside: { open: false, width: 0 },
   };
   /** 折叠时记住展开态宽度, 展开时恢复 */
   private expandedSidebarW = viewportRatioWidth(SIDEBAR_RATIO);
@@ -46,7 +45,7 @@ export class LayoutServiceImpl implements ILayoutService {
   get state(): LayoutState {
     return {
       sidebar: { ...this._state.sidebar },
-      drawer: { ...this._state.drawer },
+      aside: { ...this._state.aside },
     };
   }
 
@@ -93,40 +92,40 @@ export class LayoutServiceImpl implements ILayoutService {
     this.emit();
   }
 
-  // ───────────────────────── drawer ─────────────────────────
+  // ───────────────────────── aside ─────────────────────────
 
-  openDrawer(width?: number): void {
-    const cur = this._state.drawer;
-    const nextW = Math.max(MIN_DRAWER_W, width ?? (cur.width > 0 ? cur.width : viewportRatioWidth()));
-    this._state.drawer = { open: true, width: nextW };
-    // 打开 drawer → 自动折叠 sidebar 让出空间
+  openAside(width?: number): void {
+    const cur = this._state.aside;
+    const nextW = Math.max(MIN_ASIDE_W, width ?? (cur.width > 0 ? cur.width : viewportRatioWidth()));
+    this._state.aside = { open: true, width: nextW };
+    // 打开 aside → 自动折叠 sidebar 让出空间
     if (!this._state.sidebar.collapsed) this.collapseSidebar();
     this.emit();
   }
 
-  closeDrawer(): void {
-    this._state.drawer = { ...this._state.drawer, open: false };
+  closeAside(): void {
+    this._state.aside = { ...this._state.aside, open: false };
     this.emit();
   }
 
-  toggleDrawer(): void {
-    if (this._state.drawer.open) {
-      this.closeDrawer();
+  toggleAside(): void {
+    if (this._state.aside.open) {
+      this.closeAside();
     } else {
-      this.openDrawer();
+      this.openAside();
     }
   }
 
-  setDrawerWidth(n: number): void {
-    const next = Math.max(MIN_DRAWER_W, Math.min(window.innerWidth - 200, n));
-    this._state.drawer = { ...this._state.drawer, width: next };
+  setAsideWidth(n: number): void {
+    const next = Math.max(MIN_ASIDE_W, Math.min(window.innerWidth - 200, n));
+    this._state.aside = { ...this._state.aside, width: next };
     this.emit();
   }
 
-  /** drawer 打开时视口变化 → 同步 50% 宽 (resize 事件里调用) */
-  syncDrawerToViewport(): void {
-    if (!this._state.drawer.open) return;
-    this._state.drawer = { ...this._state.drawer, width: viewportRatioWidth() };
+  /** aside 打开时视口变化 → 同步 70% 宽 (resize 事件里调用) */
+  syncAsideToViewport(): void {
+    if (!this._state.aside.open) return;
+    this._state.aside = { ...this._state.aside, width: viewportRatioWidth() };
     this.emit();
   }
 }
@@ -142,9 +141,9 @@ export class LayoutCommandContribution implements CommandContribution {
     commands.registerCommand(LAYOUT_COMMANDS.sidebarCollapse, { execute: () => this.layout.collapseSidebar() });
     commands.registerCommand(LAYOUT_COMMANDS.sidebarExpand, { execute: () => this.layout.expandSidebar() });
     commands.registerCommand(LAYOUT_COMMANDS.sidebarToggle, { execute: () => this.layout.toggleSidebar() });
-    commands.registerCommand(LAYOUT_COMMANDS.drawerOpen, { execute: () => this.layout.openDrawer() });
-    commands.registerCommand(LAYOUT_COMMANDS.drawerClose, { execute: () => this.layout.closeDrawer() });
-    commands.registerCommand(LAYOUT_COMMANDS.drawerToggle, { execute: () => this.layout.toggleDrawer() });
+    commands.registerCommand(LAYOUT_COMMANDS.asideOpen, { execute: () => this.layout.openAside() });
+    commands.registerCommand(LAYOUT_COMMANDS.asideClose, { execute: () => this.layout.closeAside() });
+    commands.registerCommand(LAYOUT_COMMANDS.asideToggle, { execute: () => this.layout.toggleAside() });
   }
 }
 

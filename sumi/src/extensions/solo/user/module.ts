@@ -1,8 +1,8 @@
 /**
- * User 拓展 — extensions/user/
+ * User 拓展 — extensions/solo/user/
  *
  * 业务承载: SOLO sidebar 底部左侧用户信息 (头像 + 昵称, 登录入口).
- * slot 装填: 'user' (跟 config/slots.ts SOLO_SLOTS.User 同值, 协议约定非模块引用).
+ * slot 装填: 'user' (跟 config/slots.ts SOLO_SLOTS.SidebarFooter 同值, 协议约定非模块引用).
  */
 import { Injectable } from '@opensumi/di';
 import { Domain } from '@opensumi/ide-core-common';
@@ -15,7 +15,7 @@ import {
 import { UserBar } from './UserBar';
 
 export const USER_PANEL_ID = 'user';
-const TARGET_SLOT = 'user';
+const TARGET_SLOT = 'solo.sidebar.footer';
 
 @Injectable()
 @Domain(ComponentContribution)
