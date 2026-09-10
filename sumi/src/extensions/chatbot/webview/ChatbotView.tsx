@@ -2001,7 +2001,7 @@ export const ChatbotView: React.FC = () => {
             <div className="chat__sub-back">
               <span className="chat__sub-back-txt">子代理会话（只读查看执行过程）</span>
               <button type="button" className="chat__sub-back-btn" onClick={() => leaveSubSession()}>
-                ← 返回主会话
+                ← 返回
               </button>
             </div>
           )}
