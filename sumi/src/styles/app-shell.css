@@ -44,7 +44,12 @@
   will-change: width;
 }
 /* sidebar 三段: action (auto) / container (flex) / footer (auto); 区域 padding 由列壳提供 */
-.app-solo__sidebar-action { flex: 0 0 auto; min-width: 0; padding: 12px 10px 0; }
+.app-solo__sidebar-action {
+  flex: 0 0 auto; min-width: 0;
+  height: 48px; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 10px;
+}
 .app-solo__sidebar-container { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 8px 10px 12px; }
 .app-solo__sidebar-footer { flex: 0 0 auto; min-width: 0; padding: 0 10px 12px; }
 
@@ -65,6 +70,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 48px;
 }
 .app-solo__main-container {
   flex: 1 1 auto;
@@ -112,12 +118,14 @@
   display: flex;
   flex-direction: column;
 }
-/* aside action 区: 背景默认主题色 (editor-background, 亮色 #fff), 与下方内容留呼吸空间 */
+/* aside action 区: 背景默认主题色 (editor-background, 亮色 #fff), 与下方内容留呼吸空间
+   (上下呼吸空间 = resizer 宽 --resizer-w, 视觉留白统一) */
 .app-solo__aside-action {
   flex: 0 0 auto;
   min-width: 0;
+  height: 48px;
   background: var(--editor-background);
-  margin-bottom: 8px;
+  margin-bottom: var(--resizer-w);
 }
 .app-solo__aside-middle {
   flex: 1 1 auto;
@@ -125,6 +133,7 @@
   min-width: 0;
   display: flex;
   flex-direction: row;
+  margin-bottom: var(--resizer-w);
 }
 .app-solo__aside-sidebar {
   flex: 0 0 280px; width: 280px; min-width: 0;

@@ -10,7 +10,7 @@ export const styles = `
   --ai-hairline: var(--panel-border, var(--editorWidget-border, rgba(0,0,0,.1)));
 
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 260px) minmax(0, 1fr); align-items: center;
-  min-height: 60px; padding: 12px 0;
+  height: 100%; min-height: 0; padding: 0;
   box-sizing: border-box;
   user-select: none;
   background: var(--editor-background);

@@ -20,8 +20,9 @@ export const styles = `
   position: relative;
   flex: 0 0 auto;
   width: 100%;
-  min-height: 60px;
-  padding: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -52,7 +53,7 @@ export const styles = `
    - 内嵌反色 icon 块 */
 .app-action__mode {
   flex: 0 0 auto;
-  height: 36px;
+  height: 32px;
   padding: 0 10px 0 14px;
   display: inline-flex;
   align-items: center;

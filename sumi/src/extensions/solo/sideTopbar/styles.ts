@@ -13,6 +13,8 @@ export const styles = `
 
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 13px;
   color: var(--ai-fg);
@@ -26,7 +28,7 @@ export const styles = `
 }
 .app-side-topbar__mode {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 36px;
+  height: 32px;
   padding: 0 10px 0 14px;
   background: var(--ai-accent);
   color: var(--ai-accent-fg);
