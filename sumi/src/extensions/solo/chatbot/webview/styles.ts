@@ -1868,6 +1868,44 @@ export const styles = `
 }
 .oc-tool__diffstat-add { color: var(--ai-success, #4ade80); }
 .oc-tool__diffstat-del { color: var(--ai-danger, #fca5a5); }
+/* edit 结果: 左右对照 diff (macOS 窗口风与 Markdown 代码块一致) */
+.oc-diff { border: 1px solid var(--ai-hairline-strong, rgba(0,0,0,.15)); border-radius: 10px; overflow: hidden; }
+.oc-diff__bar {
+  position: relative; height: 28px;
+  border-bottom: 1px solid var(--ai-hairline);
+  background:
+    radial-gradient(circle at 13px 14px, #ff5f56 4.5px, transparent 4.6px),
+    radial-gradient(circle at 29px 14px, #ffbd2e 4.5px, transparent 4.6px),
+    radial-gradient(circle at 45px 14px, #27c93f 4.5px, transparent 4.6px),
+    color-mix(in srgb, var(--ai-fg) 7%, var(--ai-bg-elev));
+}
+.oc-diff__label {
+  position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+  height: 18px; line-height: 18px; font-size: 11px; letter-spacing: 0.02em;
+  color: var(--ai-fg-muted); user-select: none;
+}
+.oc-diff__body { max-height: 260px; overflow: auto; padding: 6px 0; }
+.oc-diff__row {
+  display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px minmax(0, 1fr);
+  font-family: var(--monaco-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px; line-height: 1.55;
+}
+.oc-diff__no {
+  color: var(--ai-fg-muted); text-align: right; padding: 0 8px 0 6px;
+  user-select: none; opacity: .7;
+}
+.oc-diff__no--right { border-left: 1px solid var(--ai-hairline); }
+.oc-diff__cell {
+  min-width: 0; white-space: pre-wrap; word-break: break-word; padding-right: 8px;
+  color: var(--ai-fg);
+}
+.oc-diff__cell.is-del { background: color-mix(in srgb, var(--ai-danger) 14%, transparent); }
+.oc-diff__cell.is-add { background: color-mix(in srgb, var(--ai-success, #4ade80) 14%, transparent); }
+.oc-diff__cell.is-empty { background: color-mix(in srgb, var(--ai-fg) 4%, transparent); }
+.oc-diff__hunk {
+  font-family: var(--monaco-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px; color: var(--ai-fg-muted); padding: 4px 10px; user-select: none;
+}
 .oc-copy-ghost {
   position: absolute; top: 4px; right: 4px; z-index: 2;
   width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;

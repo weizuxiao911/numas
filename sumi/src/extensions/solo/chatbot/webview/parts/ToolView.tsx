@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Markdown } from './Markdown';
+import { DiffView } from './DiffView';
 
 function safeStringify(v: any): string {
   if (v == null) return '';
@@ -339,7 +340,7 @@ export const ToolView: React.FC<{ part: any; streaming?: boolean }> = ({ part, s
           <div className="oc-tool__box" dir="ltr">
             <CopyGhost text={diffPatch || outStr} />
             <div className="oc-tool__scroll">
-              <CodeBlock code={diffPatch || outStr} lang="diff" />
+              {diffPatch ? <DiffView patch={diffPatch} /> : <CodeBlock code={outStr} lang="diff" />}
             </div>
           </div>
         ) : (
