@@ -140,11 +140,20 @@
   width: 20px; height: 20px; margin-left: 4px;
 }
 .app-solo__aside-sidebar [class*="titleActions"] span[class*="iconAction"]::before { display: inline-block; }
+/* 全局: design 主题 .kt-icon::before display:none, titleActions 里其它动作图标 (终端工具条
+   搜索/清屏/拆分/关闭, 底部面板展开/折叠等) glyph 全被隐藏 → 按钮空白不可见. 统一恢复. */
+.app-solo [class*="titleActions"] span[class*="iconAction"]::before,
+.app-solo [class*="titleActions"] span[class*="btnAction"]::before {
+  display: inline-block !important;
+}
 .app-solo__aside-container { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 /* 终端常驻挂载容器 (非终端模式 display:none, 避免卸载重挂载导致 xterm 无法重挂载) */
 .app-solo__aside-terminal { flex: 1 1 auto; min-width: 0; min-height: 0; flex-direction: column; }
 /* 终端模式: 隐藏底部模块 tab 条 (仅终端一个模块, 冗余; 保留终端面板自身 zsh 标题栏) */
 .app-solo__aside-container .bottom-slot .next_bottom_bar { display: none; }
+/* 查看模式: 隐藏编辑器 tab 栏右侧 actions 区 (design 主题下 .kt-icon::before 被全局 display:none,
+   图标不可见只剩空位; aside 布局也用不到拆分编辑器等动作) */
+.app-solo__aside-container [class*="editor_actions"] { display: none !important; }
 /* aside 内官方拓展视图去掉主题自带阴影 (flat 布局; left=explorer / bottom=终端 / 编辑区 tabs).
    主题用 unlayered !important 定义阴影, 必须放进 @layer 的 !important 才能盖过 (cascade layer 规则) */
 @layer numas-override {
