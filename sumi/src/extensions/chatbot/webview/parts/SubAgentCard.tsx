@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
+import { onEvent } from '@/service/event/eventBus';
 
 /**
  * 子 Agent 委派 (对齐官方 task-tool):
@@ -29,9 +30,47 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
 
   const [open, setOpen] = useState(false);
   const canExpand = !running && (!!outputText || isError);
-
-  // 官方 task 工具: 子会话 sessionId 存在 → 可点击副标题进入子代理会话查看执行过程
+  // 主消息下方投影子代理会话的对话消息流 (实时跟随)
+  const [rows, setRows] = React.useState<Array<{ id: string; role: string; parts: any[] }>>([]);
   const subSessionId: string = part?.state?.metadata?.sessionId || '';
+  React.useEffect(() => {
+    if (!subSessionId) return;
+    return onEvent((ev) => {
+      const sid = ev.properties?.sessionID;
+      if (!sid || sid !== subSessionId) return;
+      if (ev.type === 'message.part.updated') {
+        const partEv = ev.properties?.part;
+        if (!partEv?.messageID) return;
+        setRows((prev) => {
+          const idx = prev.findIndex((r) => r.id === partEv.messageID);
+          if (idx < 0) return [...prev, { id: partEv.messageID, role: 'assistant', parts: [partEv] }];
+          const next = [...prev];
+          const row = { ...next[idx], parts: [...next[idx].parts] };
+          const pi = row.parts.findIndex((p: any) => p?.id === partEv.id);
+          if (pi >= 0) row.parts[pi] = partEv; else row.parts.push(partEv);
+          next[idx] = row;
+          return next;
+        });
+      } else if (ev.type === 'message.updated') {
+        const info = ev.properties?.info;
+        if (!info?.id || !info.role) return;
+        if (info.parts?.length) {
+          setRows((prev) => {
+            const idx = prev.findIndex((r) => r.id === info.id);
+            if (idx < 0) return [...prev, { id: info.id, role: info.role, parts: info.parts }];
+            const next = [...prev];
+            next[idx] = { ...next[idx], role: info.role, parts: info.parts };
+            return next;
+          });
+        }
+      } else if (ev.type === 'message.removed') {
+        const mid = ev.properties?.messageID;
+        if (mid) setRows((prev) => prev.filter((r) => r.id !== mid));
+      }
+    });
+  }, [subSessionId]);
+
+
   const openSession = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -43,8 +82,9 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
     <div className={`oc-sub is-${status}${open ? ' is-open' : ''}`}>
       <button
         type="button"
-        className={`oc-tool__trigger oc-sub__trigger${canExpand ? '' : ' is-static'}`}
-        onClick={() => canExpand && setOpen(v => !v)}
+        className={`oc-tool__trigger oc-sub__trigger${subSessionId ? ' is-clickable' : canExpand ? '' : ' is-static'}`}
+        onClick={subSessionId ? openSession : (canExpand ? () => setOpen(v => !v) : undefined)}
+        title={subSessionId ? '点击查看子代理会话执行过程' : undefined}
       >
         <span className={`oc-sub__indicator is-${status}`}>
           {running ? (
@@ -59,19 +99,46 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
         {description && (
           <>
             <span className="oc-tool__sep">·</span>
-            <span
-              className={`oc-tool__subtitle${subSessionId ? ' is-session' : ''}`}
-              title={subSessionId ? `${description}（点击进入子代理会话）` : description}
-              onClick={subSessionId ? openSession : undefined}
-            >{description}</span>
+            <span className="oc-tool__subtitle" title={description}>{description}</span>
           </>
         )}
-        {canExpand && (
+
+        {(canExpand || running) && (
           <span className={`oc-tool__chevron${open ? ' is-open' : ''}`}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
           </span>
         )}
       </button>
+      {subSessionId && rows.length > 0 && (
+        <div className="oc-sub__proj">
+          {rows.map((r) => {
+            const isUser = r.role === 'user';
+            const text = (r.parts || []).filter((p: any) => p?.type === 'text').map((p: any) => String(p.text || '')).join('\n').trim();
+            return (
+              <div key={r.id} className={`oc-sub__proj-row is-${isUser ? 'user' : 'asst'}`}>
+                {isUser ? (
+                  <div className="oc-sub__proj-user">{text || '(…)'}</div>
+                ) : (
+                  <div className="oc-sub__proj-asst">
+                    {(r.parts || []).map((p: any, i: number) => {
+                      if (p?.type === 'reasoning' && String(p.text || '').trim()) {
+                        return <div key={i} className="oc-sub__proj-reason">🤔 {String(p.text).replace(/\s+/g, ' ').trim().slice(0, 140)}</div>;
+                      }
+                      if (p?.type === 'tool') {
+                        return <div key={i} className="oc-sub__proj-tool">⚙ {p.tool || 'tool'} · {p.state?.status || ''}</div>;
+                      }
+                      if (p?.type === 'text' && String(p.text || '').trim()) {
+                        return <div key={i} className="oc-sub__proj-text">{String(p.text).replace(/\s+/g, ' ').trim()}</div>;
+                      }
+                      return null;
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
       {canExpand && open && (
         isError ? (
           <div className="oc-tool__error"><pre className="oc-tool__pre">{errText}</pre></div>

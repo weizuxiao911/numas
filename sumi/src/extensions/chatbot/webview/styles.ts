@@ -252,7 +252,7 @@ export const styles = `
 /* Messages area */
 .chat__messages {
   flex: 1; overflow-y: auto; overflow-x: hidden; min-width: 0;
-  padding: 16px 20px;
+  padding: 16px 20px 40px;
   display: flex; flex-direction: column; min-width: 0;
   /* 保留滚动能力, 隐藏滚动条视觉 */
   scrollbar-width: none;
@@ -2191,6 +2191,65 @@ export const styles = `
   border: none; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
 }
 .chat__sub-back-btn:hover { filter: brightness(1.08); }
+
+
+/* 子代理类型 icon + 进入会话引导 */
+.oc-sub:hover .oc-sub__goto { opacity: 1; transform: translateX(2px); }
+
+
+
+
+/* 子代理操作按钮: 进入子会话查看执行过程 */
+.oc-sub:hover .oc-sub__enter { opacity: 1; }
+.oc-sub__enter:hover { background: color-mix(in srgb, var(--ai-accent, #2563eb) 12%, transparent); }
+
+
+/* 子代理整卡可点击 (进入子会话查看执行过程) */
+.oc-sub.is-clickable .oc-tool__trigger { cursor: pointer; }
+.oc-sub.is-clickable .oc-tool__trigger:hover { background: color-mix(in srgb, var(--ai-fg) 6%, transparent); }
+.oc-sub.is-clickable .oc-tool__subtitle { color: var(--ai-accent, #2563eb); }
+
+
+/* 工具执行中提示 (展开查看过程) */
+.oc-tool__pending {
+  padding: 6px 12px; font-size: 11.5px; color: var(--ai-fg-muted, #8f8f8f);
+  display: flex; align-items: center; gap: 6px;
+}
+.oc-tool__pending::before { content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ai-accent, #2563eb); animation: oc-tool-pulse 1.2s ease-in-out infinite; }
+@keyframes oc-tool-pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+
+
+/* 子代理会话消息投影 (主消息下方实时显示) */
+.oc-sub__proj {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 6px 0 8px 26px; padding-left: 12px;
+  border-left: 2px solid var(--ai-hairline-strong, rgba(0,0,0,.15));
+  max-height: 260px; overflow: auto;
+}
+.oc-sub__proj-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.oc-sub__proj-user {
+  align-self: flex-end; max-width: 90%;
+  background: color-mix(in srgb, var(--ai-fg) 7%, var(--ai-bg-elev, #fff));
+  border-radius: 8px; padding: 5px 10px;
+  font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+}
+.oc-sub__proj-asst { display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 1.5; }
+.oc-sub__proj-reason { color: var(--ai-fg-muted, #8f8f8f); font-style: italic; font-size: 11.5px; }
+.oc-sub__proj-tool { color: var(--ai-fg-muted, #8f8f8f); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+.oc-sub__proj-text { color: var(--ai-fg); white-space: pre-wrap; word-break: break-word; }
+
+
+/* 工具执行过程 (运行中卡片下方实时显示) */
+.oc-tool__process {
+  margin: 2px 0 6px 26px; padding: 6px 10px;
+  background: color-mix(in srgb, var(--ai-fg) 4%, var(--ai-bg-elev, #fff));
+  border-radius: 8px; border-left: 2px solid var(--ai-hairline-strong, rgba(0,0,0,.15));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.55;
+  color: var(--ai-fg); min-width: 0; max-height: 200px; overflow: auto;
+}
+.oc-tool__proc-cmd { color: var(--ai-fg-muted, #8f8f8f); margin-bottom: 4px; }
+.oc-tool__proc-out { margin: 0; white-space: pre-wrap; word-break: break-all; }
 
 
 `;

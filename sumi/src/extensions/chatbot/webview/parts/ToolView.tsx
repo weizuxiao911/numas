@@ -185,7 +185,8 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
         : meta.kind === 'raw'
           ? !!(outStr || inputStr)
           : false;
-  const canExpand = !pending && hasContent;
+  // 执行过程可查看: 运行中也允许展开 (shell 命令 + 已累积输出实时可见)
+  const canExpand = hasContent;
 
   const dir = meta.subtitle && meta.subtitle.includes('/') ? dirname(meta.subtitle) : '';
   const file = meta.subtitle && meta.subtitle.includes('/') ? basename(meta.subtitle) : meta.subtitle;
@@ -215,6 +216,20 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
         {canExpand && <Chevron open={open} />}
       </button>
 
+      {/* 执行过程: 运行中直接在卡片下方显示 (无需展开) */}
+      {pending && (
+        <div className="oc-tool__process">
+          {meta.kind === 'shell' && meta.command && (
+            <div className="oc-tool__proc-cmd">$ {meta.command}</div>
+          )}
+          {outStr ? (
+            <pre className="oc-tool__proc-out">{outStr}</pre>
+          ) : (
+            <div className="oc-tool__pending">● 执行中…</div>
+          )}
+        </div>
+      )}
+
       {canExpand && open && (
         isError ? (
           <div className="oc-tool__error">
@@ -223,6 +238,7 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
           </div>
         ) : meta.kind === 'shell' ? (
           <div className="oc-tool__box" dir="ltr">
+            {pending && <div className="oc-tool__pending">● 执行中…</div>}
             <CopyGhost text={shellText} />
             <div className="oc-tool__scroll">
               <pre className="oc-tool__pre oc-tool__pre--shell">
