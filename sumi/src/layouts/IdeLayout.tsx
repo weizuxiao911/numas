@@ -13,6 +13,7 @@
  * WorkspacePicker / FilePicker 是全局浮层, 必须在 codeblitz DI 内渲染.
  */
 import React from 'react';
+// import { createPortal } from 'react-dom'; // WorkBuddy 功能已整体注释, 恢复时一并取消注释
 import { SlotLocation, SlotRenderer } from '@opensumi/ide-core-browser';
 import { BoxPanel, SplitPanel } from '@opensumi/ide-core-browser/lib/components';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
@@ -54,11 +55,42 @@ const styles = `
 .app-ide__toggle:hover { background: color-mix(in srgb, currentColor 14%, transparent); color: var(--editor-foreground); }
 .app-ide__toggle.is-active { color: var(--editor-foreground); }
 .app-ide__top .app-side-topbar { flex: 0 0 auto; padding: 0; }
-/* WorkBuddy 启动按钮与面板 toggle 之间的分隔线 */
+/* === WorkBuddy 启动按钮 + 下载引导样式 (用户要求暂时注释掉整个功能; 恢复时去掉本块注释) ===
 .app-ide__top-divider {
   width: 1px; height: 16px; flex: 0 0 auto; margin: 0 6px;
   background: color-mix(in srgb, var(--editor-foreground, #1f2328) 12%, transparent);
 }
+.app-ide__wb-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .28);
+}
+.app-ide__wb-modal {
+  width: 360px; max-width: calc(100vw - 48px);
+  padding: 20px 20px 16px;
+  background: var(--editorWidget-background, #fff);
+  border: 1px solid var(--panel-border, rgba(0,0,0,.12));
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .24);
+  font-size: 13px; color: var(--editor-foreground, #1f2328);
+  text-align: center;
+}
+.app-ide__wb-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.app-ide__wb-desc { color: var(--descriptionForeground, #8f8f8f); line-height: 1.6; margin-bottom: 16px; }
+.app-ide__wb-actions { display: flex; gap: 8px; justify-content: center; }
+.app-ide__wb-btn {
+  height: 30px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--panel-border, rgba(0,0,0,.12)); border-radius: 8px;
+  background: none; color: inherit; font-size: 13px; font-family: inherit;
+  text-decoration: none; cursor: pointer;
+  transition: background .12s, opacity .12s;
+}
+.app-ide__wb-btn:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
+.app-ide__wb-btn.is-primary {
+  background: #6366f1; border-color: transparent; color: #fff;
+}
+.app-ide__wb-btn.is-primary:hover { background: #6366f1; opacity: .9; }
+=== end WorkBuddy === */
 .app-ide__top .app-action { width: auto; min-height: 0; padding: 0; }
 /* SOLO 专用按钮在 IDE 无意义: sidebar 折叠 / aside 开关 */
 .app-ide .app-side-topbar__icon-btn { display: none !important; }
@@ -176,22 +208,97 @@ const PanelToggles: React.FC<{ rightVisible: boolean; onToggleRight: () => void 
   );
 };
 
-/** WorkBuddy 启动按钮: deep link 由浏览器 (访客本机) 拉起本地 WorkBuddy 应用.
- *  公网/本地部署行为一致; 访客机器没装则浏览器无响应 (JS 无法检测). */
-const WorkBuddyButton: React.FC = () => (
-  <button
-    type="button"
-    className="app-ide__toggle"
-    title="打开 WorkBuddy"
-    onClick={() => { window.location.href = 'workbuddy://'; }}
-  >
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 4h6v6" />
-      <path d="M20 4l-8 8" />
-      <path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
-    </svg>
-  </button>
-);
+/* === WorkBuddy 启动按钮 (用户要求暂时注释掉整个功能; 恢复时去掉本块注释 + JSX 使用处 + 顶部 import) ===
+const WORKBUDDY_DOWNLOAD_URL = 'https://www.workbuddy.cn/';
+
+ * WorkBuddy 启动按钮 (IDE 顶栏右侧).
+ *
+ * 启动方式: 浏览器 (访客本机) 执行 `workbuddy://` deep link, 拉起访客电脑上安装的
+ * WorkBuddy 客户端. 公网/本地部署行为一致 (服务端 `open -a` 只能拉起服务器本机, 不可用).
+ *
+ * 未安装检测 (JS 无 API 可查协议是否注册, 只能间接推断):
+ *   1. 点击时注册 window `blur` + document `visibilitychange` 监听, 启动 2.5s 定时器,
+ *      再执行 location.href='workbuddy://';
+ *   2. 已安装: 浏览器弹「打开 WorkBuddy?」→ 用户确认 → 应用启动 → 浏览器窗口失焦
+ *      → blur 触发 → 取消定时器, 不弹引导;
+ *   3. 未安装: 浏览器静默忽略该协议 → 页面不失焦 → 2.5s 定时器到点 → 弹下载引导 modal;
+ *   4. 信号一到即 stopWatch() (清定时器 + 摘监听), 快速连点/卸载不残留.
+ *
+ * 已知误判: 已安装但用户在浏览器弹窗停留 >2.5s 也会弹引导 → modal 文案提示
+ * 「若已安装请在浏览器弹窗选打开」并提供「重试打开」; 等待期间切走标签页
+ * (visibilitychange→hidden) 视为已离开, 不弹.
+ *
+const WorkBuddyButton: React.FC = () => {
+  const [showGuide, setShowGuide] = React.useState(false);
+  const timerRef = React.useRef<number | null>(null);
+  const signalRef = React.useRef<(() => void) | null>(null);
+
+  // 清定时器 + 摘失焦监听 (launch 重入 / 组件卸载 / 信号到达都走这里)
+  const stopWatch = React.useCallback(() => {
+    if (timerRef.current != null) { window.clearTimeout(timerRef.current); timerRef.current = null; }
+    if (signalRef.current) {
+      window.removeEventListener('blur', signalRef.current);
+      document.removeEventListener('visibilitychange', signalRef.current);
+      signalRef.current = null;
+    }
+  }, []);
+
+  const launch = React.useCallback(() => {
+    stopWatch();
+    setShowGuide(false);
+    // 失焦信号 = 应用被拉起 (或用户切走), 取消未安装判定
+    const signal = () => stopWatch();
+    signalRef.current = signal;
+    window.addEventListener('blur', signal);
+    document.addEventListener('visibilitychange', signal);
+    // 2.5s 内无任何失焦信号 → 判定未安装 → 弹下载引导
+    timerRef.current = window.setTimeout(() => {
+      stopWatch();
+      setShowGuide(true);
+    }, 2500);
+    window.location.href = 'workbuddy://';
+  }, [stopWatch]);
+
+  React.useEffect(() => stopWatch, [stopWatch]);
+  React.useEffect(() => {
+    if (!showGuide) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowGuide(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showGuide]);
+
+  return (
+    <>
+      <button type="button" className="app-ide__toggle" title="打开 WorkBuddy" onClick={launch}>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 4h6v6" />
+          <path d="M20 4l-8 8" />
+          <path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
+        </svg>
+      </button>
+      {showGuide && createPortal(
+        <div
+          className="app-ide__wb-overlay"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowGuide(false); }}
+        >
+          <div className="app-ide__wb-modal" role="dialog" aria-modal="true">
+            <div className="app-ide__wb-title">未检测到 WorkBuddy</div>
+            <div className="app-ide__wb-desc">
+              若已安装, 请在浏览器弹窗中选择「打开 WorkBuddy」; 若尚未安装, 可前往官网下载客户端.
+            </div>
+            <div className="app-ide__wb-actions">
+              <a className="app-ide__wb-btn is-primary" href={WORKBUDDY_DOWNLOAD_URL} target="_blank" rel="noreferrer">前往下载</a>
+              <button type="button" className="app-ide__wb-btn" onClick={launch}>重试打开</button>
+              <button type="button" className="app-ide__wb-btn" onClick={() => setShowGuide(false)}>取消</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+};
+=== end WorkBuddy === */
 
 /** BoxPanel 从子元素 props 读 flex (同 SplitPanel), 用包装组件透传 flex=1 */
 const IdeBody: React.FC<{ children?: React.ReactNode; flex?: number }> = ({ children }) => (
@@ -211,8 +318,10 @@ export function IdeLayout(): React.ReactElement {
             <SlotRenderer slot={SOLO_SLOTS.MainAction} />
           </div>
           <div className="app-ide__top-right">
+            {/* WorkBuddy 启动按钮 (用户要求暂时注释掉整个功能, 恢复时去掉注释即可)
             <WorkBuddyButton />
             <span className="app-ide__top-divider" />
+            */}
             <PanelToggles rightVisible={rightVisible} onToggleRight={() => setRightVisible((v) => !v)} />
           </div>
         </div>

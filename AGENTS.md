@@ -313,6 +313,15 @@ AI **仍需 `question`**:
 - 每轮开头**回顾上一轮状态**, 结尾**给当前状态摘要** (committed + pushed + 已知遗留)
 - 跨轮任务**先 question 确认是否继续**, 不要一气呵成做完多轮
 
+#### 4. 自定义协议 deep link 启动本地应用 + 未安装引导
+
+- **事实**: JS 无法检测协议处理器是否注册 (应用是否安装). 浏览器对未注册的 `xxx://` 静默无响应, 对已注册的弹「打开 xxx?」确认.
+- **检测启发式**: 点击后设 2.5s 定时器 + 监听 `blur`/`visibilitychange` — 应用真被拉起时窗口失焦 (信号到达即取消定时器); 定时器走完仍未失焦 → 判定未安装 → 弹下载引导 modal.
+- **公网部署**: deep link 由**访客浏览器**执行, 部署在公网/容器行为一致; 服务端 `open -a` 只会拉起服务器本机 (容器无 GUI), 公网场景不可用.
+- **引导 UI**: modal 给「前往下载」(官网链接, `target=_blank` + `rel=noreferrer`) /「重试打开」(重新走 launch+检测) /「取消」; 支持 Esc + 点遮罩关闭; `createPortal` 到 body 避免父级 overflow 裁剪.
+- **参考实现**: `sumi/src/layouts/IdeLayout.tsx` 的 `WorkBuddyButton` (WORKBUDDY_DOWNLOAD_URL = 官网首页).
+  **当前状态 (2026-09)**: 用户要求把该功能整体注释掉 — 组件/CSS/JSX 使用/`createPortal` import 均以注释保留, 恢复时逐处取消注释即可.
+
 ### 4.2 避坑指南
 
 #### 1. opencode 服务端 `WorkspaceRoutingMiddleware` 静默 fallback 到 `process.cwd()`
