@@ -15,7 +15,6 @@ import { SIDE_TOPBAR_PANEL_ID } from './extensions/solo/sideTopbar';
 import { SESSIONS_PANEL_ID } from './extensions/solo/sessions';
 import { ACTION_PANEL_ID } from './extensions/solo/action';
 import { CHATBOT_PANEL_ID } from './extensions/solo/chatbot';
-import { USER_PANEL_ID } from './extensions/solo/user';
 import { ASIDE_TOPBAR_PANEL_ID } from './extensions/solo/asideTopbar';
 import { ASIDE_BROWSER_PANEL_ID } from './extensions/browser';
 import { SOLO_SLOTS } from './config/slots';
@@ -71,7 +70,6 @@ const SOLO_MODE = {
   panels: {
     [SOLO_SLOTS.SidebarAction]: SIDE_TOPBAR_PANEL_ID,
     [SOLO_SLOTS.SidebarContainer]: SESSIONS_PANEL_ID,
-    [SOLO_SLOTS.SidebarFooter]: USER_PANEL_ID,
     [SOLO_SLOTS.MainAction]: ACTION_PANEL_ID,
     [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
     [SOLO_SLOTS.AsideAction]: ASIDE_TOPBAR_PANEL_ID,

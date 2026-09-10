@@ -127,9 +127,6 @@ export function SoloLayout(): React.ReactElement {
           <div className="app-solo__sidebar-container">
             <SlotRenderer slot={SOLO_SLOTS.SidebarContainer} />
           </div>
-          <div className="app-solo__sidebar-footer">
-            <SlotRenderer slot={SOLO_SLOTS.SidebarFooter} />
-          </div>
         </div>
       )}
       {!sidebarCollapsed && (

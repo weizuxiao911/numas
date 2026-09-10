@@ -62,8 +62,6 @@
   padding: 0 10px;
 }
 .app-solo__sidebar-container { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 8px 10px 12px; }
-.app-solo__sidebar-footer { flex: 0 0 auto; min-width: 0; padding: 0 10px 12px; }
-
 /* 中列 main: action / container / footer 三段, 占满剩余宽度
    跟 sidebar 半档色差: 混 2.5% 前景色, 自动随主题反相
     - 亮色主题: 前景色深, 中列略深于 sidebar (sidebar 更亮)
