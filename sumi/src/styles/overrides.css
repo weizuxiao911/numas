@@ -1317,3 +1317,15 @@ div[data-viewlet-id="sessions-default"] [class*="titlebar"] {
 .app-user {
   display: none !important;
 }
+
+/* codeblitz 对话框标题: 背景透明 (不额外铺底, 跟随弹层底色) */
+.kt-dialog-content .kt-dialog-content_area .kt-dialog-content_title {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* codeblitz 对话框内容区: 硬编码白底 → 主题弹层色 (暗色主题不再发白) */
+.kt-dialog-content {
+  background-color: var(--editorWidget-background, #fff) !important;
+  background-image: none !important;
+}
