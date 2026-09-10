@@ -1324,8 +1324,10 @@ div[data-viewlet-id="sessions-default"] [class*="titlebar"] {
   background-color: transparent !important;
 }
 
-/* codeblitz 对话框内容区: 硬编码白底 → 主题弹层色 (暗色主题不再发白) */
+/* codeblitz 对话框内容区: 背景透明 + 去阴影 (不铺底, 跟随弹层底色) */
 .kt-dialog-content {
-  background-color: var(--editorWidget-background, #fff) !important;
+  background: transparent !important;
+  background-color: transparent !important;
   background-image: none !important;
+  box-shadow: none !important;
 }
