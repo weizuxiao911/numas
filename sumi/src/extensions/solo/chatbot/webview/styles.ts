@@ -1850,8 +1850,9 @@ export const styles = `
   scrollbar-width: thin;
 }
 .oc-tool__box .chat-md { padding: 10px 12px; }
+/* 工具结果里的代码块保留 macOS 窗口风 (标题栏/边框/内边距), 只让底色透明 */
 .oc-tool__box .chat-md .chat-md__body pre {
-  background: transparent !important; border: none !important; padding: 0 !important;
+  background: transparent !important;
 }
 .oc-tool__pre {
   margin: 0; font-family: var(--monaco-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace);
