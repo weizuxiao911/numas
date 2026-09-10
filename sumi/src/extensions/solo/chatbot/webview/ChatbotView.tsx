@@ -1755,15 +1755,17 @@ export const ChatbotView: React.FC = () => {
     // 纯文本/代码片段 (kind 不为 file) 走 textarea 默认行为
     const fileItems = items.filter((it) => it.kind === 'file');
     if (fileItems.length === 0) return;
+    // 关键: 剪贴板 DataTransferItem 在 paste 事件同步阶段结束后失效 →
+    // 必须先同步取 File 快照, 再走异步写盘 (否则 await 后 getAsFile() 返回 null)
+    const files = fileItems.map((it) => it.getAsFile()).filter((f): f is File => !!f);
+    if (files.length === 0) return;
     e.preventDefault();
     if (!fs?.write) { setError('沙箱文件系统未就绪'); return; }
     const added: Array<{ name: string; path: string; dataUrl?: string }> = [];
     // /api/fs/write 不建父目录 → 先 mkdir -p .tmp
     try { await fs.mkdirp('.tmp'); } catch { /* ignore */ }
-    for (const it of fileItems) {
+    for (const f of files) {
       try {
-        const f = it.getAsFile();
-        if (!f) continue;
         const mime = f.type || 'application/octet-stream';
         const ext = (f.name?.match(/\.[a-z0-9]{1,5}$/i)?.[0]
           || (mime.split('/')[1]?.split(';')[0].replace(/[^\w]/g, '') ? `.${mime.split('/')[1].split(';')[0].replace(/[^\w]/g, '')}` : '')).toLowerCase();

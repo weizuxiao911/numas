@@ -709,3 +709,11 @@ AI **仍需 `question`**:
   - 删除自绘 `.oc-sub__dots`/`.oc-sub__indicator`/`.oc-sub__status` 与 accent 前景色
 - **改动文件**: `sumi/src/extensions/chatbot/webview/parts/SubAgentCard.tsx` + `styles.ts`.
 - **排查方法**: ① 状态指示"看不见"先查 `getComputedStyle` 的实际颜色 + 当前主题 (`document.documentElement.className` 含 `design-light`/`design-dark`); ② 不要用 `--ai-accent` 做前景/填充, 前景用 `--ai-fg`/`--ai-fg-muted`/`--ai-danger`, 强调光效才用 `--ai-neon`; ③ 同类状态优先复用 `.oc-tool__spinner` / `.oc-tool__indicator` 保持全站一致.
+
+#### 36. paste 事件里 `await` 之后 `getAsFile()` 失效 → 截图/文件粘贴静默失败 (合成 DataTransfer 测试假阳性)
+
+- **现象**: 聊天输入框粘贴截图/文件无任何反应 (无附件卡片、无报错); 但用 `new DataTransfer() + dispatchEvent('paste')` 的合成测试**正常**添加附件.
+- **根因**: paste 事件里先做了异步动作 (`await fs.mkdirp('.tmp')`) 才遍历 `clipboardData.items` 调 `it.getAsFile()` — **DataTransferItem 只在事件同步阶段有效**, 事件回调返回/跨过 await 后即失效, `getAsFile()` 返回 null → 循环 `continue` 静默跳过. 合成事件的数据不经过系统剪贴板, 不受失效影响, 所以自动化测试会假阳性.
+- **解决方案**: paste 回调**第一段同步**取 File 快照 (`const files = fileItems.map(it => it.getAsFile()).filter(Boolean)`), 之后再 `await` 写盘/生成预览.
+- **改动文件**: `sumi/src/extensions/solo/chatbot/webview/ChatbotView.tsx` (`onPaste`).
+- **排查方法**: ① 用真实剪贴板验证 (`navigator.clipboard.write([new ClipboardItem({'image/png': blob})])` + `Meta+V`), 不要只用合成 `dispatchEvent`; ② 在 paste 上挂 capture 监听打 `clipboardData.types/items` 确认事件与 kind 是否到达, 区分「事件没到」vs「处理逻辑跳过了」; ③ 任何 `getAsFile()` 取值必须在事件同步阶段完成.
