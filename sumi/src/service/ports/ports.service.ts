@@ -90,6 +90,12 @@ export class PortsServiceImpl implements IPortsService {
   }
 
   proxyUrl(port: number): string {
+    // 子域代理模式 (--domain-proxy, 注入 __APP_CONFIG__.domainProxy): http(s)://<port>.<domain>/
+    const domain =
+      (typeof window !== 'undefined' ? (window as any).__APP_CONFIG__?.domainProxy : '') || '';
+    if (domain && typeof window !== 'undefined' && window.location) {
+      return `${window.location.protocol}//${port}.${domain}/`;
+    }
     const base = appBaseUrl();
     return `${base.replace(/\/+$/, '')}/proxy/${port}/`;
   }

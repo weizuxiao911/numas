@@ -19,10 +19,12 @@ export interface AppConfig {
   workspaceDir: string;
   theme: string;
   chatConfig: typeof APP_CHAT_CONFIG;
+  /** 子域端口代理域名 (opencode --domain-proxy 运行时注入); 空 = 走 /proxy/<port>/ 路径式反代 */
+  domainProxy?: string;
 }
 
 function buildAppConfig(): AppConfig {
-  // 运行时注入优先 (opencode serve/web 渲染时注入 __APP_CONFIG__.registryBaseUrl 等), 兜底编译期
+  // 运行时注入优先 (opencode serve/web 渲染时注入 __APP_CONFIG__.registryBaseUrl / domainProxy 等), 兜底编译期
   const injected = (window as any).__APP_CONFIG__ || {};
   return {
     appBaseUrl: injected.appBaseUrl || __APP_BASE_URL__ || '',
@@ -31,6 +33,7 @@ function buildAppConfig(): AppConfig {
     workspaceDir: WORKSPACE_ROOT,
     theme: 'opensumi-design-dark-theme',
     chatConfig: APP_CHAT_CONFIG,
+    domainProxy: injected.domainProxy || '',
   };
 }
 

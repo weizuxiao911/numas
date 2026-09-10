@@ -200,16 +200,24 @@ const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effe
   Layer.provide(authOnlyRouterLayer),
 )
 
-const numasPortsRoute = portsRoute.pipe(Layer.provide(authOnlyRouterLayer))
+const numasPortsRoute = (domainProxy?: string) =>
+  portsRoute(domainProxy).pipe(Layer.provide(authOnlyRouterLayer), Layer.provide(ServerAuth.Config.layer))
 
-const uiRoute = (webUIRoot?: string, registry?: string) =>
+const uiRoute = (webUIRoot?: string, registry?: string, domainProxy?: string) =>
   HttpRouter.use((router) =>
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
       const client = yield* HttpClient.HttpClient
       const flags = yield* RuntimeFlags.Service
       yield* router.add("*", "/*", (request) =>
-        serveUIEffect(request, { fs, client, disableEmbeddedWebUi: flags.disableEmbeddedWebUi, webUIRoot, registry }),
+        serveUIEffect(request, {
+          fs,
+          client,
+          disableEmbeddedWebUi: flags.disableEmbeddedWebUi,
+          webUIRoot,
+          registry,
+          domainProxy,
+        }),
       )
     }),
   ).pipe(Layer.provide(authOnlyRouterLayer))
@@ -286,6 +294,7 @@ export function createRoutes(
   webUIRoot?: string,
   registry?: string,
   extensionsDir?: string,
+  domainProxy?: string,
 ): Layer.Layer<never, EffectConfig.ConfigError, RouteRequirements> {
   const locationServiceMapV2 = buildLocationServiceMap(
     [],
@@ -299,9 +308,9 @@ export function createRoutes(
     instanceRoutes,
     serverRoutes,
     docRoute,
-    numasPortsRoute,
+    numasPortsRoute(domainProxy),
     extensionsRoute(extensionsDir),
-    uiRoute(webUIRoot, registry),
+    uiRoute(webUIRoot, registry, domainProxy),
   ).pipe(
     Layer.provide([
       errorLayer,

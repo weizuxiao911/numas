@@ -825,3 +825,12 @@ AI **仍需 `question`**:
   1. 量整条链每层 `{h, flex, minHeight, height, overflow}`: `.app-chatbot` → `.resize-wrapper` → `.app-ide__right` → `.app-ide__body` → BoxPanel wrapper → box-panel; **哪层 h 超出容器高度, 就是那层缺 `min-height: 0` / 缺 flex 上下文**.
   2. CSS-module 类名带 `___hash` 后缀, 字面 `.wrapper` 选择器匹配不到 → 用 `[class*="wrapper"]` 属性选择器.
   3. 用 `> *` 通配子元素时必须排除 React 组件内联的 `<style>`/`<script>` (`:not(style)`), 否则它们会被当 flex 项占位.
+
+#### 48. 子域端口代理 (--domain-proxy): Effect v4 全局中间件拿不到服务 + `__APP_CONFIG__` 重建丢字段
+
+- **功能**: opencode 新增 `--domain-proxy <domain>` (对标 code-server `--proxy-domain`): 已知端口 P 暴露为 `http://P.<domain>/` (path/query 原样, 不带 `/proxy` 前缀). 公网需泛域名 DNS + 泛域名证书.
+- **坑 1 (全局中间件服务注入)**: 首版把中间件做成 `HttpRouter.middleware(fn, { global: true })` 放进 `createRoutes` 的 provide 列表 → typecheck 报 `Request<"GlobalRequires", Config>` 不在 `RouteRequirements`; 服务 (Ports/HttpClient/ServerAuth) 在中间件内 yield 不到 (GlobalRequires 需求 `Layer.provide` 不剥离, `HttpRouter.serve` 又把 Request-tagged 需求从层需求剔除).
+  - **解法**: 中间件注册放进**已有服务的 raw 路由层** — `portsRoute(domainProxy)` 的 `HttpRouter.use` gen 内 `router.addGlobalMiddleware((effect) => ...)`, 服务**闭包捕获** (gen 内先 `yield* PortsService / HttpClient / Socket.WebSocketConstructor / ServerAuth.Config`), WS 构造函数在调用点 `Effect.provideService` 注入 → 零服务需求. 必须在路由匹配前拦截 (全局中间件), 否则子域请求命中 opencode 同名路由 (`/api/*`, `/session/*`).
+- **坑 2 (前端配置丢失)**: 注入到 `index.html` 的 `__APP_CONFIG__.domainProxy` 被 `sumi/src/config/app.ts:buildAppConfig()` **重建丢弃** (只列已知字段) → 前端读不到. 修法: `AppConfig` 加 `domainProxy?: string` + `buildAppConfig` 显式透传.
+- **改动文件**: `opencode/packages/opencode/src/ports/ports-domain-proxy.ts` (Host 解析 + auth + isKnown + HTTP/WS 反代), `ports-route.ts` (factory + addGlobalMiddleware), `cli/network.ts` (--domain-proxy), `server/server.ts` + `routes/instance/httpapi/server.ts` (参数透传), `server/shared/ui.ts` (注入 __APP_CONFIG__), `sumi/src/config/app.ts` + `service/ports/ports.service.ts:proxyUrl` + `extensions/browser/browser.service.ts:normalizeUrl/deproxyUrl` (子域形态互转).
+- **验证方法**: ① `curl -H "Host: 8123.localhost" http://127.0.0.1:24099/` → 命中代理 (200 + 目标内容); 未知端口 → 404 `not known`; 普通 Host → 仍走 UI; ② `curl http://127.0.0.1:24099/ | grep __APP_CONFIG__` 看注入; ③ 前端 DI 探针: React fiber (`document.querySelector('codeblitz-root')['__reactFiber$…']` 向上找 `memoizedProps.app.injector`) → `inj.get(PortsServiceImpl token).proxyUrl(8123)` 应返 `http://8123.localhost/`.

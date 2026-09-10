@@ -94,9 +94,15 @@ export function normalizeUrl(input: string): { real: string; src: string; extern
     if (/^\/proxy\/\d+(\/|$)/.test(u.pathname)) {
       return { real, src: real, external: real };
     }
+    const rest = u.pathname.replace(/^\//, '') + u.search + u.hash;
+    // 子域代理模式 (--domain-proxy): http(s)://<port>.<domain>/<rest>
+    const domain = appDomainProxy();
+    if (domain) {
+      const proxied = `${window.location.protocol}//${u.port}.${domain}/${rest}`;
+      return { real, src: proxied, external: proxied };
+    }
     const base = appBaseUrl();
     if (base) {
-      const rest = u.pathname.replace(/^\//, '') + u.search + u.hash;
       const proxied = `${base.replace(/\/+$/, '')}/proxy/${u.port}/${rest}`;
       return { real, src: proxied, external: proxied };
     }
@@ -104,13 +110,28 @@ export function normalizeUrl(input: string): { real: string; src: string; extern
   return { real, src: real, external: real };
 }
 
-/** 把反代地址 (${base}/proxy/<port>/rest) 还原为用户视角的原始地址 (http://localhost:<port>/rest).
+/** __APP_CONFIG__.domainProxy (--domain-proxy 启动参数注入); 未配置返回 '' */
+export function appDomainProxy(): string {
+  if (typeof window === 'undefined') return '';
+  return ((window as any).__APP_CONFIG__?.domainProxy as string) || '';
+}
+
+/** 把反代地址 (${base}/proxy/<port>/rest 或子域 <port>.<domain>/rest) 还原为用户视角的
+ *  原始地址 (http://localhost:<port>/rest).
  *  用于: iframe 内部跳转后, 父窗口把 iframe.contentWindow.location 同步到地址栏展示.
  *  解析失败 (非本工具产生的反代 URL) 返回原始值. */
 export function deproxyUrl(src: string): string {
   if (!src) return src;
   try {
     const u = new URL(src);
+    // 子域代理形态: <port>.<domain>
+    const domain = appDomainProxy();
+    if (domain && u.hostname.toLowerCase().endsWith(`.${domain.toLowerCase()}`)) {
+      const label = u.hostname.slice(0, -(domain.length + 1));
+      if (/^\d+$/.test(label)) {
+        return `http://localhost:${label}${u.pathname}${u.search}${u.hash}`;
+      }
+    }
     const m = u.pathname.match(/^\/proxy\/(\d+)(\/.*)?$/);
     if (!m) return src;
     const port = m[1];
