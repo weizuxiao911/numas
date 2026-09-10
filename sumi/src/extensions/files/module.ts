@@ -96,7 +96,20 @@ export class FilesContribution
       const plainFiles = entries.length ? [] : Array.from(e.dataTransfer.files || []);
       if (!entries.length && !plainFiles.length) return;
       const dirUri = dropTargetDirUri(e.clientX, e.clientY) || URI.file(getWorkspace()).toString();
-      void this.dropUpload(dirUri, entries as any[], plainFiles);
+      const dropEl = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+      void (async () => {
+        await this.dropUpload(dirUri, entries as any[], plainFiles);
+        // 还原默认态: 树的拖拽高亮 (mod_dragover 背景色) 只在它自身 dragleave/drop 里清;
+        // 我们的 drop 拦截让它收不到 → 上传完成 (树刷新重渲染稳定) 后补发 dragleave
+        const clearHighlight = () => {
+          try {
+            const target = dropEl && dropEl.isConnected ? dropEl : (document.querySelector('[class*="file_tree___"]') as HTMLElement | null);
+            target?.dispatchEvent(new DragEvent('dragleave', { bubbles: true, cancelable: true }));
+          } catch { /* ignore */ }
+        };
+        clearHighlight();
+        setTimeout(clearHighlight, 300);
+      })();
     };
     window.addEventListener('dragover', onDragOver, true);
     window.addEventListener('drop', onDrop, true);
