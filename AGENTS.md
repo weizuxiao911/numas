@@ -732,3 +732,41 @@ AI **仍需 `question`**:
 - **解决方案**: `config/modules.ts` 注册 `TerminalNextModule` + `App.tsx` 的 `layout` 把 `[SlotLocation.bottom].modules = ['@opensumi/ide-terminal-next']`; 渲染后由调用方 (asidetopbar) `IMainLayoutService.toggleSlot(SlotLocation.bottom, true)` 轮询激活 (`getTabbarHandler('terminal')?.isActivated()`), 无终端实例 (`ITerminalController.clients.size===0`) 时 `executeCommand('terminal.add')` 自动新建.
 - **附带**: `BuiltinBrowserModule` 曾在 codeblitz 容器重构 (452f001) 时从 config/modules 漏掉 → `browser.open` 命令 `HANDLER_NOT_FOUND`; 浏览器视图相关功能要先确认该模块已注册.
 - **排查方法**: 新 view 不显示 → 先查 `registry.config.layoutConfig` 里对应 slot 的 modules 是否含该模块/panel id; 再查 tabbar `isActivated()`; 命令不存在 (`HANDLER_NOT_FOUND`) → grep `config/modules.ts` 是否漏注册该 module.
+
+#### 39. vsix 扩展启动丢失 (线上全部失效): `createApp` 只执行一次, 与异步 metadata 赛跑
+
+- **现象**: 远程容器 (oscollege) 所有 vsix 扩展 (docx/html/paper/zip-viewer) 都不生效; `/extensions/metadata.json` 200 有 4 条, 前端也打印 `metadata 拉取 OK: 4 entries`, 但点 docx 落到文件系统默认二进制错误页. 本地 dev 正常.
+- **根因**: `sumi/src/App.tsx` 里 `installMetadata()` (fetch metadata.json) 与 `resolveBoot()` (fetch /path) 并行赛跑; `AppRenderer` 内 `createApp(opts)` 用 `useConstant` **只执行一次** (`@codeblitzjs/ide-core/lib/api/renderApp.js`). 若 `/path` 先返回 (远程慢网络: 本地实测 metadata 3072ms 就绪, app 3070ms 创建, 差 2ms), `createApp` 捕获空 `extensionMetadata`, 之后 `setMeta` 只更新 React props, **ClientApp 不会重建** → 永久只剩 2 个内置扩展 (`vsicons-slim`/`ide-dark-theme`), 4 个 vsix 全丢.
+- **解决方案**: ① `index.tsx` 渲染前调 `preloadExtensionMetadata()` (模块级单例, 只 fetch 一次); ② App 用 `metaReady` 门控: 预取落地 (或 8s 超时降级) 才挂 `AppRenderer`; ③ mount 后兜底: `getPreloadedMetadata()` 无 vsix 时 `location.reload()` 重试一次 (`sessionStorage` 标记防死循环).
+- **改动文件**: `sumi/src/index.tsx`, `sumi/src/service/extension/extension.service.ts` (预取单例 + `getPreloadedMetadata`), `sumi/src/App.tsx`, `sumi/src/service/extension/index.ts`.
+- **排查方法**: ① 线上现象与本地不一致时, 直接探测 app 内 `ExtensionService.extensionMetaDataArr` (浏览器控制台经 webpack module cache 拿 `app.injector.get(ExtensionService)`), 只有 2 个内置 = vsix 没注册; ② 对照本地同探测 = 6 条 (2 内置 + 4 vsix); ③ `metadata.json` 接口 200 ≠ 扩展注册成功 — 两表分离 (fetch 成功 vs ClientApp ServerConfig 快照), 别只看接口.
+
+#### 40. customEditor `Webview is disposed` 白屏: 卸载 dispose 与 `$resolveCustomTextEditor` 在途 RPC 竞态
+
+- **现象**: docx/paper/html viewer 偶发白屏; console `Uncaught (in promise) Error: Webview is disposed at resolveCustomEditor (show-docx extension.js)`.
+- **根因**: `sumi/src/patches/patch-custom-editor.ts` 的 `__paperUnmount` 直接 `webview.remove()/dispose()`; 而 `IFrameWebviewPanel.remove()` 触发 `onRemove` → `webview.dispose() + $onDidDisposeWebviewPanel(id)` (扩展侧 panel 标记 disposed). 若扩展侧 `$resolveCustomTextEditor` RPC 还在途 (慢 worker / 快速切 tab), resolveCustomEditor 读到已 dispose 的 panel 抛错 → viewer 白屏.
+- **解决方案**: `__paperTryMount` 记录 `info.resolvePromise = Promise.resolve($resolveCustomTextEditor(...))`; `__paperUnmount` 等 `Promise.race([resolvePromise, timeout(8s)])` 落地再 `remove()/dispose()`; 同时立即 `removeAttribute('data-paper-mount-key')` 防同 key 重开复用待销毁容器.
+- **改动文件**: `sumi/src/patches/patch-custom-editor.ts`.
+- **排查方法**: 日志里 `__paperUnmount` 后紧跟 `[ce-ui] useEffect fire onCustomEditor <viewType>` (重开) + `Webview is disposed` = 此竞态; 本地快 (无慢 worker) 难复现, 需远程慢网络或快速关/开 tab.
+
+#### 41. UI rebuild 后浏览器永远拿到旧页面: gzip 缓存 key 用「路径 + 原始字节数」, chunk hash 等长替换误命中
+
+- **现象**: sumi rebuild 后 curl (`http://127.0.0.1:24096/`) 返回新 index.html (`main.457eab3d.js`), 但浏览器 `fetch('/')` / 页面仍加载旧 chunk (`main.222412bc.js`); 表现为 CSS/JS 修复"没生效" (改完像没改), 反复排查代码无果.
+- **根因**: `opencode/packages/opencode/src/server/shared/ui.ts` 的 `uiGzipCache` key = 文件绝对路径, 命中条件 = `data.byteLength` 一致. index.html 无 contenthash, rebuild 后只有 chunk hash 变了 (`main.a1b2c3d4.js` → `main.e5f6a7b8.js`, **长度相同**) → 字节数比对误命中 → 服务端持续吐旧 gzip HTML (引用旧 chunk). curl 默认不带 `Accept-Encoding: gzip` → 走非缓存分支拿到新内容, 所以 curl 与浏览器表现不一致.
+- **解决方案**: `embeddedUIResponse` 里 `text/html` 不走 gzip 缓存 (现场 gzip) + 加 `Cache-Control: no-cache` (浏览器每次 revalidate); 静态资源 (contenthash 文件名) 缓存逻辑不变.
+- **改动文件**: `opencode/packages/opencode/src/server/shared/ui.ts`.
+- **排查方法**: ① 浏览器 `fetch('/', {cache:'no-store'})` 读 HTML 引用的 chunk hash, 与 `curl` / 磁盘 `dist/index.html` 对比 — 不一致即此 bug; ② 别把「curl 正常」当作浏览器正常, 两者 Accept-Encoding 路径不同.
+
+#### 42. design 主题下 titleActions 动作图标不可见 (终端工具条按钮空白): 全局 `.kt-icon::before { display:none }`
+
+- **现象**: 终端模式面板工具条按钮 (搜索/清屏/拆分/关闭)、底部面板展开/折叠等 20x20 按钮位置空白无图标; `titleActions___Xv1Ic design-titleActions___M7kD7` 里 `iconAction` span 有尺寸但 `::before display:none`.
+- **根因**: design 主题全局 `.kt-icon::before { display:none }`, 只给特定 slot (bottom) 定义了 `iconAction` 尺寸/显示; 其它 slot (left/editor/panel toolbar) 的图标 glyph 全被隐藏. 之前只修了 `.app-solo__aside-sidebar [class*="titleActions"]` (explorer 标题图标).
+- **解决方案**: `sumi/src/styles/app-shell.css` 加通用规则 `.app-solo [class*="titleActions"] span[class*="iconAction"]::before, ... span[class*="btnAction"]::before { display: inline-block !important; }`; 编辑器 tab 栏 `editor_actions` 整体 `display:none` (aside 布局用不到拆分, 图标也不可见).
+- **改动文件**: `sumi/src/styles/app-shell.css`.
+- **排查方法**: 扫描可见区域里 `[class*="iconAction"]` / `[class*="kticon"]` 的 `getBoundingClientRect().width < 2` + `::before display`; 注意要排除隐藏祖先 (display:none) 的误报.
+
+#### 43. 排查「加载慢」先换全新 browser context 对照: 旧测试 tab 累积状态会假性放大启动时间
+
+- **现象**: Playwright 长寿命测试 tab 实测启动 3.2s (spinner 到 app 挂载), 误判为代码/门控引入延迟; 同一 URL 用全新 context 实测仅 394ms.
+- **根因**: 反复 reload/交互的旧 tab 累积状态 (缓存、worker、扩展宿主、节流) 拖慢后续加载; 另外 `page.route` 拦截忘摘会人为注入延迟 (本次曾残留一个 `setTimeout(3000)` 的 metadata route, 导致 metadata 请求 `duration=3007ms`).
+- **解决方案/排查方法**: ① 判断启动耗时用**全新 browser context** (`browser.newContext()` + `newPage()`) 对照, 不拿旧 tab 数据下结论; ② 排查"某请求慢"先看 `performance.getEntriesByType('resource')` 的 `start/duration` — `duration` 异常整 (如 3007ms) 多为测试 route/timer 残留; ③ 测试完 `page.unroute()` 或关 tab, 避免污染后续验证; ④ 代码侧正常路径延迟只看真实依赖 (本次 metadata 2ms / /path 1ms, 门控无回归).
