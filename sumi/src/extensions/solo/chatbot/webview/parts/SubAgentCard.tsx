@@ -14,13 +14,15 @@ import { onEvent } from '@/service/event/eventBus';
  *    本卡片只投影执行过程, 不承载作答交互
  */
 
-export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
+export const SubAgentCard: React.FC<{ part: any; streaming?: boolean }> = ({ part, streaming }) => {
   const commandService = useInjectable<CommandService>(CommandService);
   const status: string = part?.state?.status || 'pending';
   const input = part?.state?.input || {};
   const meta = part?.state?.metadata || {};
   const isError = status === 'error';
   const running = status === 'pending' || status === 'running';
+  /** 中断残留: 同 ToolView — 只有当前流式行里的 running 才真在跑 */
+  const interrupted = running && !streaming;
 
   const rawType: string = input.subagent_type || input.agent_name || input.name || input.subagent || input.agent || 'agent';
   const title = rawType ? rawType.charAt(0).toUpperCase() + rawType.slice(1) : 'Agent';
@@ -86,11 +88,11 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
     <div className={`oc-sub is-${status}${open ? ' is-open' : ''}`}>
       <button
         type="button"
-        className={`oc-tool__trigger oc-sub__trigger${subSessionId ? ' is-clickable' : canExpand ? '' : ' is-static'}${running ? ' is-pending' : ''}`}
+        className={`oc-tool__trigger oc-sub__trigger${subSessionId ? ' is-clickable' : canExpand ? '' : ' is-static'}${running && !interrupted ? ' is-pending' : ''}`}
         onClick={subSessionId ? openSession : (canExpand ? () => setOpen(v => !v) : undefined)}
         title={subSessionId ? '点击查看子代理会话执行过程' : undefined}
       >
-        {running ? (
+        {running && !interrupted ? (
           <span className="oc-tool__spinner" />
         ) : (
           <span className="oc-tool__indicator">
@@ -104,8 +106,9 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
             <span className="oc-tool__subtitle" title={description}>{description}</span>
           </>
         )}
+        {interrupted && <span className="oc-sub__interrupted">已中断</span>}
 
-        {(canExpand || running) && (
+        {(canExpand || (running && !interrupted)) && (
           <span className={`oc-tool__chevron${open ? ' is-open' : ''}`}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
           </span>

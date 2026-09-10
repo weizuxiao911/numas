@@ -110,9 +110,9 @@ export const PartRenderer: React.FC<{
         case 'todowrite':
           return <TodoCard part={part} done={done} />;
         case 'subagent':
-          return <SubAgentCard part={part} />;
+          return <SubAgentCard part={part} streaming={streaming} />;
         default:
-          return <ToolView part={part} done={done} />;
+          return <ToolView part={part} streaming={streaming} />;
       }
     }
     case 'step-start':

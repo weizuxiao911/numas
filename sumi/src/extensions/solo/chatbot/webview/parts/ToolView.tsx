@@ -53,11 +53,38 @@ function dirname(p: string): string {
   return i > 0 ? s.slice(0, i) : '';
 }
 
+/** 文件扩展名 → shiki lang (未知回退 text); 用于 read/write 结果语法高亮 */
+function langFromPath(p?: string): string {
+  const ext = String(p || '').toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || '';
+  const map: Record<string, string> = {
+    ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx', mjs: 'javascript', cjs: 'javascript',
+    json: 'json', jsonc: 'jsonc', md: 'markdown', markdown: 'markdown',
+    css: 'css', scss: 'scss', less: 'less', html: 'html', htm: 'html', vue: 'vue', svelte: 'svelte',
+    py: 'python', sh: 'bash', bash: 'bash', zsh: 'bash', fish: 'fish',
+    yml: 'yaml', yaml: 'yaml', toml: 'toml', xml: 'xml', sql: 'sql',
+    go: 'go', rs: 'rust', java: 'java', kt: 'kotlin', swift: 'swift', rb: 'ruby', php: 'php',
+    c: 'c', h: 'c', cpp: 'cpp', hpp: 'cpp', cs: 'csharp', lua: 'lua', dart: 'dart',
+    ini: 'ini', conf: 'ini',
+  };
+  return map[ext] || 'text';
+}
+
+/** 代码结果 → Shiki 高亮 (复用 Markdown 管线的 fenced code; 4 反引号防内容含 ``` 破栅栏) */
+function CodeBlock({ code, lang }: { code: string; lang: string }) {
+  const text = code.endsWith('\n') ? code.slice(0, -1) : code;
+  return <Markdown content={'````' + (lang || 'text') + '\n' + text + '\n````'} />;
+}
+
 interface ToolMeta {
   title: string;
+  /** 开始信息: 触发行副标题 (shell=命令, 文件类=文件名, grep=pattern, fetch=url ...) */
   subtitle?: string;
-  /** 输出渲染方式 */
-  kind: 'shell' | 'markdown' | 'raw' | 'none';
+  /** subtitle 是否按路径展示 (dir 弱化 + 文件名); 命令/pattern/url 不拆 */
+  subtitleIsPath?: boolean;
+  /** 结果渲染方式 (结构统一三态, 内容按工具功能不同):
+   *  shell=命令+终端输出 | code=原文代码块 (read/list/glob/grep) | markdown=富文本 (fetch/search)
+   *  | write=写入内容 | diff=unified diff 着色 | raw=兜底 | none=无结果 */
+  kind: 'shell' | 'code' | 'markdown' | 'raw' | 'none' | 'write' | 'diff';
   /** shell 命令 */
   command?: string;
 }
@@ -66,27 +93,29 @@ function describe(tool: string, state: any): ToolMeta {
   const input = state?.input || {};
   switch (tool) {
     case 'bash':
-    case 'shell':
-      return { title: 'Shell', command: input.command ?? state?.metadata?.command ?? '', kind: 'shell' };
+    case 'shell': {
+      const command = input.command ?? state?.metadata?.command ?? '';
+      return { title: 'Shell', subtitle: command, subtitleIsPath: false, command, kind: 'shell' };
+    }
     case 'read':
-      return { title: 'Read', subtitle: input.filePath ? basename(input.filePath) : '', kind: 'markdown' };
+      return { title: 'Read', subtitle: input.filePath ? basename(input.filePath) : '', subtitleIsPath: true, kind: 'code' };
     case 'write':
-      return { title: 'Write', subtitle: input.filePath ? basename(input.filePath) : '', kind: 'none' };
+      return { title: 'Write', subtitle: input.filePath ? basename(input.filePath) : '', subtitleIsPath: true, kind: 'write' };
     case 'edit':
     case 'patch':
     case 'apply_patch':
-      return { title: 'Edit', subtitle: input.filePath ? basename(input.filePath) : '', kind: 'none' };
+      return { title: 'Edit', subtitle: input.filePath ? basename(input.filePath) : '', subtitleIsPath: true, kind: 'diff' };
     case 'list':
     case 'ls':
-      return { title: 'List', subtitle: dirname(input.path || '/') || '/', kind: 'markdown' };
+      return { title: 'List', subtitle: dirname(input.path || '/') || '/', subtitleIsPath: true, kind: 'code' };
     case 'glob':
-      return { title: 'Glob', subtitle: dirname(input.path || '/') || '/', kind: 'markdown' };
+      return { title: 'Glob', subtitle: dirname(input.path || '/') || '/', subtitleIsPath: true, kind: 'code' };
     case 'grep':
-      return { title: 'Grep', subtitle: input.pattern ? String(input.pattern) : '', kind: 'markdown' };
+      return { title: 'Grep', subtitle: input.pattern ? String(input.pattern) : '', subtitleIsPath: false, kind: 'code' };
     case 'webfetch':
-      return { title: 'Fetch', subtitle: input.url ? String(input.url) : '', kind: 'markdown' };
+      return { title: 'Fetch', subtitle: input.url ? String(input.url) : '', subtitleIsPath: false, kind: 'markdown' };
     case 'websearch':
-      return { title: 'Search', subtitle: input.query ? String(input.query) : '', kind: 'markdown' };
+      return { title: 'Search', subtitle: input.query ? String(input.query) : '', subtitleIsPath: false, kind: 'markdown' };
     default:
       return { title: tool.charAt(0).toUpperCase() + tool.slice(1), kind: 'raw' };
   }
@@ -154,19 +183,34 @@ function ToolIcon({ tool }: { tool: string }) {
 /**
  * 官方 opencode 工具卡: 无边框触发行 (标题 · 副标题), 完成后才出现 chevron,
  * 点击展开 hairline 内容盒. 运行中 shimmer 不可展开 (Shell 例外).
+ * 统一三态: 开始 (触发行关键输入) / 过程 (运行中实时或执行中) / 结果 (完成后展开);
+ * 内容按工具功能不同 (shell 终端 / code 原文 / markdown / write 内容 / diff).
  */
-export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }) => {
+export const ToolView: React.FC<{ part: any; streaming?: boolean }> = ({ part, streaming }) => {
   const tool: string = part?.tool || 'tool';
   const status: string = part?.state?.status || 'pending';
   const state = part?.state;
 
   const pending = status === 'pending' || status === 'running';
   const isError = status === 'error';
+  /** 中断残留: 只有「当前正在流式的行」(streaming=busy + 最后一条 assistant 消息) 里的
+   *  pending/running 才是真在跑; 旧消息里的 (含新一轮对话时) 都是 run 被中断的残留,
+   *  按「已中断」渲染, 不再转圈. */
+  const interrupted = pending && !streaming;
   const meta = useMemo(() => describe(tool, state), [tool, state]);
 
   const outStr = useMemo(() => pickOutStr(state), [state]);
   const errStr = useMemo(() => pickErrStr(state), [state]);
   const inputStr = useMemo(() => safeStringify(state?.input), [state]);
+
+  // 结果数据: write=写入内容; edit=unified diff patch + 增删行数 (metadata.filediff)
+  const writeText = typeof state?.input?.content === 'string' ? state.input.content : '';
+  const filediff = state?.metadata?.filediff;
+  const diffPatch = typeof filediff?.patch === 'string'
+    ? filediff.patch
+    : (typeof state?.metadata?.diff === 'string' ? state.metadata.diff : '');
+  const diffAdd = typeof filediff?.additions === 'number' ? filediff.additions : 0;
+  const diffDel = typeof filediff?.deletions === 'number' ? filediff.deletions : 0;
 
   // 默认折叠 (含 shell). 错误强制展开.
   const [open, setOpen] = useState(false);
@@ -175,7 +219,7 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
     if (isError && !forceOpenedRef.current) { setOpen(true); forceOpenedRef.current = true; }
   }, [isError]);
 
-  // 可展开: 非运行中 且 有内容
+  // 结果可展开: 有内容
   const shellText = meta.kind === 'shell'
     ? `$ ${meta.command || ''}${outStr ? `\n\n${outStr}` : ''}`
     : '';
@@ -185,29 +229,38 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
       ? !!(meta.command || outStr)
       : meta.kind === 'markdown'
         ? !!outStr
-        : meta.kind === 'raw'
-          ? !!(outStr || inputStr)
-          : false;
+        : meta.kind === 'code'
+          ? !!outStr
+          : meta.kind === 'write'
+            ? !!(writeText || outStr)
+            : meta.kind === 'diff'
+              ? !!(diffPatch || outStr)
+              : meta.kind === 'raw'
+                ? !!(outStr || inputStr)
+                : false;
   // 执行过程可查看: 运行中也允许展开 (shell 命令 + 已累积输出实时可见)
   const canExpand = hasContent;
 
-  const dir = meta.subtitle && meta.subtitle.includes('/') ? dirname(meta.subtitle) : '';
-  const file = meta.subtitle && meta.subtitle.includes('/') ? basename(meta.subtitle) : meta.subtitle;
+  const isPath = meta.subtitleIsPath === true;
+  const dir = isPath && meta.subtitle && meta.subtitle.includes('/') ? dirname(meta.subtitle) : '';
+  const file = isPath && meta.subtitle && meta.subtitle.includes('/') ? basename(meta.subtitle) : meta.subtitle;
+  // shell 展开时结果盒里已有 `$ cmd`, 触发行副标题隐藏避免重复
+  const showSubtitle = !!meta.subtitle && !(meta.kind === 'shell' && open);
 
   return (
-    <div className={`oc-tool${isError ? ' is-error' : ''}${open ? ' is-open' : ''}`}>
+    <div className={`oc-tool${isError ? ' is-error' : ''}${open ? ' is-open' : ''}${interrupted ? ' is-interrupted' : ''}`}>
       <button
         type="button"
-        className={`oc-tool__trigger${canExpand ? '' : ' is-static'}${pending ? ' is-pending' : ''}`}
+        className={`oc-tool__trigger${canExpand ? '' : ' is-static'}${pending && !interrupted ? ' is-pending' : ''}`}
         onClick={() => canExpand && setOpen((v) => !v)}
       >
-        {pending ? (
+        {pending && !interrupted ? (
           <span className="oc-tool__spinner" />
         ) : (
           <ToolIcon tool={tool} />
         )}
         <span className="oc-tool__title">{meta.title}</span>
-        {meta.subtitle && (
+        {showSubtitle && (
           <>
             <span className="oc-tool__sep">·</span>
             <span className="oc-tool__subtitle" title={meta.subtitle}>
@@ -216,10 +269,16 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
             </span>
           </>
         )}
+        {meta.kind === 'diff' && !pending && (diffAdd > 0 || diffDel > 0) && (
+          <span className="oc-tool__diffstat">
+            {diffAdd > 0 && <span className="oc-tool__diffstat-add">+{diffAdd}</span>}
+            {diffDel > 0 && <span className="oc-tool__diffstat-del">-{diffDel}</span>}
+          </span>
+        )}
         {canExpand && <Chevron open={open} />}
       </button>
 
-      {/* 执行过程: 运行中直接在卡片下方显示 (无需展开) */}
+      {/* 执行过程: 运行中直接在卡片下方显示 (无需展开); 中断残留显示「已中断」 */}
       {pending && (
         <div className="oc-tool__process">
           {meta.kind === 'shell' && meta.command && (
@@ -227,6 +286,8 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
           )}
           {outStr ? (
             <pre className="oc-tool__proc-out">{outStr}</pre>
+          ) : interrupted ? (
+            <div className="oc-tool__interrupted">● 已中断</div>
           ) : (
             <div className="oc-tool__pending">● 执行中…</div>
           )}
@@ -241,7 +302,11 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
           </div>
         ) : meta.kind === 'shell' ? (
           <div className="oc-tool__box" dir="ltr">
-            {pending && <div className="oc-tool__pending">● 执行中…</div>}
+            {pending && (
+              interrupted
+                ? <div className="oc-tool__interrupted">● 已中断</div>
+                : <div className="oc-tool__pending">● 执行中…</div>
+            )}
             <CopyGhost text={shellText} />
             <div className="oc-tool__scroll">
               <pre className="oc-tool__pre oc-tool__pre--shell">
@@ -254,6 +319,27 @@ export const ToolView: React.FC<{ part: any; done?: boolean }> = ({ part, done }
             <CopyGhost text={outStr} />
             <div className="oc-tool__scroll">
               <Markdown content={outStr} />
+            </div>
+          </div>
+        ) : meta.kind === 'code' ? (
+          <div className="oc-tool__box" dir="ltr">
+            <CopyGhost text={outStr} />
+            <div className="oc-tool__scroll">
+              <CodeBlock code={outStr} lang={langFromPath(state?.input?.filePath)} />
+            </div>
+          </div>
+        ) : meta.kind === 'write' ? (
+          <div className="oc-tool__box" dir="ltr">
+            <CopyGhost text={writeText || outStr} />
+            <div className="oc-tool__scroll">
+              <CodeBlock code={writeText || outStr} lang={langFromPath(state?.input?.filePath)} />
+            </div>
+          </div>
+        ) : meta.kind === 'diff' ? (
+          <div className="oc-tool__box" dir="ltr">
+            <CopyGhost text={diffPatch || outStr} />
+            <div className="oc-tool__scroll">
+              <CodeBlock code={diffPatch || outStr} lang="diff" />
             </div>
           </div>
         ) : (

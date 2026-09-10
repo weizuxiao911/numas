@@ -1859,6 +1859,14 @@ export const styles = `
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .oc-tool__error .oc-tool__pre { color: var(--ai-danger); padding: 10px 12px; }
+/* edit 触发行 +N/-M 摘要 (diff 本体由 Shiki 高亮) */
+.oc-tool__diffstat {
+  margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--monaco-monospace-font, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px; line-height: 1.5; user-select: none;
+}
+.oc-tool__diffstat-add { color: var(--ai-success, #4ade80); }
+.oc-tool__diffstat-del { color: var(--ai-danger, #fca5a5); }
 .oc-copy-ghost {
   position: absolute; top: 4px; right: 4px; z-index: 2;
   width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
@@ -1918,6 +1926,11 @@ export const styles = `
    运行中 = .oc-tool__spinner + 触发行 is-pending (标题 shimmer)
    完成/出错 = .oc-tool__indicator 图标; 出错时标题变红 */
 .oc-sub.is-error .oc-tool__title { color: var(--ai-danger); }
+/* 中断残留 (旧消息里的 pending/running): 静态弱灰, 不转圈 */
+.oc-sub__interrupted {
+  margin-left: auto; flex-shrink: 0; user-select: none;
+  font-size: 11.5px; line-height: 1.5; color: var(--ai-fg-muted); font-style: italic;
+}
 
 /* ---------- 附件 ---------- */
 .oc-att { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -2210,6 +2223,13 @@ export const styles = `
 }
 .oc-tool__pending::before { content: ''; width: 8px; height: 8px; border-radius: 50%;
   background: var(--ai-accent, #2563eb); animation: oc-tool-pulse 1.2s ease-in-out infinite; }
+/* 中断残留 (会话已结束但 part 仍 pending/running): 静态弱灰, 不转圈不闪 */
+.oc-tool__interrupted {
+  padding: 6px 12px; font-size: 11.5px; color: var(--ai-fg-muted, #8f8f8f);
+  display: flex; align-items: center; gap: 6px; font-style: italic;
+}
+.oc-tool__interrupted::before { content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ai-fg-muted, #8f8f8f); opacity: .5; }
 @keyframes oc-tool-pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
 
 
