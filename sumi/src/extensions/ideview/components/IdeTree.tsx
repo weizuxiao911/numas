@@ -63,7 +63,10 @@ const TreeRow: React.FC<{ node: Node; depth: number; fs: IFileServiceClient; edi
 
   const openFile = React.useCallback(() => {
     if (node.isDir) return;
-    try { void editor.open(URI.parse(node.uri)); } catch (e) { console.warn('[idev] open fail', e); }
+    // 单文件替换: 先全部关闭再打开当前文件 (无 tab 累积)
+    try {
+      void editor.closeAll().then(() => editor.open(URI.parse(node.uri)));
+    } catch (e) { console.warn('[idev] open fail', e); }
   }, [node, editor]);
 
   return (

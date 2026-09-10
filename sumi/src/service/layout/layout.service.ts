@@ -24,8 +24,8 @@ const DEFAULT_SIDEBAR_W = 320;
 const MIN_SIDEBAR_W = 200;
 const MAX_SIDEBAR_W = 480;
 const MIN_DRAWER_W = 120;
-/** drawer 打开时宽度 = viewport 50% */
-const DRAWER_RATIO = 0.5;
+/** drawer 打开时宽度 = viewport 65% */
+const DRAWER_RATIO = 0.65;
 
 function viewportRatioWidth(): number {
   return Math.round(window.innerWidth * DRAWER_RATIO);

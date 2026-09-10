@@ -237,6 +237,9 @@ body.vs,
   .app-solo__sidebar {
     background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
   }
+  .app-solo__drawer {
+    background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
+  }
   .app-solo__center {
     background: var(--editor-background, #ffffff) !important;
   }

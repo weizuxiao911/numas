@@ -32,6 +32,7 @@ const styles = `
 .idev-tree__loading { opacity: .5; }
 .idev-tree__empty, .idev-tree__err { padding: 14px 12px; font-size: 12px; opacity: .65; }
 .idev__editor { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.idev__editor [class*='kt_editor_tabs'] { display: none; }
 .idev__editor > * { flex: 1; min-width: 0; }
 `;
 
