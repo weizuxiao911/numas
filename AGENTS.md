@@ -770,3 +770,11 @@ AI **仍需 `question`**:
 - **现象**: Playwright 长寿命测试 tab 实测启动 3.2s (spinner 到 app 挂载), 误判为代码/门控引入延迟; 同一 URL 用全新 context 实测仅 394ms.
 - **根因**: 反复 reload/交互的旧 tab 累积状态 (缓存、worker、扩展宿主、节流) 拖慢后续加载; 另外 `page.route` 拦截忘摘会人为注入延迟 (本次曾残留一个 `setTimeout(3000)` 的 metadata route, 导致 metadata 请求 `duration=3007ms`).
 - **解决方案/排查方法**: ① 判断启动耗时用**全新 browser context** (`browser.newContext()` + `newPage()`) 对照, 不拿旧 tab 数据下结论; ② 排查"某请求慢"先看 `performance.getEntriesByType('resource')` 的 `start/duration` — `duration` 异常整 (如 3007ms) 多为测试 route/timer 残留; ③ 测试完 `page.unroute()` 或关 tab, 避免污染后续验证; ④ 代码侧正常路径延迟只看真实依赖 (本次 metadata 2ms / /path 1ms, 门控无回归).
+
+#### 44. 切换项目 (workdir) 后 chatbot 的 agents/skills 仍是旧项目的: 实例按目录缓存, 需显式 `POST /instance/reload`
+
+- **现象**: 切换项目后 chatbot 的 agent/model/skill 列表仍是旧项目的; 手动点设置里的「重新加载」后才刷新.
+- **根因**: opencode 实例按 directory 惰性创建并缓存 (`InstanceStore` 的 `cache`, key=realpath directory); UI 的 agents/skills/models/providers 只在 mount / `runtime-ready` / `instance.reloaded` 时拉取 (`loadConfig`). 切 workdir 只更新每请求的 `x-opencode-directory` header, 不触发任何配置刷新.
+- **解决方案**: `chatbot.setProject` 里 `state.setWorkdir(dir)` 后自动 `POST /instance/reload` (等同设置里「重新加载」: 服务端 `InstanceStore.reload` dispose + 重建实例, 重读 `.opencode/agent|skill` / `opencode.json` / `~/.config/opencode`), 完成后 `instance.reloaded` 事件驱动 `loadConfig()` 刷新 agents/skills/models/providers. 先 await POST 保证服务端已替换实例, 后续 listSessions 命中重载后的新实例.
+- **改动文件**: `sumi/src/extensions/solo/chatbot/webview/ChatbotView.tsx` (`setProject`).
+- **排查方法**: 切项目后配置不刷新 → 用 fetch spy 看是否发出 `/instance/reload` (header 应为新目录); 服务端 reload 逻辑在 `opencode/packages/opencode/src/project/instance-store.ts` 的 `reload` (替换 cache entry + `emitReloaded`).
