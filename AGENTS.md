@@ -834,3 +834,10 @@ AI **仍需 `question`**:
 - **坑 2 (前端配置丢失)**: 注入到 `index.html` 的 `__APP_CONFIG__.domainProxy` 被 `sumi/src/config/app.ts:buildAppConfig()` **重建丢弃** (只列已知字段) → 前端读不到. 修法: `AppConfig` 加 `domainProxy?: string` + `buildAppConfig` 显式透传.
 - **改动文件**: `opencode/packages/opencode/src/ports/ports-domain-proxy.ts` (Host 解析 + auth + isKnown + HTTP/WS 反代), `ports-route.ts` (factory + addGlobalMiddleware), `cli/network.ts` (--domain-proxy), `server/server.ts` + `routes/instance/httpapi/server.ts` (参数透传), `server/shared/ui.ts` (注入 __APP_CONFIG__), `sumi/src/config/app.ts` + `service/ports/ports.service.ts:proxyUrl` + `extensions/browser/browser.service.ts:normalizeUrl/deproxyUrl` (子域形态互转).
 - **验证方法**: ① `curl -H "Host: 8123.localhost" http://127.0.0.1:24099/` → 命中代理 (200 + 目标内容); 未知端口 → 404 `not known`; 普通 Host → 仍走 UI; ② `curl http://127.0.0.1:24099/ | grep __APP_CONFIG__` 看注入; ③ 前端 DI 探针: React fiber (`document.querySelector('codeblitz-root')['__reactFiber$…']` 向上找 `memoizedProps.app.injector`) → `inj.get(PortsServiceImpl token).proxyUrl(8123)` 应返 `http://8123.localhost/`.
+
+#### 49. 大 PDF (30MB+) 加载: webview 自己 fetch 裸字节, 不要 host 读 + postMessage
+
+- **现象**: pdf vsix 首版由 host 读整文件 (`vscode.workspace.fs.readFile` → 失败则 `/file/content` base64 JSON) 再 `postMessage({bytes})` 给 webview → 30MB 文件时结构化克隆卡主线程, base64 路径峰值内存 ~100MB+ (atob + 逐字节循环).
+- **正解 (对齐 deff9df 旧实现 + 在树 fs provider)**: host 只算**相对路径 + x-opencode-directory** 注入 shell HTML; webview 自己 `fetch('/api/fs/read/<rel>', {headers})` → `arrayBuffer()` 裸字节 → pdf.js 直接吃 (typed array transfer 进 worker, 无额外拷贝). 渲染用骨架 (全量 div 定尺寸) + 可见页 ±5 懒加载 canvas (300 页大书只有几个 canvas).
+- **ext host 陷阱**: `__APP_CONFIG__` / `__APP_OPENCODE_RUNTIME__` 在 ext host 里**拿不到** (同 §4.2 #48 坑 2); registry 基址在 webview 侧读 `window.parent.__APP_CONFIG__`, API 地址用**同源相对 URL** (dev 走 webpack proxy, 生产同源).
+- **排查方法**: 大文件卡顿先看数据流有几份拷贝 (host 读/克隆/slice/worker); `bytes.slice(0)` 这类防御性拷贝在确认不复用后要删; 验证用真实大文件 (如 29M 教材 PDF: 274 页, 加载后 canvas opacity=1).
