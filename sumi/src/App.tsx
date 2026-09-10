@@ -96,7 +96,7 @@ const MODES: Record<AppMode, { layout: any; panels: any }> = {
   ide: IDE_MODE,
 };
 
-const LAYOUTS: Record<AppMode, React.ComponentType> = {
+const LAYOUTS: Record<AppMode, React.FC> = {
   solo: SoloLayout,
   ide: IdeLayout,
 };

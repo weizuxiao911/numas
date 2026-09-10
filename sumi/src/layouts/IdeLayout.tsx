@@ -79,10 +79,12 @@ const styles = `
   margin-bottom: calc(var(--resizer-w) / -2) !important;
 }
 .app-ide [class*="resize-handle-vertical"]::before { top: calc(var(--resizer-w) / 2) !important; }
-/* 主体: [SplitPanel (左栏+中区)] + [右栏 chatbot] 横向排列, 右栏宽度可折叠过渡 */
+/* 主体: [SplitPanel (左栏+中区)] + [右栏 chatbot] 横向排列, 右栏宽度可折叠过渡.
+   BoxPanel 的 wrapper (CSS-module 类名) 默认 min-height:auto, 内容 (长会话) 会把它撑出视口 → 必须允许收缩 */
+.app-ide [class*="box-panel"] > [class*="wrapper"] { min-height: 0; }
 .app-ide__body { display: flex; flex-direction: row; height: 100%; flex: 1 1 auto; min-height: 0; min-width: 0; }
 .app-ide__right {
-  flex: 0 0 450px; width: 450px; min-width: 0;
+  flex: 0 0 450px; width: 450px; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
   border-left: 1px solid var(--editor-border);
   background: var(--editor-background);
@@ -90,7 +92,13 @@ const styles = `
   transition: flex-basis 260ms cubic-bezier(0.22, 1, 0.36, 1), width 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .app-ide__right.is-collapsed { flex-basis: 0; width: 0; border-left: none; }
-.app-ide__right > *:not(.app-ide__chat-topbar) { flex: 1 1 auto; min-height: 0; min-width: 0; }
+/* SlotRenderer 的 wrapper 默认 block, 会让内部 chatbot 的 flex 高度失效 (内容撑高顶出 composer);
+   这里把它变成受约束的 flex 列容器. 注意排除 topbar 内的 <style> 标签 (否则会被当 flex 项占高) */
+.app-ide__right > *:not(.app-ide__chat-topbar):not(style) {
+  flex: 1 1 auto; min-height: 0; min-width: 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
 /* 主题用 unlayered !important 定义背景/阴影, 必须放进 @layer 的 !important 才能盖过 */
 @layer numas-override {
   /* 去掉所有阴影 (flat 布局) */

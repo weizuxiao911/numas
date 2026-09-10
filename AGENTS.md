@@ -794,3 +794,25 @@ AI **仍需 `question`**:
 - **根因**: tabbar 面板宽度由 `@opensumi/ide-main-layout` 的 `panel.view.js` 决定: `tabbarService.updatePanelSize(appConfig.panelSizes?.[side] || panelSize || 335)` — **未配 panelSizes 时兜底 panelSize=335** → left 总宽 = 335 + 48 (activity bar) = 383. `SlotRenderer.defaultSize` 只对非 tabbar 的 SplitPanel 直接子节点 (或自绘列) 生效; tabbar 槽位 (left/right 等 isTabbar) 读 app 侧配置.
 - **解决方案**: 面板初始宽度写 `App.tsx` appConfig: `panelSizes: { [SlotLocation.left]: 278, [SlotLocation.right]: 450 }` (值 = 面板宽, 不含 activity bar); 拖拽下限写 `IdeLayout.tsx` 对应 `SlotRenderer` 的 `minResize` (如 left 204). 持久化的 layout 状态 (`localStorage layout` / `global:/layout-global` 的 size) 会覆盖初始值, 属预期 (用户拖过就以拖过为准).
 - **排查方法**: 面板宽度不符合预期 → 先看 `appConfig.panelSizes` 有没有该 slot (没有则兜底 335+bar), 再看持久化 layout size 是否覆盖; 别在 React 布局组件里改 defaultSize (对 tabbar 无效).
+
+#### 47. 自定义布局嵌 SlotRenderer + 长内容: BoxPanel wrapper `min-height:auto` + wrapper 是 block → 内容撑破视口 (composer 被顶出屏幕)
+
+- **现象**: IDE 右栏 chatbot 发一次消息后, 输入框 (composer) 被推到视口外 (y 829 > viewport 810), 整个右栏/body 高度被撑到 3000+px; 消息列表不内部滚动而是随内容无限增高.
+- **根因 (三层叠加)**:
+  1. **BoxPanel wrapper `min-height: auto`**: `.app-ide` 作为 BoxPanel 子组件, BoxPanel 给每个子元素套一层 wrapper (CSS-module 类名 `wrapper___hash`, **不是字面 `.wrapper`**), 默认 `min-height: auto` → 长内容把它撑高 (3214 > box-panel 810), flex 收缩失效.
+  2. **SlotRenderer 的 `.resize-wrapper` 是 block**: 右栏里 `<SlotRenderer>` 渲染的 wrapper 是 `display: block`, 内部 chatbot 的 `flex: 1 1 0%` 失去 flex 上下文 → 高度 = 内容高度, 不被容器约束.
+  3. **`> *` 通配把 `<style>` 当 flex 项**: 用 `.app-ide__right > *:not(.app-ide__chat-topbar)` 约束时, topbar 组件渲染的 `<style>{styles}</style>` 也是直接子元素, 被赋 `flex: 1 1 auto` 占了 451px.
+- **解决方案** (`sumi/src/layouts/IdeLayout.tsx`):
+  ```css
+  .app-ide [class*="box-panel"] > [class*="wrapper"] { min-height: 0; }
+  .app-ide__right { min-height: 0; }
+  .app-ide__right > *:not(.app-ide__chat-topbar):not(style) {
+    flex: 1 1 auto; min-height: 0; min-width: 0;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  ```
+  验证: 发送消息后 chatbot 稳定 726px, composer y=741 不动, `.chat__messages` h=586 / scrollHeight 3465 内部滚动.
+- **排查方法**:
+  1. 量整条链每层 `{h, flex, minHeight, height, overflow}`: `.app-chatbot` → `.resize-wrapper` → `.app-ide__right` → `.app-ide__body` → BoxPanel wrapper → box-panel; **哪层 h 超出容器高度, 就是那层缺 `min-height: 0` / 缺 flex 上下文**.
+  2. CSS-module 类名带 `___hash` 后缀, 字面 `.wrapper` 选择器匹配不到 → 用 `[class*="wrapper"]` 属性选择器.
+  3. 用 `> *` 通配子元素时必须排除 React 组件内联的 `<style>`/`<script>` (`:not(style)`), 否则它们会被当 flex 项占位.
