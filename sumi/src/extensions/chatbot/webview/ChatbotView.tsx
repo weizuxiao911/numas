@@ -2000,10 +2000,9 @@ export const ChatbotView: React.FC = () => {
 
       {ready && (
         <div className="chat__composer">
-          {/* 子代理会话: 只读查看执行过程, 不可发送; 提供返回主会话 */}
+          {/* 子代理会话: 只读查看执行过程; 仅一个「返回」按钮 */}
           {stackLen > 0 && (
             <div className="chat__sub-back">
-              <span className="chat__sub-back-txt">子代理会话（只读查看执行过程）</span>
               <button type="button" className="chat__sub-back-btn" onClick={() => leaveSubSession()}>
                 ← 返回
               </button>

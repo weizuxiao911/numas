@@ -2173,14 +2173,10 @@ export const styles = `
 .oc-msg__user-foot .oc-msg__actions { margin-top: 0; }
 
 
-/* 子代理会话只读条 */
+/* 子代理会话只读态: 仅一个「返回」按钮 (无文案条) */
 .chat__sub-back {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  margin: 4px 0 8px; padding: 10px 12px;
-  background: color-mix(in srgb, var(--ai-fg) 6%, var(--ai-bg-elev, #fff));
-  border: 1px solid var(--ai-border, rgba(0,0,0,.1));
-  border-radius: 10px;
-  color: var(--ai-fg-muted, #8f8f8f); font-size: 13px;
+  display: flex; align-items: center;
+  margin: 4px 0 8px;
 }
 .chat__sub-back-btn {
   flex-shrink: 0; padding: 5px 12px; border-radius: 6px;
