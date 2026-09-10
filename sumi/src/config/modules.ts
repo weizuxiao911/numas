@@ -28,7 +28,7 @@ import { SidebarModule } from '../extensions/sidebar';
 import { ActionModule } from '../extensions/action';
 import { ChatbotModule } from '../extensions/chatbot';
 import { UserModule } from '../extensions/user';
-import { IdeViewModule } from '../extensions/ideview'; // SPIKE 验证用 (抽屉内 FileTree+EditorView), 验证后可移除
+import { DrawerExplorerModule } from '../extensions/drawer-explorer';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
   return [
@@ -52,7 +52,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     ActionModule,          // 顶部工具栏 (action 槽)
     ChatbotModule,         // 对话主区 (main 槽)
     UserModule,            // sidebar 底部左: 用户信息 (user slot)
-    IdeViewModule,         // SPIKE: 抽屉内 FileTree + EditorView
+    DrawerExplorerModule,  // 抽屉: 官方 explorer (FileTree)
 
     // 自定义 file scheme provider (覆盖 codeblitz 默认 DiskFileSystemProvider)
     FsProviderModule,

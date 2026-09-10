@@ -72,8 +72,8 @@ export const styles = `
      用 editorWidget-background (浅色主题 = #fff, 深色 = 深弹层色), 明暗自适应 */
   background: var(--editorWidget-background, var(--ai-bg));
   color: var(--ai-fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-  font-size: 13px;
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif);
+  font-size: var(--ai-font-size, var(--editor-font-size, 13px));
   overflow: hidden;
 }
 
