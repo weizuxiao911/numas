@@ -185,6 +185,10 @@ export const App: React.FC = () => {
 
   return (
     <AppRenderer
+      // key=mode: 模式切换时卸载旧 ClientApp (cleanup → app.destroy()) 并重建 —
+      // createApp 只在挂载时执行一次, 换 key 才能让新 mode 的 layoutComponent/layoutConfig
+      // 生效, 无需整页 reload.
+      key={mode}
       appConfig={appConfig}
       runtimeConfig={(runtimeConfig ?? {}) as any}
       onLoad={verifyExtensionOnLoad}

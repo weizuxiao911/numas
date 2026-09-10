@@ -5,6 +5,17 @@
  * 主题色: 全部走 codeblitz/opensumi token, 不硬编码颜色
  * 折叠/展开动效: sidebar 跟 resizer 都加 transition: width, 平滑向左折
  */
+
+/* SOLO/IDE 模式切换: 新布局 (AppRenderer key 重建) 淡入, 柔和过渡不突兀 */
+@keyframes numas-mode-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.app-solo,
+.app-ide {
+  animation: numas-mode-fade-in 260ms ease-out;
+}
+
 .app-solo {
   --resizer-w: 6px;
   /* sidebar 折叠动效: cubic-bezier 让"折"的动作自然, 跟 macOS 风格一致 */

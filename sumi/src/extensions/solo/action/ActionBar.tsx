@@ -59,8 +59,8 @@ const ModeSwitch: React.FC = () => {
       className="app-action__mode"
       title={`当前 ${isSolo ? 'Solo' : 'IDE'} 模式, 点击切换到 ${otherLabel}`}
       onClick={() => {
+        // 不整页 reload: AppRenderer key={mode} 变化 → 旧 ClientApp destroy + 新实例重建
         setAppMode(otherMode);
-        setTimeout(() => window.location.reload(), 50);
       }}
     >
       <span className="app-action__mode-label">{isSolo ? 'SOLO' : 'IDE'}</span>
