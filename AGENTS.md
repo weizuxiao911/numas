@@ -696,3 +696,14 @@ AI **仍需 `question`**:
   1. **「可见的 playwright 浏览器被人工点击」**: 自动化验证时用户可能直接点可见浏览器窗口, 造成"dock 自动提交"误判. 用受控实验区分: 注入 fetch spy 记录 `new Error().stack` (确认调用来自 `QuestionDock.submitAll` 还是未知路径), 或只观察不点击 15s+ 看 dock 是否自行消失.
   2. **「reject 后 task 变 error 不是悬挂」**: `question.reject` → `Deferred.fail(RejectedError)` → question 工具 die → 子代理 tool error → task 工具按 `findLast(tool error)` 判失败. 这是服务端既有语义 (非 UI bug), 关键是 pending 清空且父会话回到 idle.
   3. **「事件顺序」**: `question.asked` 一定在对应 tool part `message.part.updated` 之后 (processor 先更新 tool running 再 execute); 内联/投影方案按 `tool.messageID` 关联 message 行, dock 方案直接按 sessionID 找 store, 不依赖顺序.
+
+#### 35. 浅色主题下 `--ai-accent` 解析为白色/半透明 → 用它做的状态指示不可见 (空 DOM 观感)
+
+- **现象**: 子代理卡片运行态用自绘「三个空 span 小点 + `background: var(--ai-accent)`」+ 行尾「运行中」文字 `color: var(--ai-accent)`. 浅色主题 (`design-light`) 下用户看到指示器区域"DOM 是空的"——实为 `--ai-accent: var(--button-background, #6366f1)` 在该主题解析成 `#ffffff` / `rgba(255,255,255,.08)`, 白点白底/白字白底完全不可见.
+- **根因**: `--ai-accent` 是"按钮背景色"语义, 可能是半透明白 (styles.ts 顶部 `--ai-neon` 注释早已记录该风险); 直接当**前景色/小图形填充**用, 明主题下丢失对比度. 空 span + CSS 背景的点阵形态也让排查时 DOM 看起来"空".
+- **解决方案 (用户拍板)**: 状态表现**复用 shell 工具卡 (ToolView) 的既有组件**, 不另起一套:
+  - 运行中 → `<span className="oc-tool__spinner" />` + 触发行加 `is-pending` (标题 shimmer)
+  - 完成/出错 → `<span className="oc-tool__indicator">` + 图标; 出错由容器类 (`.oc-sub.is-error .oc-tool__title`) 把标题变红
+  - 删除自绘 `.oc-sub__dots`/`.oc-sub__indicator`/`.oc-sub__status` 与 accent 前景色
+- **改动文件**: `sumi/src/extensions/chatbot/webview/parts/SubAgentCard.tsx` + `styles.ts`.
+- **排查方法**: ① 状态指示"看不见"先查 `getComputedStyle` 的实际颜色 + 当前主题 (`document.documentElement.className` 含 `design-light`/`design-dark`); ② 不要用 `--ai-accent` 做前景/填充, 前景用 `--ai-fg`/`--ai-fg-muted`/`--ai-danger`, 强调光效才用 `--ai-neon`; ③ 同类状态优先复用 `.oc-tool__spinner` / `.oc-tool__indicator` 保持全站一致.
