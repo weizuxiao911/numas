@@ -987,12 +987,9 @@ export const ChatbotView: React.FC = () => {
   );
   const currentModelLabel = useMemo(() => {
     if (!selectedModel) return '';
-    const name = selectedModel.name || selectedModel.id || '';
-    const provider = providers.find((p: any) => p.id === selectedModel.providerID)?.name
-      || selectedModel.providerName
-      || selectedModel.providerID;
-    return provider ? `${name} · ${provider}` : name;
-  }, [selectedModel, providers]);
+    // 只显示模型名, 不拼接服务商 (同名模型跨 provider 时服务商信息在 ModelPicker 里看)
+    return selectedModel.name || selectedModel.id || '';
+  }, [selectedModel]);
 
   // 构造用户消息展示文本 (拼上下文笔记/附件清单)
   const buildFullText = useCallback((t: string, files: Array<{ path: string }>, ctx: ChatContextItem[]) => {
