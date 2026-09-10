@@ -1,7 +1,7 @@
 {
   "name": "pdf",
   "displayName": "PDF Viewer",
-  "description": "PDF 阅读器 (vscode 自定义编辑器 + pdf.js 流式分页渲染, 通过 CDN 加载 PDF.js 不打包 3MB lib)",
+  "description": "PDF 阅读器 (vscode 自定义编辑器 + pdf.js 渲染; pdfjs 静态资源随 vsix 打包, 不依赖 CDN)",
   "version": "0.1.0",
   "publisher": "numas",
   "engines": {
@@ -55,8 +55,14 @@
     "build": "npm run clean && npm run compile:bundle",
     "package": "npm run build && node scripts/package.js"
   },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
   "devDependencies": {
     "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
     "@types/vscode": "^1.75.0",
     "esbuild": "^0.24.0",
     "typescript": "^5.5.4"

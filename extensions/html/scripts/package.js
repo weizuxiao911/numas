@@ -9,6 +9,7 @@
 const fs = require('fs')
 const path = require('path')
 const AdmZip = require('../../../registry/node_modules/adm-zip')
+const { copyVsixToHome } = require('../../scripts/copy-vsix-to-home')
 
 const ROOT = path.resolve(__dirname, '..')
 const SRC_DIST = path.join(ROOT, 'dist')           // 源 dist
@@ -60,3 +61,4 @@ zip.writeZip(OUT)
 fs.rmSync(STAGE, { recursive: true, force: true })
 
 console.log('[html] packaged:', OUT, '(' + (fs.statSync(OUT).size / 1024).toFixed(1) + ' KB)')
+copyVsixToHome(OUT, 'html')
