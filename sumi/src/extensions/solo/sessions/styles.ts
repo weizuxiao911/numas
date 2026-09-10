@@ -33,7 +33,7 @@ export const styles = `
   height: 36px;
   padding: 0 12px;
   margin: 0 auto;
-  background: transparent;
+  background: var(--ai-hover);
   color: var(--ai-fg-muted);
   border: 0;
   border-radius: 9px;
