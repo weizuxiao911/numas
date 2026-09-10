@@ -479,7 +479,7 @@ export const styles = `
   width: 100%; resize: none;
   background: transparent; border: none; outline: none;
   color: var(--ai-fg);
-  font-family: inherit; font-size: 16px; line-height: 1.55;
+  font-family: inherit; font-size: 14px; line-height: 1.55;
   padding: 10px 4px 10px; min-height: 56px; max-height: 220px;
   overflow-y: auto; display: block;
 }
@@ -1881,8 +1881,12 @@ export const styles = `
   cursor: pointer; color: var(--ai-fg-muted); font-family: inherit; font-size: 12.5px;
 }
 .oc-reason__trigger:hover { color: var(--ai-fg); }
-.oc-reason__caret { display: inline-flex; margin-left: 2px; color: var(--ai-fg-muted); transition: transform .15s ease-out; }
-.oc-reason__caret.is-open { transform: rotate(180deg); }
+.oc-reason__icon { display: inline-flex; align-items: center; color: var(--ai-fg-muted); }
+.oc-reason__caret {
+  display: inline-flex; align-items: center; margin-left: 2px; color: var(--ai-fg-muted);
+  transition: transform .15s ease-out; transform: rotate(-90deg);
+}
+.oc-reason__caret.is-open { transform: rotate(0); }
 .oc-reason__body {
   margin: 4px 0 6px; padding-left: 4px;
   border-left: 2px solid var(--ai-hairline); padding-left: 10px;
