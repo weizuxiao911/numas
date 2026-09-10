@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { modelPrefs } from '@/extensions/chatbot/commands/modelPrefs';
+import { modelPrefs } from '@/extensions/chat/commands/modelPrefs';
 import {
   aiConnectProvider,
   aiListProviders,
   type ProviderInfo,
-} from '@/extensions/chatbot/commands/api';
+} from '@/extensions/chat/commands/api';
 
 interface ModelInfo {
   id: string;

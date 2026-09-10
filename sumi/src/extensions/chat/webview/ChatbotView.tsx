@@ -25,8 +25,8 @@ import {
   aiRevertMessage,
   isAiReady,
   opencodeFetch,
-} from '@/extensions/chatbot/commands/api';
-import { modelPrefs } from '@/extensions/chatbot/commands/modelPrefs';
+} from '@/extensions/chat/commands/api';
+import { modelPrefs } from '@/extensions/chat/commands/modelPrefs';
 import { getWorkspace, subscribeWorkspace } from '@/infra/url';
 import { onEvent } from '@/service/event/eventBus';
 import { PartRenderer } from './parts/PartRenderer';

@@ -17,7 +17,7 @@ import {
   aiListModels,
   aiListProviders,
   aiListSkills,
-} from '@/extensions/chatbot/commands/api';
+} from '@/extensions/chat/commands/api';
 import { HIDDEN_AGENTS } from '../helpers';
 
 export function useChatConfig(ready: boolean) {

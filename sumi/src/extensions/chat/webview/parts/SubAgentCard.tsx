@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 import { onEvent } from '@/service/event/eventBus';
-import { aiListMessages } from '@/extensions/chatbot/commands/api';
+import { aiListMessages } from '@/extensions/chat/commands/api';
 import { MessageRow } from '../components/MessageRow';
 
 /**
