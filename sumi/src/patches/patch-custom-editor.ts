@@ -170,12 +170,15 @@ export function installCustomEditorPatch(): void {
              const tabStillExists = !!document.querySelector(
                `[data-uri="${escapedUri}"]`,
              );
-             if (tabStillExists) {
-               // 切走了, 隐藏 (切回时复用)
-               (this as any).__paperHide(key);
+            if (tabStillExists) {
+              // 切走了, 隐藏 (切回时复用)
+              (this as any).__paperHide(key);
               } else {
-                // tab 消失可能只是编辑区容器重挂载的中间态: 延迟复查,
-                // 仍在消失 + 容器在 才真卸载 (避免误杀 webview 导致切回空白)
+                // tab 消失: 先立即隐藏对应 editor dom (视觉与 tab 同步消失),
+                // 隐藏可逆 (__paperTryMount 会 re-show), 中间态误隐藏也无害.
+                (this as any).__paperHide(key);
+                // 再延迟复查是否真关闭: 仍在消失 + 容器在 才真卸载
+                // (避免中间态误杀 webview 导致切回空白)
                 setTimeout(() => {
                   const stillGone = !document.querySelector(`[data-uri="${escapedUri}"]`);
                   if (stillGone && document.getElementById('workbench-editor')) {
