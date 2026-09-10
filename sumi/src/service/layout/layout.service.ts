@@ -24,21 +24,23 @@ const DEFAULT_SIDEBAR_W = 320;
 const MIN_SIDEBAR_W = 200;
 const MAX_SIDEBAR_W = 480;
 const MIN_DRAWER_W = 120;
-/** drawer 打开时宽度 = viewport 65% */
-const DRAWER_RATIO = 0.65;
+/** drawer 打开时宽度 = viewport 70% */
+const DRAWER_RATIO = 0.7;
+/** sidebar 默认宽度 = viewport 25% */
+const SIDEBAR_RATIO = 0.25;
 
-function viewportRatioWidth(): number {
-  return Math.round(window.innerWidth * DRAWER_RATIO);
+function viewportRatioWidth(ratio: number = DRAWER_RATIO): number {
+  return Math.round(window.innerWidth * ratio);
 }
 
 @Injectable()
 export class LayoutServiceImpl implements ILayoutService {
   private _state: LayoutState = {
-    sidebar: { collapsed: false, width: DEFAULT_SIDEBAR_W },
+    sidebar: { collapsed: false, width: viewportRatioWidth(SIDEBAR_RATIO) },
     drawer: { open: false, width: 0 },
   };
   /** 折叠时记住展开态宽度, 展开时恢复 */
-  private expandedSidebarW = DEFAULT_SIDEBAR_W;
+  private expandedSidebarW = viewportRatioWidth(SIDEBAR_RATIO);
   private listeners = new Set<(s: LayoutState) => void>();
 
   get state(): LayoutState {
