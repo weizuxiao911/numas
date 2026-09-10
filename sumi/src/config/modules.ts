@@ -25,12 +25,10 @@ import { SessionModule } from '../service/session';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
-import { SideTopbarModule, SessionsModule } from '../extensions/sidebar';
-import { ActionModule } from '../extensions/main';
-import { ChatbotModule } from '../extensions/chatbot';
-import { AsideTopbarModule } from '../extensions/aside';
+import { SideTopbarModule, SessionsModule, ActionModule, AsideTopbarModule } from '../extensions/solo';
+import { ChatbotModule } from '../extensions/chat';
 import { ContextModule } from '../extensions/context';
-import { FilesModule } from '../extensions/files';
+import { FilesModule } from '../extensions/file';
 import { WorkspaceModule } from '../extensions/workspace';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
