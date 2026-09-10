@@ -2390,7 +2390,7 @@ export const ChatbotView: React.FC = () => {
                 <button
                   data-ai-pop="settings"
                   type="button"
-                  className="chat__bar-btn"
+                  className="chat__bar-btn chat__bar-icon"
                   title="设置"
                   onClick={() => { setShowSettings((v) => !v); setShowAgents(false); setShowModels(false); }}
                 >

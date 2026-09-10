@@ -677,6 +677,12 @@ export const styles = `
   color: var(--ai-fg);
 }
 .chat__bar-plus { width: 28px; padding: 0; justify-content: center; }
+/* 纯图标按钮 (设置等): 固定 28x28, 不参与 flex 收缩/挤压 */
+.chat__bar-icon {
+  width: 28px; height: 28px; padding: 0;
+  justify-content: center;
+  flex: 0 0 auto;
+}
 .chat__spark { color: var(--ai-accent); }
 .chat__send {
   width: 32px; height: 32px; border-radius: 10px;
