@@ -1914,20 +1914,10 @@ export const styles = `
 
 /* ---------- 子 Agent task 行 ---------- */
 .oc-sub { width: 100%; min-width: 0; margin: 2px 0; }
-.oc-sub__indicator {
-  flex-shrink: 0; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center;
-  color: var(--ai-accent);
-}
-.oc-sub__indicator.is-error { color: var(--ai-danger); }
-.oc-sub__indicator.is-completed { color: var(--ai-fg-muted); }
-.oc-sub__dots { display: inline-flex; gap: 2.5px; align-items: center; }
-.oc-sub__dots span {
-  width: 3.5px; height: 3.5px; border-radius: 50%; background: var(--ai-accent);
-  animation: oc-sub-pulse 1.1s infinite ease-in-out;
-}
-.oc-sub__dots span:nth-child(2) { animation-delay: .15s; }
-.oc-sub__dots span:nth-child(3) { animation-delay: .3s; }
-@keyframes oc-sub-pulse { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+/* 状态表现与 shell 工具卡 (ToolView) 完全一致:
+   运行中 = .oc-tool__spinner + 触发行 is-pending (标题 shimmer)
+   完成/出错 = .oc-tool__indicator 图标; 出错时标题变红 */
+.oc-sub.is-error .oc-tool__title { color: var(--ai-danger); }
 
 /* ---------- 附件 ---------- */
 .oc-att { display: flex; flex-wrap: wrap; gap: 8px; }

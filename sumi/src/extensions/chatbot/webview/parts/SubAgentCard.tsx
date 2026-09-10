@@ -5,7 +5,9 @@ import { onEvent } from '@/service/event/eventBus';
 
 /**
  * 子 Agent 委派 (对齐官方 task-tool):
- *  - 无框触发行: 左 agent 色状态指示器 (运行=三点脉冲, 完成=subagent 图标, 失败=红 !)
+ *  - 无框触发行: 状态表现与 shell 工具卡 (ToolView) 完全一致 —
+ *    运行中 = .oc-tool__spinner + is-pending (标题 shimmer); 完成 = .oc-tool__indicator 图标;
+ *    出错 = 图标 + 标题变红 (oc-sub.is-error .oc-tool__title)
  *  - 标题=专家名 (首字母大写), 副标题=任务描述 (单行截断), 后台任务加 (background)
  *  - 有输出且完成 → chevron 可展开 hairline 盒
  *  - 子代理会话的 pending question/permission 由主会话 dock 提升展示 (session-request-tree),
@@ -84,19 +86,17 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
     <div className={`oc-sub is-${status}${open ? ' is-open' : ''}`}>
       <button
         type="button"
-        className={`oc-tool__trigger oc-sub__trigger${subSessionId ? ' is-clickable' : canExpand ? '' : ' is-static'}`}
+        className={`oc-tool__trigger oc-sub__trigger${subSessionId ? ' is-clickable' : canExpand ? '' : ' is-static'}${running ? ' is-pending' : ''}`}
         onClick={subSessionId ? openSession : (canExpand ? () => setOpen(v => !v) : undefined)}
         title={subSessionId ? '点击查看子代理会话执行过程' : undefined}
       >
-        <span className={`oc-sub__indicator is-${status}`}>
-          {running ? (
-            <span className="oc-sub__dots"><span /><span /><span /></span>
-          ) : isError ? (
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="12" y1="8" x2="12" y2="13" /><circle cx="12" cy="16.5" r="0.6" fill="currentColor" /></svg>
-          ) : (
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.2" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
-          )}
-        </span>
+        {running ? (
+          <span className="oc-tool__spinner" />
+        ) : (
+          <span className="oc-tool__indicator">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.2" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
+          </span>
+        )}
         <span className="oc-tool__title">{title}</span>
         {description && (
           <>
