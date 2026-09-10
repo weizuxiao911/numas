@@ -1703,7 +1703,7 @@ export const Chat: React.FC = () => {
               onChange={onInput}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
-              placeholder="输入/ 可以召唤魔法; 输入@ 可以选择智能体 🎉"
+              placeholder="输入@可以召唤专家或上下文; 输入/可以唤起更多功能..."
               rows={1}
             />
             {contextItems.length > 0 && (
