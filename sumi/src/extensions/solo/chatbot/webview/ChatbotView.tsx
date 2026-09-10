@@ -24,6 +24,7 @@ import {
   aiDeleteSession,
   aiRevertMessage,
   isAiReady,
+  opencodeFetch,
 } from '@/extensions/solo/chatbot/commands/api';
 import { modelPrefs } from '@/extensions/solo/chatbot/commands/modelPrefs';
 import { getWorkspace, subscribeWorkspace } from '@/infra/url';
@@ -186,6 +187,9 @@ export const ChatbotView: React.FC = () => {
   const [showCommands, setShowCommands] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
+  /** 输入框底部设置 popover (当前只有「重新加载」) */
+  const [showSettings, setShowSettings] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [skills, setSkills] = useState<Array<{ name: string; description?: string; location?: string }>>([]);
   const [questionRev, setQuestionRev] = useState(0);
   // 交互状态按会话管理: sid → { question?, permission? }; 渲染时按当前会话树取, 切换天然跟随
@@ -431,6 +435,25 @@ export const ChatbotView: React.FC = () => {
     try { setProviders(await aiListProviders() || []); } catch (e) { console.warn('[ai] load providers failed', e); }
     try { setSkills(await aiListSkills() || []); } catch (e) { console.warn('[ai] load skills failed', e); }
   }, [ready, currentAgent]);
+  // 事件回调里经 ref 调 loadConfig, 避免 currentAgent 变化导致 SSE 订阅重挂
+  const loadConfigRef = useRef<() => Promise<void>>(async () => {});
+  loadConfigRef.current = loadConfig;
+
+  /** 设置 popover: 重新加载实例 (POST /instance/reload) → instance.reloaded 事件后自动刷新 agents/skills */
+  const onReloadInstance = useCallback(async () => {
+    if (reloading) return;
+    setReloading(true);
+    setShowSettings(false);
+    try {
+      await opencodeFetch('/instance/reload', { method: 'POST' });
+      showNotice('已触发实例重载, 完成后自动刷新 agents/skills');
+    } catch (e) {
+      setError(`重载失败: ${String((e as any)?.message || e)}`);
+    } finally {
+      setReloading(false);
+    }
+  }, [reloading, showNotice]);
+
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
@@ -476,14 +499,17 @@ export const ChatbotView: React.FC = () => {
       if (t.closest('.chat__mpop')
         || t.closest('.chat__modal')
         || t.closest('[data-ai-pop="agents"]')
-        || t.closest('[data-ai-pop="models"]')) return;
+        || t.closest('[data-ai-pop="models"]')
+        || t.closest('[data-ai-pop="settings"]')) return;
       setShowAgents(false);
       setShowModels(false);
+      setShowSettings(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       setShowAgents(false);
       setShowModels(false);
+      setShowSettings(false);
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -864,6 +890,12 @@ export const ChatbotView: React.FC = () => {
               const msg = oneLine.length > 220 ? oneLine.slice(0, 220) + '…' : oneLine;
               setSessionErrors((prev) => ({ ...prev, [esid]: { name: errName, message: msg, at: Date.now() } }));
               setStatusBySession((prev) => ({ ...prev, [esid]: { type: 'idle' } }));
+              break;
+            }
+            case 'instance.reloaded': {
+              // 实例重载完成 (设置 → 重新加载): 刷新 agents/skills/models/providers
+              void loadConfigRef.current();
+              showNotice('实例已重载, 配置已刷新');
               break;
             }
             case 'todo.updated': {
@@ -2346,6 +2378,41 @@ export const ChatbotView: React.FC = () => {
               </div>
 
               <div className="chat__bar-spacer" />
+
+              {/* 设置: 输入框底部齿轮按钮 + popover (重新加载实例) */}
+              <div className="chat__select">
+                <button
+                  data-ai-pop="settings"
+                  type="button"
+                  className="chat__bar-btn"
+                  title="设置"
+                  onClick={() => { setShowSettings((v) => !v); setShowAgents(false); setShowModels(false); }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </button>
+                {showSettings && (
+                  <div className="chat__settings-pop" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="chat__settings-item"
+                      disabled={reloading}
+                      onClick={onReloadInstance}
+                    >
+                      <span className="chat__settings-ic">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                      </span>
+                      <span className="chat__settings-body">
+                        <span className="chat__settings-name">重新加载</span>
+                        <span className="chat__settings-desc">重载 agents / skills / tools / 配置</span>
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {busy ? (
                 <button type="button" className="chat__send chat__send--stop" onClick={() => onAbort()} title="停止">

@@ -374,6 +374,7 @@ const config = {
                     '/debug',
                     '/template',
                     '/extensions',
+                    '/instance',
                 ],
                 target: process.env.OPENCODE_PROXY_URL || 'http://127.0.0.1:24096',
                 changeOrigin: true,

@@ -717,3 +717,10 @@ AI **仍需 `question`**:
 - **解决方案**: paste 回调**第一段同步**取 File 快照 (`const files = fileItems.map(it => it.getAsFile()).filter(Boolean)`), 之后再 `await` 写盘/生成预览.
 - **改动文件**: `sumi/src/extensions/solo/chatbot/webview/ChatbotView.tsx` (`onPaste`).
 - **排查方法**: ① 用真实剪贴板验证 (`navigator.clipboard.write([new ClipboardItem({'image/png': blob})])` + `Meta+V`), 不要只用合成 `dispatchEvent`; ② 在 paste 上挂 capture 监听打 `clipboardData.types/items` 确认事件与 kind 是否到达, 区分「事件没到」vs「处理逻辑跳过了」; ③ 任何 `getAsFile()` 取值必须在事件同步阶段完成.
+
+#### 37. 新增 opencode V2 端点在 dev (7788) 下 404: webpack devServer proxy 白名单没加路径
+
+- **现象**: 前端调 `POST /instance/reload` 在 dev (`http://localhost:7788`) 返回 404; 但直连 opencode (24096) 正常 200. 生产同源 (opencode serve 托管 UI) 不受影响.
+- **根因**: sumi webpack devServer 的 `proxy.context` 是**白名单** (列出 `/api` `/session` `/question` ...), 只有列出的前缀才转发到 24096, 其余走 SPA fallback. 新增 V2 端点 (`/instance/reload`) 不在列表 → dev 下 404.
+- **解决方案**: 新增端点时同步把路径前缀加进 `sumi/webpack.config.js` 的 `devServer.proxy[0].context` (如 `'/instance'`); 改完**必须重启 webpack dev server** (config 不热更新).
+- **排查方法**: dev 下新端点 404 → 先直连 opencode 端口验证端点本身 (200 则排除服务端), 再检查 `webpack.config.js` 的 proxy context 是否含该前缀; 注意 `/instance` 是独立前缀 (不是 `/api/instance`).
