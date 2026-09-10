@@ -13,6 +13,7 @@
  *     并通过高权重 resolver 在打开文件时应用默认编辑器.
  */
 import { Injectable, Autowired } from '@opensumi/di';
+import { registerLocalizationBundle } from '@opensumi/ide-core-common/lib/localize';
 import { Domain, URI, CommandRegistry, CommandContribution } from '@opensumi/ide-core-common';
 import {
   BrowserModule,
@@ -249,9 +250,9 @@ const COMPONENT_DESCRIPTIONS: Record<string, string> = {
   'webapp.welcome': '欢迎页',
 };
 
-/** 打开方式 label: code → 文本编辑器 (不用 OpenSumi 的 "代码"), 组件 → title/componentId */
+/** 打开方式 label: code → 文本 (不用 OpenSumi 的 "代码"), 组件 → title/componentId */
 function openTypeLabel(item: IEditorOpenType): string {
-  if (item.type === 'code') return '文本编辑器';
+  if (item.type === 'code') return '文本';
   return item.title || (item as any).componentId || item.type;
 }
 
