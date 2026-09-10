@@ -16,6 +16,7 @@ import React from 'react';
 // import { createPortal } from 'react-dom'; // WorkBuddy 功能已整体注释, 恢复时一并取消注释
 import { SlotLocation, SlotRenderer } from '@opensumi/ide-core-browser';
 import { BoxPanel, SplitPanel } from '@opensumi/ide-core-browser/lib/components';
+import { CommandService } from '@opensumi/ide-core-common';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 
@@ -151,6 +152,25 @@ const styles = `
   .app-ide .kt-tab-panel { background: var(--editor-background, #ffffff) !important; }
 }
 `;
+
+/** 内置浏览器按钮: 在编辑区打开浏览器 tab (browser.open 全局命令, 跨拓展契约) */
+const IdeBrowserButton: React.FC = () => {
+  const commandService = useInjectable<CommandService>(CommandService);
+  return (
+    <button
+      type="button"
+      className="app-ide__toggle"
+      title="打开浏览器"
+      onClick={() => void commandService.executeCommand('browser.open')}
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18" />
+        <ellipse cx="12" cy="12" rx="4" ry="9" />
+      </svg>
+    </button>
+  );
+};
 
 /** 面板 toggle: 左栏 / 底部 / 右栏 (右栏为自绘列, 走本地 state + 宽度过渡) */
 const PanelToggles: React.FC<{ rightVisible: boolean; onToggleRight: () => void }> = ({ rightVisible, onToggleRight }) => {
@@ -322,6 +342,8 @@ export function IdeLayout(): React.ReactElement {
             <WorkBuddyButton />
             <span className="app-ide__top-divider" />
             */}
+            <IdeBrowserButton />
+            <span className="app-ide__top-divider" />
             <PanelToggles rightVisible={rightVisible} onToggleRight={() => setRightVisible((v) => !v)} />
           </div>
         </div>

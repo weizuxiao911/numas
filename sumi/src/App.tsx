@@ -13,6 +13,7 @@ import type { ExtensionMetadata } from './service/extension';
 import { runtimeConfig } from './config/runtime';
 import { SIDE_TOPBAR_PANEL_ID, SESSIONS_PANEL_ID, ACTION_PANEL_ID, ASIDE_TOPBAR_PANEL_ID } from './extensions/solo';
 import { CHATBOT_PANEL_ID } from './extensions/chat';
+import { ASIDE_BROWSER_PANEL_ID } from './extensions/browser';
 import { SOLO_SLOTS } from './config/slots';
 import { IdeLayout } from './layouts/IdeLayout';
 import { SoloLayout } from './layouts/SoloLayout';
@@ -69,6 +70,7 @@ const SOLO_MODE = {
     [SOLO_SLOTS.MainAction]: ACTION_PANEL_ID,
     [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
     [SOLO_SLOTS.AsideAction]: ASIDE_TOPBAR_PANEL_ID,
+    [SOLO_SLOTS.AsideBrowser]: ASIDE_BROWSER_PANEL_ID,
   },
 };
 

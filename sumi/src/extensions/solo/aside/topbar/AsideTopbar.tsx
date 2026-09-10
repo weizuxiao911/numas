@@ -1,14 +1,13 @@
 /**
  * AsideTopbar — SOLO 右列顶部活动栏 (solo.aside.action)
  *
- * 胶囊分段控件: 查看 | 终端 (默认查看).
+ * 胶囊分段控件: 查看 | 终端 | 浏览器 (默认查看).
  * 点击切换 aside 中间区视图 (service/layout: state.aside.view + setAsideView),
  * 滑块 (pill) 用 transform 过渡实现丝滑跳转.
  *
  * 语义:
  *   - 查看: aside 中间 = explorer (aside.sidebar) + editor (aside.container) 左右布局
  *   - 终端: aside 中间 = 终端 (官方 TerminalNextModule 的 bottom slot)
- *   - 浏览器: 暂下线 (内置浏览器拓展重置中, 见 extensions/browser 重做)
  */
 import React, { useEffect, useState } from 'react';
 
@@ -23,6 +22,7 @@ import { styles } from './styles';
 const ITEMS: Array<{ id: AsideView; label: string }> = [
   { id: 'view', label: '查看' },
   { id: 'terminal', label: '终端' },
+  { id: 'browser', label: '浏览器' },
 ];
 
 export const AsideTopbar: React.FC = () => {

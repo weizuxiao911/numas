@@ -30,6 +30,7 @@ import { ChatbotModule } from '../extensions/chat';
 import { ContextModule } from '../extensions/context';
 import { FilesModule } from '../extensions/file';
 import { MarkdownModule } from '../extensions/markdown';
+import { BrowserModule } from '../extensions/browser';
 import { WorkspaceModule } from '../extensions/workspace';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
@@ -59,6 +60,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     ContextModule,         // 编辑器/终端选区 + 文件树「添加到对话」(契约: chatbot.addContext 命令)
     FilesModule,           // 文件树: 上传/下载/压缩 zip (右键 + 标题栏上传按钮)
     MarkdownModule,        // .md 预览 (marked+shiki+katex+mermaid; 右键/标题栏/命令)
+    BrowserModule,         // 内置浏览器 (aside.browser 视图 + numas-browser:// 编辑器 tab)
 
     // workspace 根同步 (官方 explorer/editor 读 IWorkspaceService; 查看模式依赖)
     WorkspaceModule,
