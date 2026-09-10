@@ -18,5 +18,9 @@ import type { IAppRendererProps } from '@codeblitzjs/ide-core';
 import { WelcomeView } from '../extensions/welcome/WelcomeView';
 
 export const runtimeConfig: IAppRendererProps['runtimeConfig'] = {
+  // 关闭欢迎页 (用户要求): codeblitz WelcomeContribution.onDidRestoreState 里
+  // `if (!opened.length && startupEditor)` → startupEditor 非 readme/welcomePage 时直接 return,
+  // 不会走后面的 openWelcome() 兜底. WelcomePage 组件保留 (需要时可换回 'welcomePage').
+  startupEditor: 'none',
   WelcomePage: WelcomeView as any,
 } as any;
