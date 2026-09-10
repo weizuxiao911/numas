@@ -601,21 +601,18 @@ export const styles = `
   width: 32px; height: 32px; border-radius: 10px;
   border: none; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--ai-metal-accent); color: var(--ai-accent-fg);
-  box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 3px 10px color-mix(in srgb, #000 35%, transparent);
-  transition: filter .15s, opacity .15s, transform .06s;
+  background: var(--ai-accent); color: var(--ai-accent-fg);
+  transition: opacity .15s;
   flex-shrink: 0;
 }
-.chat__send:hover:not(:disabled) { filter: brightness(1.12); }
-.chat__send:active:not(:disabled) { transform: translateY(1px); }
+.chat__send:hover:not(:disabled) { opacity: .88; }
 .chat__send:disabled {
   opacity: 0.35; cursor: not-allowed;
   background: var(--ai-hover); color: var(--ai-fg-muted);
-  box-shadow: none;
 }
+/* 停止生成: 与发送按钮同款主题底 (仅靠中间方块图标区分状态) */
 .chat__send--stop {
-  background: var(--ai-danger-bg); color: var(--ai-danger);
-  box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 2px 6px color-mix(in srgb, #000 25%, transparent);
+  background: var(--ai-accent); color: var(--ai-accent-fg);
 }
 .chat__stop-square {
   width: 9px; height: 9px;
