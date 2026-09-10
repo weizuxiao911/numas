@@ -8,19 +8,14 @@
  * 文件系统实现见 ./fs.ts (CustomFileSystemProvider + DI 注入 CustomFsProviderContribution).
  * 不依赖任何 codeblitz ide-browserfs 模块, 不维护 InMemory 缓存 / 墓碑 / overlay.
  *
- * WelcomePage (用户拍板, 2026-09): 欢迎页显示/打开规则走 codeblitz 官方机制
- * (官方 WelcomeContribution.onDidRestoreState: 无打开资源才 openWelcome),
- * 自建 welcome 扩展 (extensions/welcome/module.ts) 已删, 本处经官方扩展点
- * runtimeConfig.WelcomePage 注入 numas 欢迎 UI 替换官方默认组件.
+ * 欢迎页 (用户拍板, 2026-09): 已关闭 — runtimeConfig.startupEditor 设为非 readme/welcomePage 值,
+ * codeblitz WelcomeContribution.onDidRestoreState 首分支直接 return, 不走 openWelcome() 兜底;
+ * 原 numas WelcomePage 组件 (extensions/welcome) 已删除.
  */
 
 import type { IAppRendererProps } from '@codeblitzjs/ide-core';
-import { WelcomeView } from '../extensions/welcome/WelcomeView';
 
 export const runtimeConfig: IAppRendererProps['runtimeConfig'] = {
-  // 关闭欢迎页 (用户要求): codeblitz WelcomeContribution.onDidRestoreState 里
-  // `if (!opened.length && startupEditor)` → startupEditor 非 readme/welcomePage 时直接 return,
-  // 不会走后面的 openWelcome() 兜底. WelcomePage 组件保留 (需要时可换回 'welcomePage').
+  // 关闭欢迎页: startupEditor 非 readme/welcomePage 时 onDidRestoreState 直接 return
   startupEditor: 'none',
-  WelcomePage: WelcomeView as any,
 } as any;
