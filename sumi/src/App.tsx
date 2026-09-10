@@ -16,6 +16,8 @@ import { SESSIONS_PANEL_ID } from './extensions/solo/sessions';
 import { ACTION_PANEL_ID } from './extensions/solo/action';
 import { CHATBOT_PANEL_ID } from './extensions/solo/chatbot';
 import { USER_PANEL_ID } from './extensions/solo/user';
+import { ASIDE_TOPBAR_PANEL_ID } from './extensions/solo/asideTopbar';
+import { ASIDE_BROWSER_PANEL_ID } from './extensions/browser';
 import { SOLO_SLOTS } from './config/slots';
 import { IdeLayout } from './layouts/IdeLayout';
 import { SoloLayout } from './layouts/SoloLayout';
@@ -42,14 +44,17 @@ export const setAppMode = (m: AppMode): void => {
   window.dispatchEvent(new CustomEvent('app-mode-change'));
 };
 
-/** 全锁槽位 — 不让 codeblitz 装默认 module, vsix 拓展自己装 */
+/** 槽位模块映射 — 官方能力按需放开, 其余锁空 (vsix 拓展自己装).
+ *  - left: 官方 explorer 容器 (查看模式 aside.sidebar 渲染)
+ *  - main: 官方编辑器 workbench (查看模式 aside.container 渲染; IDE 模式主区)
+ *  - bottom: 官方终端 (solo 终端模式在 aside 中间渲染) */
 const layout = {
   [SlotLocation.top]: { modules: [] },
   [SlotLocation.action]: { modules: [] },
-  [SlotLocation.left]: { modules: [] },
+  [SlotLocation.left]: { modules: ['@opensumi/ide-explorer'] },
   [SlotLocation.right]: { modules: [] },
-  [SlotLocation.main]: { modules: [] },
-  [SlotLocation.bottom]: { modules: [] },
+  [SlotLocation.main]: { modules: ['@opensumi/ide-editor'] },
+  [SlotLocation.bottom]: { modules: ['@opensumi/ide-terminal-next'] },
   [SlotLocation.extra]: { modules: [] },
 };
 
@@ -62,6 +67,8 @@ const SOLO_MODE = {
     [SOLO_SLOTS.SidebarFooter]: USER_PANEL_ID,
     [SOLO_SLOTS.MainAction]: ACTION_PANEL_ID,
     [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
+    [SOLO_SLOTS.AsideAction]: ASIDE_TOPBAR_PANEL_ID,
+    [SOLO_SLOTS.AsideBrowser]: ASIDE_BROWSER_PANEL_ID,
   },
 };
 
@@ -116,6 +123,8 @@ export const App: React.FC = () => {
     layoutComponent: Layout,
     defaultPanels: cfg?.panels,
     componentCDNType: 'jsdelivr',
+    // 精简 explorer 容器: 移除官方 Outline/OpenedEditor 模块 (只留文件树 section)
+    useSimplifyExplorerPanel: true,
     defaultPreferences: preferences,
     extensionMetadata: meta as any,
     modules: [

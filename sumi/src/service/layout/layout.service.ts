@@ -10,23 +10,23 @@
  *   - 折叠时记住展开宽度, 展开恢复
  *   - aside 打开 → 自动折叠 sidebar 让出空间 (并记下展开宽度)
  *   - 关闭 aside 不自动恢复 sidebar (用户自己 expand)
- *   - aside 打开时视口 resize → 宽度同步 70%
+ *   - aside 打开时视口 resize → 宽度同步 60%
  */
 
 import { Injectable, Autowired } from '@opensumi/di';
 import { BrowserModule } from '@opensumi/ide-core-browser';
 import { Domain, CommandContribution, CommandRegistry } from '@opensumi/ide-core-common';
 
-import type { ILayoutService, LayoutState } from './layout.interface';
+import type { ILayoutService, LayoutState, AsideView } from './layout.interface';
 import { LayoutToken, LAYOUT_COMMANDS } from './layout.interface';
 
 const MIN_SIDEBAR_W = 200;
 const MAX_SIDEBAR_W = 480;
 const MIN_ASIDE_W = 120;
-/** aside 打开时宽度 = viewport 70% */
-const ASIDE_RATIO = 0.7;
-/** sidebar 默认宽度 = viewport 25% */
-const SIDEBAR_RATIO = 0.25;
+/** aside 打开时宽度 = viewport 60% */
+const ASIDE_RATIO = 0.6;
+/** sidebar 默认宽度 = 固定 300px */
+const SIDEBAR_DEFAULT_W = 300;
 
 function viewportRatioWidth(ratio: number = ASIDE_RATIO): number {
   return Math.round(window.innerWidth * ratio);
@@ -35,11 +35,11 @@ function viewportRatioWidth(ratio: number = ASIDE_RATIO): number {
 @Injectable()
 export class LayoutServiceImpl implements ILayoutService {
   private _state: LayoutState = {
-    sidebar: { collapsed: false, width: viewportRatioWidth(SIDEBAR_RATIO) },
-    aside: { open: false, width: 0 },
+    sidebar: { collapsed: false, width: SIDEBAR_DEFAULT_W },
+    aside: { open: false, width: 0, view: 'view' },
   };
   /** 折叠时记住展开态宽度, 展开时恢复 */
-  private expandedSidebarW = viewportRatioWidth(SIDEBAR_RATIO);
+  private expandedSidebarW = SIDEBAR_DEFAULT_W;
   private listeners = new Set<(s: LayoutState) => void>();
 
   get state(): LayoutState {
@@ -97,7 +97,7 @@ export class LayoutServiceImpl implements ILayoutService {
   openAside(width?: number): void {
     const cur = this._state.aside;
     const nextW = Math.max(MIN_ASIDE_W, width ?? (cur.width > 0 ? cur.width : viewportRatioWidth()));
-    this._state.aside = { open: true, width: nextW };
+    this._state.aside = { ...cur, open: true, width: nextW };
     // 打开 aside → 自动折叠 sidebar 让出空间
     if (!this._state.sidebar.collapsed) this.collapseSidebar();
     this.emit();
@@ -122,7 +122,14 @@ export class LayoutServiceImpl implements ILayoutService {
     this.emit();
   }
 
-  /** aside 打开时视口变化 → 同步 70% 宽 (resize 事件里调用) */
+  /** 切换 aside 中间区视图 (查看 | 终端 | 浏览器) */
+  setAsideView(view: AsideView): void {
+    if (this._state.aside.view === view) return;
+    this._state.aside = { ...this._state.aside, view };
+    this.emit();
+  }
+
+  /** aside 打开时视口变化 → 同步 60% 宽 (resize 事件里调用) */
   syncAsideToViewport(): void {
     if (!this._state.aside.open) return;
     this._state.aside = { ...this._state.aside, width: viewportRatioWidth() };

@@ -145,6 +145,10 @@ export function installCustomEditorPatch(): void {
       // 检测激活 tab 走 DOM (workbenchEditorService.currentResource.uri 对 customEditor
       // 返回 undefined, 不可用)
        const sync = () => {
+         // 编辑区容器整体卸载 (查看→终端/浏览器) 时 #workbench-editor 不在 DOM:
+         // tab 消失 ≠ tab 关闭, 不能 __paperUnmount (会销毁 webview, 切回后无法恢复),
+         // 直接跳过; 容器重挂载后由 MutationObserver 再触发恢复.
+         if (!document.getElementById('workbench-editor')) return;
          const activeTab = document.querySelector(
            '.kt_editor_tab___LLmhN.kt_editor_tab_current___A2OZc',
          ) as HTMLElement | null;
@@ -167,10 +171,16 @@ export function installCustomEditorPatch(): void {
              if (tabStillExists) {
                // 切走了, 隐藏 (切回时复用)
                (this as any).__paperHide(key);
-             } else {
-               // tab 关闭了, 彻底卸载 (避免孤儿 webview 残留)
-               (this as any).__paperUnmount(key);
-             }
+              } else {
+                // tab 消失可能只是编辑区容器重挂载的中间态: 延迟复查,
+                // 仍在消失 + 容器在 才真卸载 (避免误杀 webview 导致切回空白)
+                setTimeout(() => {
+                  const stillGone = !document.querySelector(`[data-uri="${escapedUri}"]`);
+                  if (stillGone && document.getElementById('workbench-editor')) {
+                    (this as any).__paperUnmount(key);
+                  }
+                }, 800);
+              }
            }
          }
        };
@@ -199,14 +209,22 @@ export function installCustomEditorPatch(): void {
   // 挂载单个
   (MainThreadCustomEditor.prototype as any).__paperTryMount = async function (this: any, key: string) {
     const state = getState(this);
-    const info = state.pendingMounts.get(key);
+    // mountedMap 也查: 编辑区容器卸载时 sync 被 guard 跳过 (未走 __paperHide),
+    // info 仍留在 mountedMap, 切回后需要靠 reshow 分支重新挂到新容器
+    const info = state.pendingMounts.get(key) || state.mountedMap.get(key);
     if (!info) return;
     if (info.cancellationToken?.isCancellationRequested) {
       state.pendingMounts.delete(key);
       return;
     }
     if (info.mounted) {
-      // 已挂载过, 切回时只需恢复显示
+      // 已挂载过, 切回时只需恢复显示; 编辑区容器卸载过 → stable container 已脱离文档, 重新挂到新容器
+      const wb = document.getElementById('workbench-editor');
+      if (info.stableContainer && wb && !wb.contains(info.stableContainer)) {
+        wb.appendChild(info.stableContainer);
+        // iframe 随容器脱离文档会丢浏览上下文: 重新 append 触发 webview-ready → doUpdateContent 回填内容
+        try { info.webview.appendTo(info.stableContainer); } catch { /* */ }
+      }
       if (info.stableContainer) {
         info.stableContainer.style.display = 'block';
       }
@@ -215,7 +233,7 @@ export function installCustomEditorPatch(): void {
       // 重新挂载 ResizeObserver
       const target = findPaperTabContainer(info.uri.toString());
       if (target && info.resizeObserver) {
-        try { info.resizeObserver.observe(target.editorBody); } catch { /* */ }
+        try { info.resizeObserver.disconnect(); info.resizeObserver.observe(target.editorBody); } catch { /* */ }
       }
       if (target && info.onWindowResize) {
         window.addEventListener('resize', info.onWindowResize);
@@ -254,11 +272,13 @@ export function installCustomEditorPatch(): void {
       workbenchEditor.appendChild(stableContainer);
     }
 
-    // 同步位置
+    // 同步位置 (实时查 DOM: 编辑区容器可能卸载→重挂载, 闭包里的旧节点已脱离文档)
     const syncPosition = () => {
-      const rect = target.editorBody.getBoundingClientRect();
-      const workRect = workbenchEditor.getBoundingClientRect();
-      if (!stableContainer) return;
+      const wb = document.getElementById('workbench-editor');
+      const t = findPaperTabContainer(info.uri.toString());
+      if (!stableContainer || !wb || !t) return;
+      const rect = t.editorBody.getBoundingClientRect();
+      const workRect = wb.getBoundingClientRect();
       stableContainer.style.top = rect.top - workRect.top + 'px';
       stableContainer.style.left = rect.left - workRect.left + 'px';
       stableContainer.style.width = rect.width + 'px';

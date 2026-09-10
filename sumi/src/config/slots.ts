@@ -18,9 +18,9 @@
  *   - main.container:    中列容器区
  *   - main.footer:       中列底部栏
  *   - aside.action:      右列顶部活动栏
- *   - aside.sidebar:     右列中间段左侧
- *   - aside.container:   右列中间段右侧 (容器区)
+ *   - aside.browser:     右列中间段 (浏览器视图)
  *   - aside.footer:      右列底部栏
+ *   (查看模式中间段直接用官方 SlotLocation.left / SlotLocation.main)
  *
  * 拓展注册时用同样 slot name (registerComponent 第 4 个参数 location).
  * 拓展不 import 本文件, 字符串字面量是协议约定.
@@ -39,10 +39,10 @@ export const SOLO_SLOTS = {
   MainAction: 'solo.main.action',
   MainContainer: 'solo.main.container',
   MainFooter: 'solo.main.footer',
-  // 右列 aside (中间段: 左 aside.sidebar | 右 aside.container)
+  // 右列 aside (中间段: 查看模式左=官方 SlotLocation.left explorer, 右=官方 SlotLocation.main 编辑区)
   AsideAction: 'solo.aside.action',
-  AsideSidebar: 'solo.aside.sidebar',
-  AsideContainer: 'solo.aside.container',
+  /** 浏览器视图 (asidetopbar 激活浏览器时, 中间段加载此 slot; 与 editor 互斥) */
+  AsideBrowser: 'solo.aside.browser',
   AsideFooter: 'solo.aside.footer',
 } as const;
 

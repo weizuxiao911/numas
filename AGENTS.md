@@ -724,3 +724,11 @@ AI **仍需 `question`**:
 - **根因**: sumi webpack devServer 的 `proxy.context` 是**白名单** (列出 `/api` `/session` `/question` ...), 只有列出的前缀才转发到 24096, 其余走 SPA fallback. 新增 V2 端点 (`/instance/reload`) 不在列表 → dev 下 404.
 - **解决方案**: 新增端点时同步把路径前缀加进 `sumi/webpack.config.js` 的 `devServer.proxy[0].context` (如 `'/instance'`); 改完**必须重启 webpack dev server** (config 不热更新).
 - **排查方法**: dev 下新端点 404 → 先直连 opencode 端口验证端点本身 (200 则排除服务端), 再检查 `webpack.config.js` 的 proxy context 是否含该前缀; 注意 `/instance` 是独立前缀 (不是 `/api/instance`).
+
+#### 38. 自定义布局里渲染 codeblitz 标准 slot (如 bottom 终端): 需 layoutConfig 映射 + 显式激活容器
+
+- **现象**: SoloLayout 里 `<SlotRenderer slot={SlotLocation.bottom} />` 渲染官方终端 (TerminalNextModule) 时, tabbar 面板挂载了但**无激活容器** (panel 高度 0, 无 xterm); 且 tab 列表混入其它自定义 slot 的面板.
+- **根因**: ① 终端 view 注册**不带 location**, 靠 `layoutConfig[SlotLocation.bottom].modules` 收录 (`getSlotLocation` 反查), 不映射就不出现; ② 框架 tabbar 的 `currentContainerId` 来自持久化 layout state, numas 冷启动脚本把 `bottom.currentId` 置 `''` → 容器不激活; ③ 自定义 slot 名 (`solo.aside.container`) 与标准 slot 混用时, 容器注册的 side 推断可能把自定义 slot 的面板也挂进 bottom tabbar (显示多余 tab, 不影响功能).
+- **解决方案**: `config/modules.ts` 注册 `TerminalNextModule` + `App.tsx` 的 `layout` 把 `[SlotLocation.bottom].modules = ['@opensumi/ide-terminal-next']`; 渲染后由调用方 (asidetopbar) `IMainLayoutService.toggleSlot(SlotLocation.bottom, true)` 轮询激活 (`getTabbarHandler('terminal')?.isActivated()`), 无终端实例 (`ITerminalController.clients.size===0`) 时 `executeCommand('terminal.add')` 自动新建.
+- **附带**: `BuiltinBrowserModule` 曾在 codeblitz 容器重构 (452f001) 时从 config/modules 漏掉 → `browser.open` 命令 `HANDLER_NOT_FOUND`; 浏览器视图相关功能要先确认该模块已注册.
+- **排查方法**: 新 view 不显示 → 先查 `registry.config.layoutConfig` 里对应 slot 的 modules 是否含该模块/panel id; 再查 tabbar `isActivated()`; 命令不存在 (`HANDLER_NOT_FOUND`) → grep `config/modules.ts` 是否漏注册该 module.

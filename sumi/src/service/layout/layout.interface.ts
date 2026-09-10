@@ -20,11 +20,16 @@ export interface SidebarState {
   width: number;
 }
 
+/** aside 中间区视图 (asidetopbar 胶囊切换): 查看 | 终端 | 浏览器 */
+export type AsideView = 'view' | 'terminal' | 'browser';
+
 export interface AsideState {
   /** 当前是否打开 */
   open: boolean;
   /** 当前 aside 宽 (px) */
   width: number;
+  /** 当前激活视图 (默认 view = explorer + editor 左右布局) */
+  view: AsideView;
 }
 
 export interface LayoutState {
@@ -59,7 +64,9 @@ export interface ILayoutService {
   closeAside(): void;
   toggleAside(): void;
   setAsideWidth(n: number): void;
-  /** aside 打开时视口变化 → 同步 70% 宽 (resize 事件调用) */
+  /** 切换 aside 中间区视图 (查看 | 终端 | 浏览器) */
+  setAsideView(view: AsideView): void;
+  /** aside 打开时视口变化 → 同步 60% 宽 (resize 事件调用) */
   syncAsideToViewport(): void;
 }
 

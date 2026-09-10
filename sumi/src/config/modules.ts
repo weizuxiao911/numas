@@ -15,6 +15,7 @@ import { ExtensionModule } from '../service/extension';
 import { FsModule, FsProviderModule } from '../service/filesystem';
 import { FileDocModule } from '../service/filesystem/doc-provider';
 import { TerminalModule } from '../service/pty';
+import { TerminalNextModule } from '@opensumi/ide-terminal-next/lib/browser';
 import { EditorModule } from '../service/editor';
 import { StateModule } from '../service/state';
 import { PortsModule } from '../service/ports';
@@ -29,7 +30,9 @@ import { SessionsModule } from '../extensions/solo/sessions';
 import { ActionModule } from '../extensions/solo/action';
 import { ChatbotModule } from '../extensions/solo/chatbot';
 import { UserModule } from '../extensions/solo/user';
-import { AsideModule } from '../extensions/solo/aside';
+import { AsideTopbarModule } from '../extensions/solo/asideTopbar';
+import { BuiltinBrowserModule } from '../extensions/browser';
+import { WorkspaceModule } from '../extensions/workspace';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
   return [
@@ -44,6 +47,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     LayoutModule,          // SOLO 布局状态 (sidebar / aside 折叠 + 宽度 + 命令)
     BrandModule,           // 品牌信息 (名称 / logo / slogan)
     SessionModule,         // 登录态 (cookie → session.yaml → 用户信息)
+    TerminalNextModule,    // 官方终端 UI (bottom slot; solo 终端模式渲染于 aside)
 
     // contribution 层 (lifecycle / UI 状态)
     EditorRestoreFallbackModule, // 官方 workbench tab 恢复的延迟兜底 (早期 handlesUri 未就绪)
@@ -54,7 +58,11 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     ActionModule,          // 中列 main.action
     ChatbotModule,         // 中列 main.container (对话主区)
     UserModule,            // 左列 sidebar.footer (用户信息)
-    AsideModule,  // 右列 aside.container (官方 explorer FileTree)
+    AsideTopbarModule,     // 右列 aside.action (查看/终端/浏览器 胶囊)
+    BuiltinBrowserModule,  // 内置浏览器 (aside.browser 视图 + numas-browser:// 编辑器 tab; browser.* 命令)
+
+    // workspace 根同步 (官方 explorer/editor 读 IWorkspaceService; 查看模式依赖)
+    WorkspaceModule,
 
     // 自定义 file scheme provider (覆盖 codeblitz 默认 DiskFileSystemProvider)
     FsProviderModule,

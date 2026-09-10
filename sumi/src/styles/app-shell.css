@@ -112,7 +112,13 @@
   display: flex;
   flex-direction: column;
 }
-.app-solo__aside-action { flex: 0 0 auto; min-width: 0; }
+/* aside action 区: 背景默认主题色 (editor-background, 亮色 #fff), 与下方内容留呼吸空间 */
+.app-solo__aside-action {
+  flex: 0 0 auto;
+  min-width: 0;
+  background: var(--editor-background);
+  margin-bottom: 8px;
+}
 .app-solo__aside-middle {
   flex: 1 1 auto;
   min-height: 0;
@@ -120,8 +126,25 @@
   display: flex;
   flex-direction: row;
 }
-.app-solo__aside-sidebar { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; }
+.app-solo__aside-sidebar {
+  flex: 0 0 280px; width: 280px; min-width: 0;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--editor-border);
+}
+/* 查看模式: 隐藏官方 left 槽自带活动栏 (与 查看/终端/浏览器 胶囊重复) */
+.app-solo__aside-sidebar [class*="left_tab_bar"] { display: none; }
+/* 查看模式: 打开官方 explorer 标题栏动作图标 (新建文件/新建文件夹/筛选/刷新/全部折叠).
+   design 主题只给 bottom slot 定义了 iconAction 尺寸, left slot 默认 2px + 全局 .kt-icon::before display:none → 不可见 */
+.app-solo__aside-sidebar [class*="titleActions"] span[class*="iconAction"] {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; margin-left: 4px;
+}
+.app-solo__aside-sidebar [class*="titleActions"] span[class*="iconAction"]::before { display: inline-block; }
 .app-solo__aside-container { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* 终端常驻挂载容器 (非终端模式 display:none, 避免卸载重挂载导致 xterm 无法重挂载) */
+.app-solo__aside-terminal { flex: 1 1 auto; min-width: 0; min-height: 0; flex-direction: column; }
+/* 终端模式: 隐藏底部模块 tab 条 (仅终端一个模块, 冗余; 保留终端面板自身 zsh 标题栏) */
+.app-solo__aside-container .bottom-slot .next_bottom_bar { display: none; }
 .app-solo__aside-footer { flex: 0 0 auto; min-width: 0; }
 
 /* 拖动条: 朴素 1px 主线, 折叠时跟 sidebar 一起收, 动效跟 sidebar 同步 */

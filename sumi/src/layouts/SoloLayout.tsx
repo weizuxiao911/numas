@@ -19,24 +19,39 @@
  *   - 拖拽改宽 → service.setSidebarWidth / setAsideWidth (单例广播)
  */
 import React, { useRef, useEffect } from 'react';
-import { SlotRenderer } from '@opensumi/ide-core-browser/lib/react-providers/slot';
+import { SlotLocation, SlotRenderer } from '@opensumi/ide-core-browser';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
+import { ITerminalController } from '@opensumi/ide-terminal-next/lib/common';
 
 import { WorkspacePicker } from '../extensions/workspace/WorkspacePicker';
 import { FilePicker } from '../extensions/filepicker/FilePicker';
 import { SOLO_SLOTS } from '../config/slots';
 import { LayoutToken, type ILayoutService } from '../service/layout';
+import { getWorkdir, subscribeWorkdir } from '../infra/url';
 
 export function SoloLayout(): React.ReactElement {
   const layout = useInjectable<ILayoutService>(LayoutToken);
+  const terminals = useInjectable<ITerminalController>(ITerminalController);
   // 每次渲染取最新状态 (service 广播 → 本组件 subscribe 触发重渲染)
   const { sidebar, aside } = layout.state;
   const sidebarCollapsed = sidebar.collapsed;
   const sidebarW = sidebar.width;
   const asideOpen = aside.open;
   const asideW = aside.width;
+  const asideView = aside.view;
 
-  // aside 打开时: 视口变化同步到 50% (resize 由 service 处理)
+  // 项目切换: aside 整体 unmount→mount (key={workdir}), 旧终端属于旧项目 → 先销毁再重挂
+  const [workdir, setWorkdir] = React.useState<string>(() => getWorkdir());
+  useEffect(() => {
+    return subscribeWorkdir((next) => {
+      try {
+        Array.from(terminals.clients.values()).forEach((c) => c.dispose());
+      } catch { /* ignore */ }
+      setWorkdir(next);
+    });
+  }, [terminals]);
+
+  // aside 打开时: 视口变化同步到 60% (resize 由 service 处理)
   useEffect(() => {
     if (!asideOpen) return;
     const onResize = () => layout.syncAsideToViewport();
@@ -144,16 +159,25 @@ export function SoloLayout(): React.ReactElement {
             aria-orientation="vertical"
           />
         )}
-        <div className="app-solo__aside-body">
+        <div className="app-solo__aside-body" key={workdir}>
           <div className="app-solo__aside-action">
             <SlotRenderer slot={SOLO_SLOTS.AsideAction} />
           </div>
           <div className="app-solo__aside-middle">
-            <div className="app-solo__aside-sidebar">
-              <SlotRenderer slot={SOLO_SLOTS.AsideSidebar} />
-            </div>
+            {/* 查看: 官方 explorer(left 槽) + 编辑器 workbench(main 槽); 终端/浏览器: 仅容器区 */}
+            {asideView === 'view' && (
+              <div className="app-solo__aside-sidebar">
+                <SlotRenderer slot={SlotLocation.left} />
+              </div>
+            )}
             <div className="app-solo__aside-container">
-              <SlotRenderer slot={SOLO_SLOTS.AsideContainer} />
+              {asideView === 'view' && <SlotRenderer key="aside-editor" slot={SlotLocation.main} />}
+              {asideView === 'browser' && <SlotRenderer key="aside-browser" slot={SOLO_SLOTS.AsideBrowser} />}
+              {/* 终端常驻挂载 (非终端模式仅 display:none): TerminalClient._renderOnDemand 对已打开的 xterm
+                  直接 return, 卸载重挂载不会重新 append 到新容器 → 终端空白/无法连接. 常驻后模式切换只切显隐 */}
+              <div className="app-solo__aside-terminal" style={{ display: asideView === 'terminal' ? 'flex' : 'none' }}>
+                <SlotRenderer slot={SlotLocation.bottom} />
+              </div>
             </div>
           </div>
           <div className="app-solo__aside-footer">

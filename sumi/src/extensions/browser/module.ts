@@ -17,6 +17,7 @@ import {
   BrowserModule as OpenSumiBrowserModule,
   ClientAppContribution,
 } from '@opensumi/ide-core-browser';
+import { ComponentContribution, ComponentRegistry } from '@opensumi/ide-core-browser/lib/layout';
 import { WorkbenchEditorService } from '@opensumi/ide-editor';
 import type { IResource, ResourceService } from '@opensumi/ide-editor';
 import {
@@ -128,12 +129,32 @@ export class BrowserContribution
 }
 
 @Injectable()
+@Domain(ComponentContribution)
+export class BrowserSlotContribution implements ComponentContribution {
+  registerComponent(registry: ComponentRegistry): void {
+    // aside 浏览器视图 (solo.aside.browser): asidetopbar 激活浏览器时中间段加载此 slot.
+    // 独立组件形态 (非编辑器 tab), 与「查看」模式的编辑区互斥、互不污染.
+    registry.register(
+      ASIDE_BROWSER_PANEL_ID,
+      { id: ASIDE_BROWSER_PANEL_ID, component: BrowserView as any },
+      { containerId: ASIDE_BROWSER_PANEL_ID, iconClass: 'codicon codicon-globe', title: '浏览器' },
+      ASIDE_BROWSER_SLOT,
+    );
+  }
+}
+
+/** aside 浏览器视图 panel id / slot (跟 config/slots.ts SOLO_SLOTS.AsideBrowser 同值) */
+export const ASIDE_BROWSER_PANEL_ID = 'aside-browser';
+const ASIDE_BROWSER_SLOT = 'solo.aside.browser';
+
+@Injectable()
 export class BuiltinBrowserModule extends OpenSumiBrowserModule {
   providers = [
     BrowserContribution,
+    BrowserSlotContribution,
     { token: BrowserToken, useClass: BrowserServiceImpl },
     BrowserServiceImpl,
   ];
-  contributionProvider = [BrowserEditorContribution, CommandContribution, ClientAppContribution];
+  contributionProvider = [BrowserEditorContribution, ComponentContribution, CommandContribution, ClientAppContribution];
 }
 

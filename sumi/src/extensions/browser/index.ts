@@ -1,4 +1,4 @@
-export { BuiltinBrowserModule, BrowserContribution, BROWSER_COMMANDS } from './module';
+export { BuiltinBrowserModule, BrowserContribution, BrowserSlotContribution, ASIDE_BROWSER_PANEL_ID, BROWSER_COMMANDS } from './module';
 export { BrowserServiceImpl, BrowserCrossOriginError, normalizeUrl } from './browser.service';
 export {
   BrowserToken,
