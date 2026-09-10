@@ -1614,7 +1614,8 @@ export const ChatbotView: React.FC = () => {
       showNotice('提交回答失败, 已重新同步');
     }
     void recoverPendingInteractions();
-    if (sid) {
+    // 仅当提问属于当前查看的会话时才刷新消息流; 子代理会话的提问不能用子会话 ID 覆盖主视图 rows
+    if (sid && sid === sessionIDRef.current) {
       try { await loadMessages(sid); } catch { /* ignore */ }
     }
   }, [loadMessages, showNotice, recoverPendingInteractions]);
@@ -1632,7 +1633,10 @@ export const ChatbotView: React.FC = () => {
     }
     clearQuestion(sid);
     void recoverPendingInteractions();
-    try { await loadMessages(sid); } catch { /* ignore */ }
+    // 同 onReplyQuestion: 子代理会话的提问不覆盖主视图消息流
+    if (sid === sessionIDRef.current) {
+      try { await loadMessages(sid); } catch { /* ignore */ }
+    }
   }, [sessionID, loadMessages, recoverPendingInteractions]);
 
   /** 撤销此消息 (官方同款): revert 到该消息之前, 重新拉消息流 */
