@@ -2043,6 +2043,9 @@ export const styles = `
     0 12px 28px rgba(19, 16, 16, 0.09);
 }
 .oc-qd__header { display: flex; align-items: center; gap: 12px; min-height: 26px; padding: 4px 12px 16px; }
+/* 底部内边距: 选项与 tray 按钮之间留出 shell 背景呼吸区 (官方 options 16px + footer 8px ≈ 24px,
+   本仓 tray 36/-24 → +12, 故 body 12px 后总间距 ≈24px) */
+.oc-qd__body { padding-bottom: 12px; }
 .oc-qd__title { font-size: 14px; font-weight: 600; color: var(--oc-strong); min-width: 0; white-space: nowrap; }
 .oc-qd__header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .oc-qd__progress { display: flex; gap: 4px; }
