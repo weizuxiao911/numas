@@ -25,6 +25,22 @@ function registryBaseUrl(): string {
   return base.replace(/\/+$/, '');
 }
 
+/** metadata 预取 promise (模块级单例): index.tsx 在 React 渲染前 await 一次,
+ *  确保 AppRenderer 内 createApp 时 vsix 元数据已在全局缓存, 不再与 /path 赛跑. */
+let metadataPromise: Promise<ExtensionMetadata[]> | null = null;
+export function preloadExtensionMetadata(): Promise<ExtensionMetadata[]> {
+  if (!metadataPromise) {
+    metadataPromise = new ExtensionServiceImpl().installMetadata().catch(() => []);
+  }
+  return metadataPromise;
+}
+
+/** 读预取结果 (index.tsx await 完成后必含 vsix; 未 await 时可能是空). */
+export function getPreloadedMetadata(): ExtensionMetadata[] {
+  const cached = (window as any).__APP_REGISTRY_METADATA__;
+  return Array.isArray(cached) ? cached : [];
+}
+
 /** kt-ext 静态资源贡献 — 覆盖 codeblitz 默认的 kt-ext→https 解析.
  *  codeblitz 默认把 kt-ext://<host>/<id> 转 https://<host>/<id>; 这里改为直连 registryBaseUrl. */
 @Injectable()

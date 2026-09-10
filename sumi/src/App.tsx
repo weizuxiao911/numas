@@ -8,7 +8,7 @@ import '@codeblitzjs/ide-core/languages';
 import { getBuiltinModules } from './config/modules';
 import { isBootReady, resolveBoot } from './infra/url';
 import { preferences } from './config/preferences';
-import { ExtensionServiceImpl } from './service/extension';
+import { getPreloadedMetadata, preloadExtensionMetadata } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
 import { runtimeConfig } from './config/runtime';
 import { SIDE_TOPBAR_PANEL_ID } from './extensions/solo/sideTopbar';
@@ -91,11 +91,19 @@ const LAYOUTS: Record<AppMode, React.ComponentType> = {
 export const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(() => getAppMode());
   const defaultModules = getDefaultAppConfig().modules || [];
-  const [meta, setMeta] = useState<ExtensionMetadata[]>([]);
-
+  // metadata 预取单例: index.tsx 渲染前已发起, 这里读全局缓存 (同步, 不再重复 fetch).
+  const [meta, setMeta] = useState<ExtensionMetadata[]>(() => getPreloadedMetadata());
+  // metadata 门控: AppRenderer 内 createApp 只在首次挂载执行一次 (useConstant),
+  // 若此时 vsix 元数据未就绪, ClientApp 会永久只剩内置扩展 (线上 vsix 全部失效的根因).
+  // 必须等预取落地再挂 AppRenderer; 超时 (请求挂起) 则降级为无 vsix 启动.
+  const [metaReady, setMetaReady] = React.useState(false);
   React.useEffect(() => {
-    const svc = new ExtensionServiceImpl();
-    svc.installMetadata().then(setMeta);
+    let alive = true;
+    const timer = setTimeout(() => { if (alive) setMetaReady(true); }, 8000);
+    preloadExtensionMetadata()
+      .then((m) => { if (!alive) return; clearTimeout(timer); setMeta(m); setMetaReady(true); })
+      .catch(() => { if (!alive) return; clearTimeout(timer); setMetaReady(true); });
+    return () => { alive = false; clearTimeout(timer); };
   }, []);
 
   React.useEffect(() => {
@@ -133,7 +141,27 @@ export const App: React.FC = () => {
     ],
   };
 
-  if (!wsReady) {
+  // mount 后兜底: 若预取的 vsix metadata 为空 (fetch 瞬时失败/降级), reload 重试一次.
+  // 判定只看预取结果 (__APP_REGISTRY_METADATA__ 是 index 预取同步写入的), 不依赖 DI/时序,
+  // 避免误判正常启动. sessionStorage 标记防死循环.
+  const verifyExtensionOnLoad = React.useCallback(() => {
+    try {
+      const CHECK_KEY = '__numas_ext_check_done__';
+      if (sessionStorage.getItem(CHECK_KEY)) return;
+      const meta = getPreloadedMetadata();
+      const hasVsix = meta.some((m) => {
+        const p = m.extension?.publisher || '';
+        return p && p !== 'kaitian' && p !== 'alex-ext-public';
+      });
+      if (!hasVsix) {
+        sessionStorage.setItem(CHECK_KEY, '1');
+        console.warn('[extension] 预取 vsix metadata 为空, reload 重试一次');
+        window.location.reload();
+      }
+    } catch { /* 探测失败忽略, 不误杀 */ }
+  }, []);
+
+  if (!wsReady || !metaReady) {
     return (
       <div className="app-boot">
         <div className="app-boot__spinner" aria-hidden />
@@ -146,6 +174,7 @@ export const App: React.FC = () => {
     <AppRenderer
       appConfig={appConfig}
       runtimeConfig={(runtimeConfig ?? {}) as any}
+      onLoad={verifyExtensionOnLoad}
     />
   );
 };

@@ -37,6 +37,8 @@ interface PendingMount {
   syncPosition?: () => void;
   hideDisposable?: { dispose: () => void };
   docRef?: any;  // IEditorDocumentModelService 创建的 doc ref, 卸载时 dispose
+  /** $resolveCustomTextEditor RPC 的落地 promise (卸载要等它, 见 __paperUnmount) */
+  resolvePromise?: Promise<unknown>;
 }
 
 interface InstanceState {
@@ -359,12 +361,20 @@ export function installCustomEditorPatch(): void {
         info.webviewOptions,
         info.extensionInfo,
       );
-      this.proxy.$resolveCustomTextEditor(
-        info.viewType,
-        info.uri.codeUri,
-        info.webview.id,
-        info.cancellationToken,
-      );
+      // 记录 resolve RPC 落地 promise: __paperUnmount 必须等它再销毁 webview,
+      // 否则扩展侧 resolveCustomEditor 会读到已 dispose 的 panel ("Webview is disposed").
+      // 包一层 catch: resolve 失败只告警, 不让清理逻辑卡在 rejected promise 上.
+      info.resolvePromise = Promise.resolve(
+        this.proxy.$resolveCustomTextEditor(
+          info.viewType,
+          info.uri.codeUri,
+          info.webview.id,
+          info.cancellationToken,
+        ),
+      ).catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.warn(TAG, 'resolveCustomTextEditor failed', err);
+      });
       // eslint-disable-next-line no-console
       console.log(TAG, 'webview mounted + resolve fired', { key, webviewId: info.webview.id, hasDocRef: !!docRef });
     } catch (err) {
@@ -417,16 +427,36 @@ export function installCustomEditorPatch(): void {
     if (info.docRef) {
       try { info.docRef.dispose(); } catch { /* */ }
     }
-    if (info.webview) {
-      try { info.webview.remove(); } catch { /* */ }
-      try { info.webview.dispose(); } catch { /* */ }
+    // 立即摘掉 mount 标记: 同 key 重开时 __paperTryMount 会新建 container,
+    // 不复用这个待销毁的旧 container (复用会被延迟销毁连新 webview 一起删).
+    if (info.stableContainer) {
+      try { info.stableContainer.removeAttribute('data-paper-mount-key'); } catch { /* */ }
     }
-    if (info.stableContainer && info.stableContainer.parentNode) {
-      const toRemove = info.stableContainer;
-      setTimeout(() => {
-        if (toRemove.parentNode) toRemove.parentNode.removeChild(toRemove);
-      }, 100);
+
+    const destroy = () => {
+      if (info.webview) {
+        try { info.webview.remove(); } catch { /* */ }
+        try { info.webview.dispose(); } catch { /* */ }
+      }
+      if (info.stableContainer && info.stableContainer.parentNode) {
+        const toRemove = info.stableContainer;
+        setTimeout(() => {
+          if (toRemove.parentNode) toRemove.parentNode.removeChild(toRemove);
+        }, 100);
+      }
+    };
+
+    // 关键 (Webview is disposed 竞态): webview.remove() 会触发 onRemove →
+    // webview.dispose() + $onDidDisposeWebviewPanel (扩展侧 panel 标记 disposed).
+    // 若扩展侧 $resolveCustomTextEditor 还在途, resolveCustomEditor 会读到已 dispose
+    // 的 panel 抛 "Webview is disposed" → viewer 白屏. 必须等 resolve 落地 (或超时) 再销毁.
+    if (info.resolvePromise) {
+      const timeout = new Promise<void>((resolve) => setTimeout(resolve, 8000));
+      Promise.race([info.resolvePromise, timeout]).then(destroy, destroy);
+    } else {
+      destroy();
     }
+
     state.mountedMap.delete(key);
     state.pendingMounts.delete(key);
   };
