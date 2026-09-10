@@ -25,11 +25,10 @@ import { SessionModule } from '../service/session';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
-import { SideTopbarModule } from '../extensions/side-topbar';
-import { SessionsModule } from '../extensions/sessions';
-import { ActionModule } from '../extensions/action';
+import { SideTopbarModule, SessionsModule } from '../extensions/sidebar';
+import { ActionModule } from '../extensions/main';
 import { ChatbotModule } from '../extensions/chatbot';
-import { AsideTopbarModule } from '../extensions/aside-topbar';
+import { AsideTopbarModule } from '../extensions/aside';
 import { ContextModule } from '../extensions/context';
 import { FilesModule } from '../extensions/files';
 import { WorkspaceModule } from '../extensions/workspace';

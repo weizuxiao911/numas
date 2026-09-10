@@ -19,10 +19,10 @@ import React, { useEffect, useState } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 
-import { getAppMode, setAppMode, type AppMode } from '../../App';
-import { StateToken, type IStateService } from '../../service/state';
-import { LayoutToken, LAYOUT_COMMANDS, type ILayoutService } from '../../service/layout';
-import { requestFilePicker } from '../filepicker/FilePicker';
+import { getAppMode, setAppMode, type AppMode } from '../../../App';
+import { StateToken, type IStateService } from '../../../service/state';
+import { LayoutToken, LAYOUT_COMMANDS, type ILayoutService } from '../../../service/layout';
+import { requestFilePicker } from '../../filepicker/FilePicker';
 import { styles } from './styles';
 
 function pathBasename(p: string): string {
