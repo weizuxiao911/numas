@@ -36,18 +36,25 @@ import './styles/app-shell.css';
  *   - devtools:    window.__appSetMode('ide')
  */
 export type AppMode = 'solo' | 'ide';
-let _appMode: AppMode = 'solo';
+/** 模式持久化 key: 模式切换按钮会 reload 页面重建 ClientApp (layoutComponent 只在 createApp
+ *  时消费一次, 运行时不换布局), 必须持久化否则 reload 后回落 solo. */
+const APP_MODE_STORAGE_KEY = 'NUMAS_MODE';
+function readStoredAppMode(): AppMode {
+  try { return window.localStorage.getItem(APP_MODE_STORAGE_KEY) === 'ide' ? 'ide' : 'solo'; } catch { return 'solo'; }
+}
+let _appMode: AppMode = readStoredAppMode();
 export const getAppMode = (): AppMode => _appMode;
 export const setAppMode = (m: AppMode): void => {
   if (_appMode === m) return;
   _appMode = m;
+  try { window.localStorage.setItem(APP_MODE_STORAGE_KEY, m); } catch { /* localStorage 不可用忽略 */ }
   window.dispatchEvent(new CustomEvent('app-mode-change'));
 };
 
 /** 槽位模块映射 — 官方能力按需放开, 其余锁空 (vsix 拓展自己装).
- *  - left: 官方 explorer 容器 (查看模式 aside.sidebar 渲染)
+ *  - left: 官方 explorer 容器 (查看模式 aside.sidebar 渲染; IDE 模式左栏)
  *  - main: 官方编辑器 workbench (查看模式 aside.container 渲染; IDE 模式主区)
- *  - bottom: 官方终端 (solo 终端模式在 aside 中间渲染) */
+ *  - bottom: 官方终端 (solo 终端模式在 aside 中间渲染; IDE 模式底部面板) */
 const layout = {
   [SlotLocation.top]: { modules: [] },
   [SlotLocation.action]: { modules: [] },
@@ -72,10 +79,16 @@ const SOLO_MODE = {
   },
 };
 
-/** IDE 模式 — 标准 SlotLocation, 不预设展开任何 panel */
+/** IDE 模式 — 标准 SlotLocation: explorer / editor / terminal;
+ *  IdeLayout 里同时渲染 SOLO 已注册的自定义槽组件 (顶栏 action + 右栏 chatbot),
+ *  不注册新 slot / 不改 SOLO 组件, 组合全部收敛在 IdeLayout.tsx. */
 const IDE_MODE = {
   layout,
-  panels: {},
+  panels: {
+    [SOLO_SLOTS.SidebarAction]: SIDE_TOPBAR_PANEL_ID,
+    [SOLO_SLOTS.MainAction]: ACTION_PANEL_ID,
+    [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
+  },
 };
 
 const MODES: Record<AppMode, { layout: any; panels: any }> = {
