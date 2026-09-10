@@ -104,18 +104,19 @@ export const styles = `
 }
 
 /* 项目选择按钮: 带文字的开关按钮 (📁 {项目名} ⌄)
-   - 透明 bg, hover 浅色; 展开态 is-open 维持 hover 态
+   - 浅色底 (前景色 7% 混) + hover 加深; 展开态 is-open 维持
    - 文字 = 当前 workspace basename, 自动截断 (max-width) */
 .app-action__pick {
   flex: 0 0 auto;
-  max-width: 280px;
+  min-width: 120px;
+  max-width: 200px;
   height: 36px;
   padding: 0 10px 0 12px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: transparent;
-  color: var(--ai-fg-muted);
+  background: color-mix(in srgb, var(--ai-fg) 7%, transparent);
+  color: var(--ai-fg);
   border: 0;
   border-radius: 9px;
   cursor: pointer;
@@ -126,11 +127,11 @@ export const styles = `
   transition: background 0.12s, color 0.12s;
 }
 .app-action__pick:hover {
-  background: var(--ai-hover);
+  background: color-mix(in srgb, var(--ai-fg) 12%, transparent);
   color: var(--ai-fg);
 }
 .app-action__pick.is-open {
-  background: var(--ai-hover);
+  background: color-mix(in srgb, var(--ai-fg) 12%, transparent);
   color: var(--ai-fg);
 }
 .app-action__pick-label {
