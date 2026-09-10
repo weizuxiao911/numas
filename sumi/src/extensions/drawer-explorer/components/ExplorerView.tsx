@@ -24,7 +24,8 @@ const styles = `
 .dexplorer__body { flex: 1; min-height: 0; display: flex; }
 .dexplorer__tree { width: 250px; flex-shrink: 0; overflow: hidden;
   border-right: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
-.dexplorer__editor { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.dexplorer__editor { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; overflow: hidden; }
+.dexplorer__editor iframe { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; border: none; }
 .dexplorer__editor > * { flex: 1; min-width: 0; }
 .dexplorer__editor [class*='kt_editor_tabs'] { display: none; }
 .dexplorer__loading { padding: 14px; font-size: 12px; opacity: .65; }
