@@ -1086,7 +1086,8 @@ export const ChatbotView: React.FC = () => {
     });
   }, [sessionID, client]);
 
-  const onSwitchSession = useCallback((sid: string) => {
+  /** 切到指定会话 (不处理子会话栈) */
+  const switchTo = useCallback((sid: string) => {
     if (draftRef.current?.sid !== sid) cleanupDraft();
     // 多次点击同一会话时 React bailout (setSessionID 同值不触发 useEffect [sessionID]),
     // 不能依赖 useEffect 重拉消息; 直接调 loadMessages + 清 rows.
@@ -1108,6 +1109,35 @@ export const ChatbotView: React.FC = () => {
     requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus()));
   }, [cleanupDraft, refreshSessionStatuses, loadMessages]);
 
+  /** 子代理会话栈 (父会话路径): 非空 = 处于子会话 (只读查看执行过程) */
+  const sessionStackRef = React.useRef<string[]>([]);
+  const [stackLen, setStackLen] = React.useState(0);
+
+  /** 进入子代理会话: 记录父会话 → 切换过去 (只读) */
+  const enterSubSession = useCallback((sid: string) => {
+    if (!sid || sid === sessionIDRef.current) return;
+    sessionStackRef.current = [...sessionStackRef.current, sessionIDRef.current];
+    setStackLen(sessionStackRef.current.length);
+    switchTo(sid);
+  }, [switchTo]);
+
+  /** 返回父会话 */
+  const leaveSubSession = useCallback(() => {
+    const p = sessionStackRef.current;
+    if (p.length === 0) return;
+    const parent = p[p.length - 1];
+    sessionStackRef.current = p.slice(0, -1);
+    setStackLen(sessionStackRef.current.length);
+    switchTo(parent);
+  }, [switchTo]);
+
+  /** 侧栏手动切换 = 重置到根 (离开子会话只读态) */
+  const onSwitchSession = useCallback((sid: string) => {
+    sessionStackRef.current = [];
+    setStackLen(0);
+    switchTo(sid);
+  }, [switchTo]);
+
   // 注册 ChatPanelApi (供 PDF AI讲解/文件树/选区等外部; 卸载注销)
   useEffect(() => {
     registerChatPanelApi({
@@ -1115,6 +1145,8 @@ export const ChatbotView: React.FC = () => {
       sessions: () => { /* chatbot 不提供历史会话弹窗 (topbar 已移除) */ },
       send: (text) => { void sendPrompt(text); },
       changeSession: (sid) => onSwitchSession(sid),
+      enterSubSession: (sid) => { void enterSubSession(sid); },
+      leaveSubSession: () => { void leaveSubSession(); },
       getCurrentSessionID: () => sessionIDRef.current,
       getProject: () => state.getWorkdir(),
       setProject: async (dir: string) => {
@@ -1851,6 +1883,15 @@ export const ChatbotView: React.FC = () => {
 
       {ready && (
         <div className="chat__composer">
+          {/* 子代理会话: 只读查看执行过程, 不可发送; 提供返回主会话 */}
+          {stackLen > 0 && (
+            <div className="chat__sub-back">
+              <span className="chat__sub-back-txt">子代理会话（只读查看执行过程）</span>
+              <button type="button" className="chat__sub-back-btn" onClick={() => leaveSubSession()}>
+                ← 返回主会话
+              </button>
+            </div>
+          )}
           {activeQuestion && (
             <QuestionDock
               key={activeQuestion.requestID}
@@ -1941,8 +1982,8 @@ export const ChatbotView: React.FC = () => {
             </div>
           )}
 
-          {/* 官方 DockPrompt 语义: question/permission dock 出现时顶替输入发送区 */}
-          {!dockPromptActive && (
+          {/* 官方 DockPrompt 语义: question/permission dock 出现时顶替输入发送区; 子会话只读不渲染输入区 */}
+          {!dockPromptActive && stackLen === 0 && (
           <div className="chat__input-wrap"
             onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
             onDrop={(e) => {

@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
+import { CommandService } from '@opensumi/ide-core-common';
 
 /**
  * 子 Agent 委派 (对齐官方 task-tool):
@@ -7,6 +9,7 @@ import React, { useState } from 'react';
  *  - 有输出且完成 → chevron 可展开 hairline 盒
  */
 export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
+  const commandService = useInjectable<CommandService>(CommandService);
   const status: string = part?.state?.status || 'pending';
   const input = part?.state?.input || {};
   const meta = part?.state?.metadata || {};
@@ -26,6 +29,15 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
 
   const [open, setOpen] = useState(false);
   const canExpand = !running && (!!outputText || isError);
+
+  // 官方 task 工具: 子会话 sessionId 存在 → 可点击副标题进入子代理会话查看执行过程
+  const subSessionId: string = part?.state?.metadata?.sessionId || '';
+  const openSession = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!subSessionId) return;
+    void commandService.executeCommand('chatbot.enterSubSession', subSessionId);
+  };
 
   return (
     <div className={`oc-sub is-${status}${open ? ' is-open' : ''}`}>
@@ -47,7 +59,11 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
         {description && (
           <>
             <span className="oc-tool__sep">·</span>
-            <span className="oc-tool__subtitle" title={description}>{description}</span>
+            <span
+              className={`oc-tool__subtitle${subSessionId ? ' is-session' : ''}`}
+              title={subSessionId ? `${description}（点击进入子代理会话）` : description}
+              onClick={subSessionId ? openSession : undefined}
+            >{description}</span>
           </>
         )}
         {canExpand && (

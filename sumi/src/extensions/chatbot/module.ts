@@ -34,6 +34,8 @@ export const CHATBOT_COMMANDS = {
   newSession: { id: 'chatbot.newSession', label: '新建会话' },
   listSessions: { id: 'chatbot.listSessions', label: '历史会话列表' },
   changeSession: { id: 'chatbot.changeSession', label: '切换会话' },
+  enterSubSession: { id: 'chatbot.enterSubSession', label: '进入子代理会话' },
+  leaveSubSession: { id: 'chatbot.leaveSubSession', label: '返回主会话' },
   deleteSession: { id: 'chatbot.deleteSession', label: '删除会话' },
   getCurrentSessionID: { id: 'chatbot.getCurrentSessionID', label: '当前会话 id' },
   /** 切换当前项目 (workspace 根或根下子目录): 有该项目会话则载入最新, 无则新建草稿 */
@@ -74,6 +76,12 @@ export class ChatbotCommandContribution implements CommandContribution {
     });
     commands.registerCommand(CHATBOT_COMMANDS.changeSession, {
       execute: (sid: string) => getChatPanelApi()?.changeSession(sid),
+    });
+    commands.registerCommand(CHATBOT_COMMANDS.enterSubSession, {
+      execute: (sid: string) => getChatPanelApi()?.enterSubSession?.(sid),
+    });
+    commands.registerCommand(CHATBOT_COMMANDS.leaveSubSession, {
+      execute: () => getChatPanelApi()?.leaveSubSession?.(),
     });
     commands.registerCommand(CHATBOT_COMMANDS.deleteSession, {
       execute: (sid: string) => getChatPanelApi()?.deleteSession(sid),

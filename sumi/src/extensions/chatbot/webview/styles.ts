@@ -2176,5 +2176,22 @@ export const styles = `
 .oc-msg__user-foot .oc-msg__actions { margin-top: 0; }
 
 
+/* 子代理会话只读条 */
+.chat__sub-back {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 4px 0 8px; padding: 10px 12px;
+  background: color-mix(in srgb, var(--ai-fg) 6%, var(--ai-bg-elev, #fff));
+  border: 1px solid var(--ai-border, rgba(0,0,0,.1));
+  border-radius: 10px;
+  color: var(--ai-fg-muted, #8f8f8f); font-size: 13px;
+}
+.chat__sub-back-btn {
+  flex-shrink: 0; padding: 5px 12px; border-radius: 6px;
+  background: var(--button-background, #2563eb); color: var(--button-foreground, #fff);
+  border: none; font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.chat__sub-back-btn:hover { filter: brightness(1.08); }
+
+
 `;
 export {};

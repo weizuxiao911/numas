@@ -40,6 +40,10 @@ export interface ChatPanelApi {
   send(text: string): void | Promise<void>;
   /** 切换会话 */
   changeSession(sid: string): void;
+  /** 进入子代理会话 (只读查看执行过程) */
+  enterSubSession?(sid: string): void;
+  /** 从子代理会话返回父会话 */
+  leaveSubSession?(): void;
   /** 当前会话 id */
   getCurrentSessionID(): string;
   /** 当前 cwd 的顶层会话列表 (排除 subagent) */
