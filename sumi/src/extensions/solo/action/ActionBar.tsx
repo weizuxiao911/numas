@@ -112,7 +112,7 @@ const AsideToggle: React.FC<{ layout: ILayoutService; commandService: CommandSer
   );
 };
 
-const ProjectPickButton: React.FC<{ label: string; commandService: CommandService; state: IStateService }> = ({ label, commandService, state }) => {
+const ProjectPickButton: React.FC<{ label: string; project: string; commandService: CommandService; state: IStateService }> = ({ label, project, commandService, state }) => {
   const onClick = () => {
     // 单 workdir 模型: 点击直接弹 filepicker 自由选任意目录 (即 workdir 根).
     const start = state.getWorkdir() || '';
@@ -131,7 +131,7 @@ const ProjectPickButton: React.FC<{ label: string; commandService: CommandServic
     <button
       type="button"
       className="app-action__pick"
-      title="选择项目"
+      title={project || '选择项目'}
       onClick={onClick}
     >
       <span className="app-action__pick-label">{label}</span>
@@ -171,7 +171,7 @@ export const ActionBar: React.FC = () => {
               <ExpandToggle layout={layout} commandService={commandService} />
             </>
           )}
-          <ProjectPickButton label={label} commandService={commandService} state={state} />
+          <ProjectPickButton label={label} project={project} commandService={commandService} state={state} />
         </div>
         <div className="app-action__right">
           <AsideToggle commandService={commandService} layout={layout} />

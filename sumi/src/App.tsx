@@ -143,6 +143,13 @@ export const App: React.FC = () => {
     layoutConfig: cfg?.layout,
     layoutComponent: Layout,
     defaultPanels: cfg?.panels,
+    // 面板初始宽度 (app 侧配置; SlotRenderer 上的 defaultSize 对 tabbar 面板无效):
+    // 未配置时 main-layout 的 panel.view 兜底 panelSize=335 → left 总宽 = 335+48 = 383.
+    // 拖拽下限在 IdeLayout.tsx 的 SlotRenderer minResize.
+    panelSizes: {
+      [SlotLocation.left]: 278,   // explorer
+      [SlotLocation.right]: 450,  // AI 对话 (自绘右栏, 见 IdeLayout .app-ide__right)
+    },
     componentCDNType: 'jsdelivr',
     // 精简 explorer 容器: 移除官方 Outline/OpenedEditor 模块 (只留文件树 section)
     useSimplifyExplorerPanel: true,

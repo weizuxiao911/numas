@@ -188,7 +188,7 @@ export function IdeLayout(): React.ReactElement {
             <SlotRenderer
               slot={SlotLocation.left}
               isTabbar
-              defaultSize={300}
+              minResize={204}
             />
             <SplitPanel id="main-vertical" minResize={300} flexGrow={1} direction="top-to-bottom">
               <SlotRenderer flex={2} flexGrow={1} minResize={200} slot={SlotLocation.main} />

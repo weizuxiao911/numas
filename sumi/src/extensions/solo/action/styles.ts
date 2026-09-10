@@ -110,7 +110,7 @@ export const styles = `
   flex: 0 0 auto;
   min-width: 120px;
   max-width: 200px;
-  height: 36px;
+  height: 32px;
   padding: 0 10px 0 12px;
   display: inline-flex;
   align-items: center;
