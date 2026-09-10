@@ -9,7 +9,7 @@ import React, { useEffect, useState } from 'react';
 
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
-import { StateToken, type IStateService } from '../../../service/state';
+import { StateToken, type IStateService } from '../../service/state';
 import { styles } from './styles';
 
 const NewSessionButton: React.FC = () => {

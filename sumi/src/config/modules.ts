@@ -25,11 +25,11 @@ import { SessionModule } from '../service/session';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
-import { SideTopbarModule } from '../extensions/solo/sideTopbar';
-import { SessionsModule } from '../extensions/solo/sessions';
-import { ActionModule } from '../extensions/solo/action';
-import { ChatbotModule } from '../extensions/solo/chatbot';
-import { AsideTopbarModule } from '../extensions/solo/asideTopbar';
+import { SideTopbarModule } from '../extensions/side-topbar';
+import { SessionsModule } from '../extensions/sessions';
+import { ActionModule } from '../extensions/action';
+import { ChatbotModule } from '../extensions/chatbot';
+import { AsideTopbarModule } from '../extensions/aside-topbar';
 import { BuiltinBrowserModule } from '../extensions/browser';
 import { WorkspaceModule } from '../extensions/workspace';
 

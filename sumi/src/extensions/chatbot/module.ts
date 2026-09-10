@@ -1,5 +1,5 @@
 /**
- * Chatbot 拓展 — extensions/solo/chatbot/
+ * Chatbot 拓展 — extensions/chatbot/
  *
  * 业务承载: SOLO 模式对话主区 (ChatbotView: 消息流 + 输入区).
  *

@@ -1,5 +1,5 @@
 /**
- * Action 拓展 — extensions/solo/action/
+ * Action 拓展 — extensions/action/
  *
  * 业务承载: SOLO 模式顶部工具栏 (ModeSwitch / sidebar expand / ProjectPicker).
  *

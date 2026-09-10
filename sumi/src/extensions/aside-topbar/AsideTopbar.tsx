@@ -17,7 +17,7 @@ import { CommandService } from '@opensumi/ide-core-common';
 import { SlotLocation } from '@opensumi/ide-core-browser';
 import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 import { ITerminalController } from '@opensumi/ide-terminal-next/lib/common';
-import { LayoutToken, type ILayoutService, type AsideView } from '../../../service/layout';
+import { LayoutToken, type ILayoutService, type AsideView } from '../../service/layout';
 import { styles } from './styles';
 
 const ITEMS: Array<{ id: AsideView; label: string }> = [

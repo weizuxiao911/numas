@@ -1,5 +1,5 @@
 /**
- * AsideTopbar 拓展 — extensions/solo/asideTopbar/
+ * AsideTopbar 拓展 — extensions/aside-topbar/
  *
  * 业务承载: SOLO 右列顶部活动栏 (胶囊: 查看 | 终端 | 浏览器).
  * 装 solo.aside.action slot (字符串即协议, 不 import config/).

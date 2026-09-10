@@ -8,7 +8,7 @@
  * 跨拓展/动态拓展通过 VSCode 标准的 executeCommand 使用.
  */
 
-import { pathBase } from '../../../../infra/path';
+import { pathBase } from '../../../infra/path';
 
 export type ChatContextItem =
   | {

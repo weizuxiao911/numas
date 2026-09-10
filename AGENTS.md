@@ -724,7 +724,7 @@ AI **仍需 `question`**:
 - **现象**: 聊天输入框粘贴截图/文件无任何反应 (无附件卡片、无报错); 但用 `new DataTransfer() + dispatchEvent('paste')` 的合成测试**正常**添加附件.
 - **根因**: paste 事件里先做了异步动作 (`await fs.mkdirp('.tmp')`) 才遍历 `clipboardData.items` 调 `it.getAsFile()` — **DataTransferItem 只在事件同步阶段有效**, 事件回调返回/跨过 await 后即失效, `getAsFile()` 返回 null → 循环 `continue` 静默跳过. 合成事件的数据不经过系统剪贴板, 不受失效影响, 所以自动化测试会假阳性.
 - **解决方案**: paste 回调**第一段同步**取 File 快照 (`const files = fileItems.map(it => it.getAsFile()).filter(Boolean)`), 之后再 `await` 写盘/生成预览.
-- **改动文件**: `sumi/src/extensions/solo/chatbot/webview/ChatbotView.tsx` (`onPaste`).
+- **改动文件**: `sumi/src/extensions/chatbot/webview/ChatbotView.tsx` (`onPaste`).
 - **排查方法**: ① 用真实剪贴板验证 (`navigator.clipboard.write([new ClipboardItem({'image/png': blob})])` + `Meta+V`), 不要只用合成 `dispatchEvent`; ② 在 paste 上挂 capture 监听打 `clipboardData.types/items` 确认事件与 kind 是否到达, 区分「事件没到」vs「处理逻辑跳过了」; ③ 任何 `getAsFile()` 取值必须在事件同步阶段完成.
 
 #### 37. 新增 opencode V2 端点在 dev (7788) 下 404: webpack devServer proxy 白名单没加路径
@@ -785,7 +785,7 @@ AI **仍需 `question`**:
 - **现象**: 切换项目后 chatbot 的 agent/model/skill 列表仍是旧项目的; 手动点设置里的「重新加载」后才刷新.
 - **根因**: opencode 实例按 directory 惰性创建并缓存 (`InstanceStore` 的 `cache`, key=realpath directory); UI 的 agents/skills/models/providers 只在 mount / `runtime-ready` / `instance.reloaded` 时拉取 (`loadConfig`). 切 workdir 只更新每请求的 `x-opencode-directory` header, 不触发任何配置刷新.
 - **解决方案**: `chatbot.setProject` 里 `state.setWorkdir(dir)` 后自动 `POST /instance/reload` (等同设置里「重新加载」: 服务端 `InstanceStore.reload` dispose + 重建实例, 重读 `.opencode/agent|skill` / `opencode.json` / `~/.config/opencode`), 完成后 `instance.reloaded` 事件驱动 `loadConfig()` 刷新 agents/skills/models/providers. 先 await POST 保证服务端已替换实例, 后续 listSessions 命中重载后的新实例.
-- **改动文件**: `sumi/src/extensions/solo/chatbot/webview/ChatbotView.tsx` (`setProject`).
+- **改动文件**: `sumi/src/extensions/chatbot/webview/ChatbotView.tsx` (`setProject`).
 - **排查方法**: 切项目后配置不刷新 → 用 fetch spy 看是否发出 `/instance/reload` (header 应为新目录); 服务端 reload 逻辑在 `opencode/packages/opencode/src/project/instance-store.ts` 的 `reload` (替换 cache entry + `emitReloaded`).
 
 #### 45. SOLO/IDE 模式切换必须整页 reload + 模式持久化; IDE 模式组合收敛在 IdeLayout.tsx

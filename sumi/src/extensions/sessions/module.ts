@@ -1,5 +1,5 @@
 /**
- * Sessions 拓展 — extensions/solo/sessions/
+ * Sessions 拓展 — extensions/sessions/
  *
  * 业务承载: SOLO 左列容器区 (新建会话 + 历史会话列表).
  * 装 solo.sidebar.container slot (字符串即协议, 不 import config/).

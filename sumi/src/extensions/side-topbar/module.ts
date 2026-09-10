@@ -1,5 +1,5 @@
 /**
- * SideTopbar 拓展 — extensions/solo/sideTopbar/
+ * SideTopbar 拓展 — extensions/side-topbar/
  *
  * 业务承载: SOLO 左列顶部活动栏 (模式切换 + sidebar 折叠).
  * 装 solo.sidebar.action slot (字符串即协议, 不 import config/).
