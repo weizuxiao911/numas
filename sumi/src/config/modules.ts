@@ -30,6 +30,7 @@ import { SessionsModule } from '../extensions/sessions';
 import { ActionModule } from '../extensions/action';
 import { ChatbotModule } from '../extensions/chatbot';
 import { AsideTopbarModule } from '../extensions/aside-topbar';
+import { ContextModule } from '../extensions/context';
 import { WorkspaceModule } from '../extensions/workspace';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
@@ -56,6 +57,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     ActionModule,          // 中列 main.action
     ChatbotModule,         // 中列 main.container (对话主区)
     AsideTopbarModule,     // 右列 aside.action (查看/终端 胶囊)
+    ContextModule,         // 编辑器/终端选区 + 文件树「添加到对话」(契约: chatbot.addContext 命令)
 
     // workspace 根同步 (官方 explorer/editor 读 IWorkspaceService; 查看模式依赖)
     WorkspaceModule,

@@ -42,6 +42,8 @@ export const CHATBOT_COMMANDS = {
   setProject: { id: 'chatbot.setProject', label: '切换项目' },
   /** 当前项目路径 (= 当前会话 directory, 无会话时为 workspace 根) */
   getProject: { id: 'chatbot.getProject', label: '当前项目路径' },
+  /** 挂上下文到输入栏 (跨拓展契约, 入参 = ChatContextItem) */
+  addContext: { id: 'chatbot.addContext', label: '添加对话上下文' },
 } as const;
 
 @Injectable()
@@ -94,6 +96,9 @@ export class ChatbotCommandContribution implements CommandContribution {
     });
     commands.registerCommand(CHATBOT_COMMANDS.getProject, {
       execute: () => getChatPanelApi()?.getProject?.() ?? '',
+    });
+    commands.registerCommand(CHATBOT_COMMANDS.addContext, {
+      execute: (item: unknown) => getChatPanelApi()?.addContext(item as never),
     });
   }
 }

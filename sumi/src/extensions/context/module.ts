@@ -5,20 +5,19 @@
  *   - 文件树右键「添加到对话」
  *   - 编辑器选中文本 → 悬浮条
  *   - 终端选中文本 → 悬浮条
- * 契约: chat/commands/chatApi.addToConversation (不 import Chat.tsx, 不走 ask()).
+ * 契约: 全局命令 `chatbot.addContext` (命令 id 字符串即跨拓展 API, 见 AGENTS.md §2.2;
+ *       不 import chatbot 实现, 不走 ask()).
  */
 import { Injectable, Autowired } from '@opensumi/di';
-import { Domain, URI, CommandRegistry, CommandContribution, Disposable, IDisposable } from '@opensumi/ide-core-common';
-import { BrowserModule, ClientAppContribution, SlotLocation } from '@opensumi/ide-core-browser';
+import { Domain, URI, CommandRegistry, CommandContribution, CommandService, Disposable, IDisposable } from '@opensumi/ide-core-common';
+import { BrowserModule, ClientAppContribution } from '@opensumi/ide-core-browser';
 import { MenuContribution, IMenuRegistry, MenuId } from '@opensumi/ide-core-browser/lib/menu/next';
-import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 import { WorkbenchEditorService } from '@opensumi/ide-editor';
 import type { IEditor } from '@opensumi/ide-editor';
 import { FileTreeModelService } from '@opensumi/ide-file-tree-next/lib/browser/services/file-tree-model.service';
 import { ITerminalController } from '@opensumi/ide-terminal-next/lib/common';
 import type { ITerminalClient } from '@opensumi/ide-terminal-next/lib/common';
 
-import { addToConversation, type ChatContextItem } from '../chat/commands/chatApi';
 import { hideAddToChatFloat, showAddToChatFloat } from './float';
 import { displayNameFromPath, hostPathFromUri } from './host-path';
 import {
@@ -28,16 +27,36 @@ import {
   readAnyAccessibleSelection,
 } from './dom-selection';
 
+/** 对话上下文项 — 契约: 全局命令 chatbot.addContext 的入参 (与 chatbot 侧 ChatContextItem 同形) */
+export type ChatContextItem =
+  | {
+      kind: 'file';
+      path: string;
+      name: string;
+    }
+  | {
+      kind: 'selection';
+      source: 'editor' | 'terminal';
+      path?: string;
+      name: string;
+      startLine?: number;
+      endLine?: number;
+      text: string;
+    };
+
 export const ADD_TO_CONVERSATION_COMMAND = {
   id: 'context.addToConversation',
   label: '添加到对话',
 };
 
+/** 跨拓展契约: chatbot 侧注册的全局命令 (加对话上下文) */
+const CHATBOT_ADD_CONTEXT_COMMAND = 'chatbot.addContext';
+
 @Injectable()
 @Domain(CommandContribution, MenuContribution, ClientAppContribution)
 export class ContextContribution implements CommandContribution, MenuContribution, ClientAppContribution {
-  @Autowired(IMainLayoutService)
-  private readonly layoutService!: IMainLayoutService;
+  @Autowired(CommandService)
+  private readonly commandService!: CommandService;
 
   @Autowired(WorkbenchEditorService)
   private readonly editorService!: WorkbenchEditorService;
@@ -121,14 +140,12 @@ export class ContextContribution implements CommandContribution, MenuContributio
 
   private push(item: ChatContextItem): void {
     this.revealChat();
-    addToConversation(item);
+    // 跨拓展契约: 全局命令 (chatbot 内部有 pending 队列, 面板挂载后 flush)
+    void this.commandService.executeCommand(CHATBOT_ADD_CONTEXT_COMMAND, item).catch(() => { /* ignore */ });
   }
 
   private revealChat(): void {
-    try {
-      this.layoutService.toggleSlot(SlotLocation.right, true);
-      this.layoutService.getTabbarHandler('chat-panel')?.activate();
-    } catch { /* 面板未就绪时仍派事件, Chat 挂载后 flush 队列 */ }
+    // 对话区在 SOLO = 中列常驻 / IDE = 右栏自绘列, 无需激活面板; 派事件让 chatbot 聚焦输入框
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('chat:ai-reveal'));
     }
