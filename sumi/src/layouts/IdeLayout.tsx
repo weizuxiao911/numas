@@ -26,6 +26,7 @@ import { FilePicker } from '../extensions/filepicker/FilePicker';
 /** IDE 专属样式: 顶部栏排布 + 隐藏 SOLO 专用按钮 (sidebar 折叠 / aside 开关) */
 const styles = `
 .app-ide {
+  --resizer-w: 6px;
   width: 100%; height: 100%;
   display: flex; flex-direction: column;
   min-width: 0; min-height: 0;
@@ -33,9 +34,9 @@ const styles = `
 .app-ide__top {
   display: flex; align-items: center;
   flex: 0 0 auto;
-  height: 36px; padding: 0 12px;
-  background: var(--editor-background);
-  border-bottom: 1px solid var(--editor-border);
+  height: 48px; padding: 0 12px;
+  /* 跟 SOLO sidebar 同色 (偏灰 token, overrides.css 亮色块同款 mix) */
+  background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328));
   min-width: 0;
 }
 .app-ide__top .app-side-topbar { flex: 0 0 auto; padding: 0; }
@@ -43,12 +44,31 @@ const styles = `
 /* SOLO 专用按钮在 IDE 无意义: sidebar 折叠 / aside 开关 */
 .app-ide .app-side-topbar__icon-btn { display: none !important; }
 .app-ide .app-action__right { display: none !important; }
-/* 官方视图去掉主题自带阴影 (flat 布局; explorer / 终端 / 编辑区 tabs).
-   主题用 unlayered !important 定义阴影, 必须放进 @layer 的 !important 才能盖过 (cascade layer 规则) */
+/* SplitPanel 拖拽条: 宽度/命中区对齐 SOLO resizer (--resizer-w 6px), 1px 线居中留呼吸感 */
+.app-ide [class*="resize-handle-horizontal"] {
+  width: var(--resizer-w) !important;
+  margin-left: calc(var(--resizer-w) / -2) !important;
+  margin-right: calc(var(--resizer-w) / -2) !important;
+}
+.app-ide [class*="resize-handle-horizontal"]::before { left: calc(var(--resizer-w) / 2) !important; }
+.app-ide [class*="resize-handle-vertical"] {
+  height: var(--resizer-w) !important;
+  margin-top: calc(var(--resizer-w) / -2) !important;
+  margin-bottom: calc(var(--resizer-w) / -2) !important;
+}
+.app-ide [class*="resize-handle-vertical"]::before { top: calc(var(--resizer-w) / 2) !important; }
+/* 主题用 unlayered !important 定义背景/阴影, 必须放进 @layer 的 !important 才能盖过 */
 @layer numas-override {
+  /* 去掉所有阴影 (flat 布局) */
+  .app-ide,
+  .app-ide * { box-shadow: none !important; }
+  /* top + activity bar 背景跟 SOLO sidebar 一致 (偏灰 token; 主题默认半透明白) */
   .app-ide .left-slot,
-  .app-ide .bottom-slot,
-  .app-ide [class*="kt_editor_tabs"] { box-shadow: none !important; }
+  .app-ide [class*="left_tab_bar"] {
+    background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
+  }
+  /* 面板内容区用 #fff token (主题默认透明, 会透出左侧灰底) */
+  .app-ide .kt-tab-panel { background: var(--editor-background, #ffffff) !important; }
 }
 /* 右栏: AI 对话 (chatbot 容器) */
 .app-ide__right {
