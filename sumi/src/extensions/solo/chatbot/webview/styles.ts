@@ -457,7 +457,7 @@ export const styles = `
 
 /* Composer — 官方 prompt input 卡片风: rounded-12 + hairline 边框 + 无霓虹/无金属渐变 */
 .chat__composer {
-  padding: 8px 12px 12px;
+  padding: 8px 12px 32px;
   flex-shrink: 0;
   position: relative;
 }
