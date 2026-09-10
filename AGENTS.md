@@ -778,3 +778,12 @@ AI **仍需 `question`**:
 - **解决方案**: `chatbot.setProject` 里 `state.setWorkdir(dir)` 后自动 `POST /instance/reload` (等同设置里「重新加载」: 服务端 `InstanceStore.reload` dispose + 重建实例, 重读 `.opencode/agent|skill` / `opencode.json` / `~/.config/opencode`), 完成后 `instance.reloaded` 事件驱动 `loadConfig()` 刷新 agents/skills/models/providers. 先 await POST 保证服务端已替换实例, 后续 listSessions 命中重载后的新实例.
 - **改动文件**: `sumi/src/extensions/solo/chatbot/webview/ChatbotView.tsx` (`setProject`).
 - **排查方法**: 切项目后配置不刷新 → 用 fetch spy 看是否发出 `/instance/reload` (header 应为新目录); 服务端 reload 逻辑在 `opencode/packages/opencode/src/project/instance-store.ts` 的 `reload` (替换 cache entry + `emitReloaded`).
+
+#### 45. SOLO/IDE 模式切换必须整页 reload + 模式持久化; IDE 模式组合收敛在 IdeLayout.tsx
+
+- **现象**: 点 SOLO/IDE 切换按钮后回到原模式 (永远进不了 IDE).
+- **根因**: `@codeblitzjs/ide-core` 的 `AppRenderer` 内部 `const app = useConstant(() => createApp(opts))` — ClientApp (含 `layoutComponent`/`layoutConfig`/`defaultPanels`) **只在首次挂载创建一次**; 运行时 `setAppMode` 只让 React 重渲染 App 组件, ClientApp 不重建 → 布局不变. 所以切换必须 `location.reload()` 让 createApp 用新 mode 配置重建; 而 `_appMode` 原先只存内存 (module 变量), reload 后重置回 solo → 切换永远无效.
+- **解决方案**: `App.tsx` 模式持久化到 `localStorage['NUMAS_MODE']` (`_appMode` 初始化读, `setAppMode` 写); 切换按钮保持 `setAppMode` + `location.reload()`.
+- **IDE 模式组合 (不注册新 slot / 不改 SOLO 组件)**: 全部收敛在 `sumi/src/layouts/IdeLayout.tsx` — 标准槽 (left explorer / main editor / bottom terminal) + 直接 `SlotRenderer` 渲染 SOLO 已注册的自定义槽 (`SOLO_SLOTS.SidebarAction` 模式切换 / `SOLO_SLOTS.MainAction` 项目选择 / `SOLO_SLOTS.MainContainer` chatbot 右栏); `IDE_MODE.panels` 用同一批 panel id 激活. IDE 专属样式 (顶栏高度/隐藏 SOLO 专用按钮) 用 `.app-ide` scoped CSS 在 IdeLayout 内注入.
+- **附加 (SplitPanel 尺寸)**: `SplitPanel` 从**子元素 props** (`defaultSize`/`savedSize`/`flex`) 读尺寸, 不是 CSS flex; 自定义包装组件要透传这些 props (如 `IdeRightPanel defaultSize={380}`), 且包装 div 需 `height: 100%` (SplitPanel 的 wrapper 是 block, 子元素 height auto 会塌成内容高).
+- **排查方法**: 改布局不生效 → 先确认是否走了 reload (createApp 一次性); 模式不记忆 → 查 localStorage `NUMAS_MODE`; SplitPanel 子元素尺寸不对 → 查子元素 props 是否有 `defaultSize`/`flex`, 及是否 `height: 100%`.
