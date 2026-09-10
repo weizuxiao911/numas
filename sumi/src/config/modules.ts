@@ -29,6 +29,7 @@ import { SideTopbarModule, SessionsModule, ActionModule, AsideTopbarModule } fro
 import { ChatbotModule } from '../extensions/chat';
 import { ContextModule } from '../extensions/context';
 import { FilesModule } from '../extensions/file';
+import { MarkdownModule } from '../extensions/markdown';
 import { WorkspaceModule } from '../extensions/workspace';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
@@ -57,6 +58,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     AsideTopbarModule,     // 右列 aside.action (查看/终端 胶囊)
     ContextModule,         // 编辑器/终端选区 + 文件树「添加到对话」(契约: chatbot.addContext 命令)
     FilesModule,           // 文件树: 上传/下载/压缩 zip (右键 + 标题栏上传按钮)
+    MarkdownModule,        // .md 预览 (marked+shiki+katex+mermaid; 右键/标题栏/命令)
 
     // workspace 根同步 (官方 explorer/editor 读 IWorkspaceService; 查看模式依赖)
     WorkspaceModule,
