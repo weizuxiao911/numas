@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 import { onEvent } from '@/service/event/eventBus';
+import { aiListMessages } from '@/extensions/solo/chatbot/commands/api';
+import { MessageRow } from '../components/MessageRow';
 
 /**
  * 子 Agent 委派 (对齐官方 task-tool):
@@ -9,10 +11,21 @@ import { onEvent } from '@/service/event/eventBus';
  *    运行中 = .oc-tool__spinner + is-pending (标题 shimmer); 完成 = .oc-tool__indicator 图标;
  *    出错 = 图标 + 标题变红 (oc-sub.is-error .oc-tool__title)
  *  - 标题=专家名 (首字母大写), 副标题=任务描述 (单行截断), 后台任务加 (background)
- *  - 有输出且完成 → chevron 可展开 hairline 盒
- *  - 子代理会话的 pending question/permission 由主会话 dock 提升展示 (session-request-tree),
- *    本卡片只投影执行过程, 不承载作答交互
+ *  - 内联消息区: 直接复用主消息组件 (MessageRow/PartRenderer) 渲染子会话消息流,
+ *    与主会话同款格式 (markdown/代码窗/工具卡/diff); 数据 = 挂载回补 (aiListMessages) + 实时事件
+ *  - 交互: 点标题行进子会话 (只读); 右侧 chevron 单独折叠/展开内联区
+ *  - 默认态: 运行中展开实时跟随, 完成后自动折叠
+ *  - 子代理会话的 pending question/permission 由主会话 dock 提升展示 (session-request-tree)
  */
+
+interface ChildRow {
+  id: string;
+  role: string;
+  parts: any[];
+}
+
+/** 内联区只读: question 交互由主会话 dock 承载, 这里 no-op */
+const noopReply = async (): Promise<void> => {};
 
 export const SubAgentCard: React.FC<{ part: any; streaming?: boolean }> = ({ part, streaming }) => {
   const commandService = useInjectable<CommandService>(CommandService);
@@ -23,6 +36,7 @@ export const SubAgentCard: React.FC<{ part: any; streaming?: boolean }> = ({ par
   const running = status === 'pending' || status === 'running';
   /** 中断残留: 同 ToolView — 只有当前流式行里的 running 才真在跑 */
   const interrupted = running && !streaming;
+  const active = running && !interrupted;
 
   const rawType: string = input.subagent_type || input.agent_name || input.name || input.subagent || input.agent || 'agent';
   const title = rawType ? rawType.charAt(0).toUpperCase() + rawType.slice(1) : 'Agent';
@@ -35,12 +49,49 @@ export const SubAgentCard: React.FC<{ part: any; streaming?: boolean }> = ({ par
   const outputText = typeof output === 'string' ? output : output ? JSON.stringify(output, null, 2) : '';
   const errText = (() => { const e = part?.state?.error; if (!e) return ''; return typeof e === 'string' ? e : (e.message || JSON.stringify(e)); })();
 
-  const [open, setOpen] = useState(false);
-  const canExpand = !running && (!!outputText || isError);
-  // 主消息下方投影子代理会话的对话消息流 (实时跟随)
-  const [rows, setRows] = React.useState<Array<{ id: string; role: string; parts: any[] }>>([]);
   const subSessionId: string = part?.state?.metadata?.sessionId || '';
-  React.useEffect(() => {
+  const canExpand = !running && (!!outputText || isError);
+  const showToggle = !!subSessionId || canExpand;
+
+  // 默认态: 运行中展开; 完成后 (或中断残留) 自动折叠一次; 用户点 chevron 可随时切换
+  const [open, setOpen] = useState(active);
+  const wasRunning = useRef(active);
+  useEffect(() => {
+    if (active) {
+      wasRunning.current = true;
+      setOpen(true);
+      return;
+    }
+    if (wasRunning.current) {
+      wasRunning.current = false;
+      setOpen(false);
+    }
+  }, [active]);
+
+  // 子会话消息流: 挂载回补 (进入子会话再返回后不丢) + 实时事件跟随
+  const [rows, setRows] = useState<ChildRow[]>([]);
+  useEffect(() => {
+    if (!subSessionId) return;
+    let cancelled = false;
+    void aiListMessages(subSessionId)
+      .then((msgs) => {
+        if (cancelled) return;
+        const seeded: ChildRow[] = (msgs || []).map((m: any) => {
+          const info = m.info || m;
+          return { id: info?.id || m.id, role: info?.role || m.role, parts: m.parts || info?.parts || [] };
+        });
+        setRows((prev) => {
+          const byId = new Map<string, ChildRow>();
+          for (const r of seeded) byId.set(r.id, r);
+          for (const r of prev) byId.set(r.id, r); // 实时行覆盖回补行
+          return Array.from(byId.values());
+        });
+      })
+      .catch(() => { /* 命令未就绪时忽略 */ });
+    return () => { cancelled = true; };
+  }, [subSessionId]);
+
+  useEffect(() => {
     if (!subSessionId) return;
     return onEvent((ev) => {
       const sid = ev.properties?.sessionID;
@@ -86,65 +137,61 @@ export const SubAgentCard: React.FC<{ part: any; streaming?: boolean }> = ({ par
 
   return (
     <div className={`oc-sub is-${status}${open ? ' is-open' : ''}`}>
-      <button
-        type="button"
-        className={`oc-tool__trigger oc-sub__trigger${subSessionId ? ' is-clickable' : canExpand ? '' : ' is-static'}${running && !interrupted ? ' is-pending' : ''}`}
-        onClick={subSessionId ? openSession : (canExpand ? () => setOpen(v => !v) : undefined)}
-        title={subSessionId ? '点击查看子代理会话执行过程' : undefined}
-      >
-        {running && !interrupted ? (
-          <span className="oc-tool__spinner" />
-        ) : (
-          <span className="oc-tool__indicator">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.2" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
-          </span>
-        )}
-        <span className="oc-tool__title">{title}</span>
-        {description && (
-          <>
-            <span className="oc-tool__sep">·</span>
-            <span className="oc-tool__subtitle" title={description}>{description}</span>
-          </>
-        )}
-        {interrupted && <span className="oc-sub__interrupted">已中断</span>}
-
-        {(canExpand || (running && !interrupted)) && (
-          <span className={`oc-tool__chevron${open ? ' is-open' : ''}`}>
+      <div className="oc-sub__head">
+        <button
+          type="button"
+          className={`oc-tool__trigger oc-sub__trigger${subSessionId ? ' is-clickable' : ' is-static'}${active ? ' is-pending' : ''}`}
+          onClick={subSessionId ? openSession : undefined}
+          title={subSessionId ? '点击进入子代理会话 (只读)' : undefined}
+        >
+          {active ? (
+            <span className="oc-tool__spinner" />
+          ) : (
+            <span className="oc-tool__indicator">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="3.2" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
+            </span>
+          )}
+          <span className="oc-tool__title">{title}</span>
+          {description && (
+            <>
+              <span className="oc-tool__sep">·</span>
+              <span className="oc-tool__subtitle" title={description}>{description}</span>
+            </>
+          )}
+          {interrupted && <span className="oc-sub__interrupted">已中断</span>}
+        </button>
+        {showToggle && (
+          <button
+            type="button"
+            className={`oc-sub__toggle${open ? ' is-open' : ''}`}
+            title={open ? '折叠执行过程' : '展开执行过程'}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-          </span>
+          </button>
         )}
-      </button>
-      {subSessionId && rows.length > 0 && (
-        <div className="oc-sub__proj">
-          {rows.map((r) => {
-            const isUser = r.role === 'user';
-            const text = (r.parts || []).filter((p: any) => p?.type === 'text').map((p: any) => String(p.text || '')).join('\n').trim();
-            return (
-              <div key={r.id} className={`oc-sub__proj-row is-${isUser ? 'user' : 'asst'}`}>
-                {isUser ? (
-                  <div className="oc-sub__proj-user">{text || '(…)'}</div>
-                ) : (
-                  <div className="oc-sub__proj-asst">
-                    {(r.parts || []).map((p: any, i: number) => {
-                      if (p?.type === 'reasoning' && String(p.text || '').trim()) {
-                        return <div key={i} className="oc-sub__proj-reason">🤔 {String(p.text).replace(/\s+/g, ' ').trim().slice(0, 140)}</div>;
-                      }
-                      if (p?.type === 'tool') {
-                        return <div key={i} className="oc-sub__proj-tool">⚙ {p.tool || 'tool'} · {p.state?.status || ''}</div>;
-                      }
-                      if (p?.type === 'text' && String(p.text || '').trim()) {
-                        return <div key={i} className="oc-sub__proj-text">{String(p.text).replace(/\s+/g, ' ').trim()}</div>;
-                      }
-                      return null;
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      </div>
+
+      {/* 内联消息区: 复用主消息组件渲染子会话消息流 (只读) */}
+      {subSessionId && open && rows.length > 0 && (
+        <div className="oc-sub__stream">
+          {rows.map((r, i) => (
+            <MessageRow
+              key={r.id}
+              row={r as any}
+              streaming={active && i === rows.length - 1}
+              done={!active}
+              sessionID={subSessionId}
+              onReplyQuestion={noopReply}
+              busy={active}
+            />
+          ))}
         </div>
       )}
-      {canExpand && open && (
+
+      {/* 无子会话时的输出盒 (兜底) */}
+      {!subSessionId && canExpand && open && (
         isError ? (
           <div className="oc-tool__error"><pre className="oc-tool__pre">{errText}</pre></div>
         ) : (

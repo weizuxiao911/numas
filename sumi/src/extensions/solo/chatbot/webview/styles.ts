@@ -2272,24 +2272,29 @@ export const styles = `
 @keyframes oc-tool-pulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
 
 
-/* 子代理会话消息投影 (主消息下方实时显示) */
-.oc-sub__proj {
-  display: flex; flex-direction: column; gap: 6px;
+/* 子代理卡: head (标题行 + 折叠按钮) + 内联消息流 (复用主消息组件) */
+.oc-sub__head { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.oc-sub__head .oc-tool__trigger { flex: 1 1 auto; width: auto; min-width: 0; }
+.oc-sub__toggle {
+  flex-shrink: 0; width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: none; border: none; border-radius: 5px;
+  color: var(--ai-fg-muted); cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.oc-sub__toggle:hover { background: var(--ai-hover); color: var(--ai-fg); }
+.oc-sub__toggle svg { display: block; transition: transform .15s ease-out; }
+.oc-sub__toggle.is-open svg { transform: rotate(180deg); }
+/* 内联消息区: 与主会话同款消息行, 缩进 + 左竖线 + 限高滚动 */
+.oc-sub__stream {
+  display: flex; flex-direction: column; gap: 14px;
   margin: 6px 0 8px 26px; padding-left: 12px;
   border-left: 2px solid var(--ai-hairline-strong, rgba(0,0,0,.15));
-  max-height: 260px; overflow: auto;
+  max-height: 420px; overflow: auto;
 }
-.oc-sub__proj-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.oc-sub__proj-user {
-  align-self: flex-end; max-width: 90%;
-  background: color-mix(in srgb, var(--ai-fg) 7%, var(--ai-bg-elev, #fff));
-  border-radius: 8px; padding: 5px 10px;
-  font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
-}
-.oc-sub__proj-asst { display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 1.5; }
-.oc-sub__proj-reason { color: var(--ai-fg-muted, #8f8f8f); font-style: italic; font-size: 11.5px; }
-.oc-sub__proj-tool { color: var(--ai-fg-muted, #8f8f8f); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
-.oc-sub__proj-text { color: var(--ai-fg); white-space: pre-wrap; word-break: break-word; }
+.oc-sub__stream .oc-msg { margin: 0; }
+.oc-sub__stream .oc-msg + .oc-msg { margin-top: 0; }
+.oc-sub__stream .oc-msg__user-col { max-width: 92%; }
 
 
 /* 工具执行过程 (运行中卡片下方实时显示) */

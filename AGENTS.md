@@ -697,6 +697,7 @@ AI **仍需 `question`**:
   2. **「reject 后 task 变 error 不是悬挂」**: `question.reject` → `Deferred.fail(RejectedError)` → question 工具 die → 子代理 tool error → task 工具按 `findLast(tool error)` 判失败. 这是服务端既有语义 (非 UI bug), 关键是 pending 清空且父会话回到 idle.
   3. **「事件顺序」**: `question.asked` 一定在对应 tool part `message.part.updated` 之后 (processor 先更新 tool running 再 execute); 内联/投影方案按 `tool.messageID` 关联 message 行, dock 方案直接按 sessionID 找 store, 不依赖顺序.
   4. **「作答后主视图消息列表变成了子代理的」**: 作答/忽略回调里用 `ownerSessionID` (可能是子会话) 调 `loadMessages(sid)` 会直接把主视图 `rows` 覆盖成子会话消息 (sessionID state 没变, 但显示内容错了). 修法: 仅当 `sid === sessionIDRef.current` (提问属于当前查看会话) 时才刷新; 子会话提问作答后主视图无需重载 (task part 状态不随作答变化).
+  5. **「进入子代理会话再返回后, 卡片内联消息区空了」**: 内联投影只靠 `onEvent` 实时累积 rows, 组件重挂载 (切走再回来/列表重载) 后为空且不回补. 修法: 挂载时 `aiListMessages(subSessionId)` 回补 + 实时事件跟随 (回补行被实时行覆盖去重); 内联渲染直接复用主消息组件 (`MessageRow`/`PartRenderer`), 与主会话同款格式 (markdown/代码窗/工具卡), 不用 iframe.
 
 #### 35. 浅色主题下 `--ai-accent` 解析为白色/半透明 → 用它做的状态指示不可见 (空 DOM 观感)
 
