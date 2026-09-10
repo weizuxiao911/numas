@@ -342,7 +342,7 @@ export function requestFilePicker(config: FilePickerConfig): void {
 }
 
 const STYLES = `
-/* FilePicker 是 layout 顶层 modal, 不在 .chat/.app-chatbot/.app-sidebar 任何容器内,
+/* FilePicker 是 layout 顶层 modal, 不在 .chat/.app-chatbot 等任何面板容器内,
    拿不到那些容器上定义的 --ai-* → 必须自己映射一套 codeblitz token, 否则全走暗色硬编码
    fallback (黑底紫 accent), 在浅色主题下跟 SOLO 完全两个世界. */
 .fp-overlay{

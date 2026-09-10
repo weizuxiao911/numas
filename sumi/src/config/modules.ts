@@ -24,7 +24,8 @@ import { SessionModule } from '../service/session';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
-import { SidebarModule } from '../extensions/solo/sidebar';
+import { SideTopbarModule } from '../extensions/solo/sideTopbar';
+import { SessionsModule } from '../extensions/solo/sessions';
 import { ActionModule } from '../extensions/solo/action';
 import { ChatbotModule } from '../extensions/solo/chatbot';
 import { UserModule } from '../extensions/solo/user';
@@ -48,7 +49,8 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     EditorRestoreFallbackModule, // 官方 workbench tab 恢复的延迟兜底 (早期 handlesUri 未就绪)
 
     // vsix 拓展 (UI 组件, 走 ComponentContribution 装 solo slot)
-    SidebarModule,         // 左列 sidebar.action + sidebar.container
+    SideTopbarModule,      // 左列 sidebar.action (模式切换 + 折叠)
+    SessionsModule,        // 左列 sidebar.container (新建会话 + 历史会话)
     ActionModule,          // 中列 main.action
     ChatbotModule,         // 中列 main.container (对话主区)
     UserModule,            // 左列 sidebar.footer (用户信息)

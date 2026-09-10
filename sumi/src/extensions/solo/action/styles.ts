@@ -141,7 +141,7 @@ export const styles = `
 }
 .app-action__pick > svg { flex: 0 0 auto; }
 
-/* 抽屉开关按钮: 36x36 裸 icon, 跟 sidebar 的 .app-sidebar__icon-btn--bare 同款
+/* 抽屉开关按钮: 36x36 裸 icon, 跟 sideTopbar 的 .app-side-topbar__icon-btn 同款
    (透明 bg, muted fg, hover 浅色 + 加深 fg), 仅通过内部 icon 方向
    (chevron-right ↔ chevron-left) 区分 "抽屉关闭" / "抽屉打开". */
 .app-action__aside {

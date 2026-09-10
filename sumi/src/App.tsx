@@ -11,7 +11,8 @@ import { preferences } from './config/preferences';
 import { ExtensionServiceImpl } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
 import { runtimeConfig } from './config/runtime';
-import { SIDEBAR_PANEL_ID, SIDEBAR_ACTION_PANEL_ID } from './extensions/solo/sidebar';
+import { SIDE_TOPBAR_PANEL_ID } from './extensions/solo/sideTopbar';
+import { SESSIONS_PANEL_ID } from './extensions/solo/sessions';
 import { ACTION_PANEL_ID } from './extensions/solo/action';
 import { CHATBOT_PANEL_ID } from './extensions/solo/chatbot';
 import { USER_PANEL_ID } from './extensions/solo/user';
@@ -56,8 +57,8 @@ const layout = {
 const SOLO_MODE = {
   layout,
   panels: {
-    [SOLO_SLOTS.SidebarAction]: SIDEBAR_ACTION_PANEL_ID,
-    [SOLO_SLOTS.SidebarContainer]: SIDEBAR_PANEL_ID,
+    [SOLO_SLOTS.SidebarAction]: SIDE_TOPBAR_PANEL_ID,
+    [SOLO_SLOTS.SidebarContainer]: SESSIONS_PANEL_ID,
     [SOLO_SLOTS.SidebarFooter]: USER_PANEL_ID,
     [SOLO_SLOTS.MainAction]: ACTION_PANEL_ID,
     [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
