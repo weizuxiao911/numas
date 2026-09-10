@@ -166,7 +166,9 @@ export const Sessions: React.FC = () => {
     <>
       <style>{styles}</style>
       <div className="app-sessions">
-        <NewSessionButton />
+        <div className="app-sessions__new-wrap">
+          <NewSessionButton />
+        </div>
         <SessionList />
       </div>
     </>

@@ -23,6 +23,14 @@ export const styles = `
   user-select: none;
 }
 
+/* 新建会话按钮容器: 独立 div, 上 25px / 下 40px 外边距, 内容垂直水平居中 */
+.app-sessions__new-wrap {
+  margin: 25px 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* 新建会话按钮 */
 .app-sessions__new {
   display: inline-flex;
