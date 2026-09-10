@@ -8,13 +8,15 @@ const VSIX_ID = 'numas.pdf-0.1.0'
 /**
  * PDF 阅读器 (vsix)
  *
- * 架构:
- *   extension host (本文件): custom editor 壳 + 读 PDF 字节 (vscode.workspace.fs → opencode /file/content 兜底)
- *   webview (dist/webview.js, React): pdf.js 渲染 + 工具栏; 与 host 走 postMessage
+ * 架构 (大文件友好):
+ *   extension host (本文件): custom editor 壳; 只算 webview 端要用的 fetch URL + headers (几 KB),
+ *     不读文件字节、不传大 buffer (30MB+ postMessage 结构化克隆会卡死主线程).
+ *   webview (dist/webview.js, React): 自己 fetch opencode /api/fs/read 拿原始字节 (裸二进制,
+ *     无 base64) → 直接交给 pdf.js (transfer 进 worker, 不额外拷贝).
  *
  * 关键问题 + 解决:
  *   1. opensumi webview listening 有空窗期 → shell HTML 多档延迟重发
- *   2. 大文件 vscode.workspace.fs 在 ext host worker 可能不可用 → fetch opencode /file/content 兜底
+ *   2. webview 是 srcdoc 同源 iframe → fetch 同源 API (dev 走 webpack proxy, 生产同源), 无 CORS 问题
  *   3. pdf.js 静态资源随 vsix 打包 (pdfjs/), 从 registry 加载, 不依赖 CDN
  */
 export function activate(context: vscode.ExtensionContext) {
@@ -23,28 +25,14 @@ export function activate(context: vscode.ExtensionContext) {
       webviewPanel.webview.options = { enableScripts: true, retainContextWhenHidden: true }
 
       const name = (document.uri?.fsPath || '').split(/[\\/]/).pop() || 'document.pdf'
-      const shell = buildShell(name)
+      const target = resolveFetchTarget(document)
+      const shell = buildShell(name, target)
 
       // opensumi webview 监听空窗期: 一次 set html 会丢 → 多档重发
       const sendShell = () => { try { webviewPanel.webview.html = shell } catch { /* ignore */ } }
       sendShell()
       const timers = [120, 400, 1000].map((ms) => setTimeout(sendShell, ms))
-
-      // webview 就绪 → 推 PDF 字节
-      const sub = webviewPanel.webview.onDidReceiveMessage(async (msg: any) => {
-        if (!msg || msg.type !== 'ready') return
-        const result = await readPdfBytes(document)
-        if (result.ok) {
-          webviewPanel.webview.postMessage({ type: 'pdf-bytes', bytes: result.data, name })
-        } else {
-          webviewPanel.webview.postMessage({ type: 'pdf-error', message: result.error })
-        }
-      })
-
-      webviewPanel.onDidDispose(() => {
-        timers.forEach((t) => clearTimeout(t))
-        sub.dispose()
-      })
+      webviewPanel.onDidDispose(() => timers.forEach((t) => clearTimeout(t)))
     },
   }
 
@@ -63,39 +51,28 @@ export function activate(context: vscode.ExtensionContext) {
   )
 }
 
-/** 读 PDF 字节: 1) vscode.workspace.fs 2) opencode /file/content 兜底 */
-async function readPdfBytes(
-  document: vscode.TextDocument,
-): Promise<{ ok: true; data: Uint8Array } | { ok: false; error: string }> {
-  try {
-    const bytes = await vscode.workspace.fs.readFile(document.uri)
-    if (bytes && bytes.byteLength) return { ok: true, data: bytes }
-  } catch { /* fallback */ }
+type FetchTarget = { rel?: string; headerDir?: string; error?: string }
 
+/**
+ * 算 webview 端拉 PDF 字节的相对地址参数: /api/fs/read/<rel> + x-opencode-directory header.
+ * 工作区内: header=workspace 根, rel=相对路径; 区外/取不到 cwd: header=文件所在目录, rel=basename.
+ * (对齐 sumi fs provider 的 apiReadBytes: 裸字节 arrayBuffer, 无 base64/JSON)
+ * 注意: ext host 拿不到 __APP_OPENCODE_RUNTIME__ (同 __APP_CONFIG__), 所以只传相对参数,
+ * base URL 由 webview 侧用同源相对路径解析.
+ */
+function resolveFetchTarget(document: vscode.TextDocument): FetchTarget {
   try {
-    const w = window as any
-    const ocBase = (w.__APP_OPENCODE_RUNTIME__?.baseUrl as string | undefined) || ''
-    if (!ocBase) throw new Error('opencode baseUrl 未注入 (缺 __APP_OPENCODE_RUNTIME__)')
     const cwd = (() => { try { return localStorage.getItem('APP_CWD') || '' } catch { return '' } })()
     const fsPath = document.uri?.fsPath || ''
-    const rootName = cwd.split('/').pop() || ''
-    const pathParam = (() => {
-      if (rootName && fsPath.includes(`/workspace/${rootName}/`)) return fsPath.split(`/workspace/${rootName}/`)[1] || ''
-      if (cwd && fsPath.startsWith(cwd + '/')) return fsPath.slice(cwd.length + 1)
-      return fsPath.split('/').pop() || ''
-    })()
-    const r = await fetch(`${ocBase}/file/content?path=${encodeURIComponent(pathParam)}&directory=${encodeURIComponent(cwd)}`)
-    if (!r.ok) throw new Error(`opencode /file/content HTTP ${r.status}`)
-    const data: any = await r.json()
-    if (data.type === 'binary' && data.encoding === 'base64') {
-      const bin = atob(String(data.content || ''))
-      const arr = new Uint8Array(bin.length)
-      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
-      return { ok: true, data: arr }
-    }
-    throw new Error(`文件不是 PDF 二进制 (type=${data.type})`)
+    const norm = (p: string) => p.replace(/\/+$/, '')
+    const underCwd = !!cwd && (fsPath === norm(cwd) || fsPath.startsWith(norm(cwd) + '/'))
+    const headerDir = underCwd ? norm(cwd) : fsPath.slice(0, Math.max(fsPath.lastIndexOf('/'), 0))
+    const rel = underCwd ? fsPath.slice(norm(cwd).length + 1) : (fsPath.split(/[\\/]/).pop() || '')
+    if (!rel) return { error: `无法解析相对路径: ${fsPath}` }
+    if (!headerDir) return { error: `无法解析目录: ${fsPath}` }
+    return { rel, headerDir }
   } catch (e: any) {
-    return { ok: false, error: e?.message || String(e) }
+    return { error: e?.message || String(e) }
   }
 }
 
@@ -103,11 +80,11 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 }
 
-/** shell HTML: 只挂 root + 配置 + webview bundle (内容走 postMessage, 避免大字符串序列化).
+/** shell HTML: 只挂 root + 配置 (registry 基址 + fetch 地址/headers) + webview bundle.
  *  registry 基址在 webview 侧解析 (ext host 拿不到 __APP_CONFIG__):
  *    window.parent.__APP_CONFIG__.registryBaseUrl → 相对 '/extensions' 兜底 (同源, 生产/开发都成立). */
-function buildShell(name: string): string {
-  const safeName = JSON.stringify(name)
+function buildShell(name: string, target: FetchTarget): string {
+  const cfg = JSON.stringify({ name, fetch: target })
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -125,7 +102,7 @@ function buildShell(name: string): string {
     if (c && c.registryBaseUrl) base = c.registryBaseUrl;
   } catch (e) { /* 跨域/沙箱 → 同源相对路径兜底 */ }
   base = String(base).replace(/\\/+$/, '');
-  window.__PDF_CFG__ = { registryBase: base, name: ${safeName} };
+  window.__PDF_CFG__ = Object.assign({ registryBase: base }, ${cfg});
   var s = document.createElement('script');
   s.src = base + '/${VSIX_ID}/dist/webview.js';
   s.onerror = function () {
