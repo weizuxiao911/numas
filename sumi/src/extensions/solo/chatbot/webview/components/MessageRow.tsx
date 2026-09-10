@@ -93,6 +93,12 @@ function cap(s: string): string {
   return s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : '';
 }
 
+/** 路径 basename (跨平台分隔符) */
+function fileBasename(p: string): string {
+  const parts = String(p || '').split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || p;
+}
+
 const MessageRowInner: React.FC<{
   row: Row;
   streaming: boolean;
@@ -113,16 +119,31 @@ const MessageRowInner: React.FC<{
   const fileParts = (row.parts || []).filter((p: any) => p?.type === 'file');
 
   if (row.role === 'user') {
-    const text = extractText(row.parts);
+    const rawText = extractText(row.parts);
+    // 发送时文本尾部拼了 [已上传文件] 清单 → 解析成附件卡片渲染, 气泡只显示正文
+    const attachPaths: string[] = (() => {
+      const m = rawText.match(/\[已上传文件\]\n((?:- .*(?:\n|$))*)/);
+      if (!m) return [];
+      return m[1].split('\n').map((l) => l.replace(/^-\s*/, '').trim()).filter(Boolean);
+    })();
+    const text = rawText.replace(/\n*\[已上传文件\]\n(?:- .*(?:\n|$))*/g, '').trimEnd();
     // 官方用户 meta: "Agent · 模型 · HH:MM" (tail 时间), 整行 hover 浮现
     const modelLabel = (resolveModelName && turnModel ? resolveModelName(turnModel) : '') || turnModel || '';
     const metaItems = [cap(turnAgent || ''), modelLabel, fmtClock(row.time?.created)].filter(Boolean);
     return (
       <div className="oc-msg is-user">
         <div className="oc-msg__user-col">
-          {fileParts.length > 0 && (
+          {(fileParts.length > 0 || attachPaths.length > 0) && (
             <div className="oc-att oc-att--row oc-att--user">
               {fileParts.map((p: any, i: number) => <FileAttachment key={i} p={p} />)}
+              {attachPaths.map((p, i) => (
+                <span key={`f${i}`} className="oc-att__file" title={p}>
+                  <span className="oc-att__file-ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                  </span>
+                  <span className="oc-att__file-name">{fileBasename(p)}</span>
+                </span>
+              ))}
             </div>
           )}
           {text && <div className="oc-msg__user-bubble" dir="auto">{text}</div>}
