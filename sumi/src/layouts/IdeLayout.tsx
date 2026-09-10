@@ -44,6 +44,14 @@ const styles = `
 /* SOLO 专用按钮在 IDE 无意义: sidebar 折叠 / aside 开关 */
 .app-ide .app-side-topbar__icon-btn { display: none !important; }
 .app-ide .app-action__right { display: none !important; }
+/* explorer 标题栏动作图标 (新建文件/文件夹/筛选/刷新/折叠): design 主题默认 2px 尺寸 +
+   全局 .kt-icon::before display:none → 不可见. 与 SOLO aside sidebar 同款修复. */
+.app-ide [class*="view_container"] [class*="titleActions"] span[class*="iconAction"] {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; margin-left: 4px;
+}
+.app-ide [class*="titleActions"] span[class*="iconAction"]::before,
+.app-ide [class*="titleActions"] span[class*="btnAction"]::before { display: inline-block !important; }
 /* SplitPanel 拖拽条: 宽度/命中区对齐 SOLO resizer (--resizer-w 6px), 1px 线居中留呼吸感 */
 .app-ide [class*="resize-handle-horizontal"] {
   width: var(--resizer-w) !important;
@@ -64,7 +72,8 @@ const styles = `
   .app-ide * { box-shadow: none !important; }
   /* top + activity bar 背景跟 SOLO sidebar 一致 (偏灰 token; 主题默认半透明白) */
   .app-ide .left-slot,
-  .app-ide [class*="left_tab_bar"] {
+  .app-ide [class*="left_tab"],
+  .app-ide [class*="bar_content"] {
     background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
   }
   /* 面板内容区用 #fff token (主题默认透明, 会透出左侧灰底) */
@@ -101,12 +110,13 @@ export function IdeLayout(): React.ReactElement {
           <SlotRenderer
             slot={SlotLocation.left}
             isTabbar
+            defaultSize={300}
           />
           <SplitPanel id="main-vertical" minResize={300} flexGrow={1} direction="top-to-bottom">
             <SlotRenderer flex={2} flexGrow={1} minResize={200} slot={SlotLocation.main} />
             <SlotRenderer flex={1} slot={SlotLocation.bottom} isTabbar />
           </SplitPanel>
-          <IdeRightPanel defaultSize={380}>
+          <IdeRightPanel defaultSize={450}>
             <SlotRenderer slot={SOLO_SLOTS.MainContainer} />
           </IdeRightPanel>
         </SplitPanel>
