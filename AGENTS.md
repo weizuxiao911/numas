@@ -787,3 +787,10 @@ AI **仍需 `question`**:
 - **IDE 模式组合 (不注册新 slot / 不改 SOLO 组件)**: 全部收敛在 `sumi/src/layouts/IdeLayout.tsx` — 标准槽 (left explorer / main editor / bottom terminal) + 直接 `SlotRenderer` 渲染 SOLO 已注册的自定义槽 (`SOLO_SLOTS.SidebarAction` 模式切换 / `SOLO_SLOTS.MainAction` 项目选择 / `SOLO_SLOTS.MainContainer` chatbot 右栏); `IDE_MODE.panels` 用同一批 panel id 激活. IDE 专属样式 (顶栏高度/隐藏 SOLO 专用按钮) 用 `.app-ide` scoped CSS 在 IdeLayout 内注入.
 - **附加 (SplitPanel 尺寸)**: `SplitPanel` 从**子元素 props** (`defaultSize`/`savedSize`/`flex`) 读尺寸, 不是 CSS flex; 自定义包装组件要透传这些 props (如 `IdeRightPanel defaultSize={380}`), 且包装 div 需 `height: 100%` (SplitPanel 的 wrapper 是 block, 子元素 height auto 会塌成内容高).
 - **排查方法**: 改布局不生效 → 先确认是否走了 reload (createApp 一次性); 模式不记忆 → 查 localStorage `NUMAS_MODE`; SplitPanel 子元素尺寸不对 → 查子元素 props 是否有 `defaultSize`/`flex`, 及是否 `height: 100%`.
+
+#### 46. tabbar 面板初始宽度 = app 侧 `appConfig.panelSizes[slot]`; `SlotRenderer.defaultSize` 对 tabbar 面板无效
+
+- **现象**: 在 `IdeLayout.tsx` 给左侧 `SlotRenderer` 设 `defaultSize={278}` / `{300}` 完全无效, 实测 left 总宽恒为 383 (384 持久化).
+- **根因**: tabbar 面板宽度由 `@opensumi/ide-main-layout` 的 `panel.view.js` 决定: `tabbarService.updatePanelSize(appConfig.panelSizes?.[side] || panelSize || 335)` — **未配 panelSizes 时兜底 panelSize=335** → left 总宽 = 335 + 48 (activity bar) = 383. `SlotRenderer.defaultSize` 只对非 tabbar 的 SplitPanel 直接子节点 (或自绘列) 生效; tabbar 槽位 (left/right 等 isTabbar) 读 app 侧配置.
+- **解决方案**: 面板初始宽度写 `App.tsx` appConfig: `panelSizes: { [SlotLocation.left]: 278, [SlotLocation.right]: 450 }` (值 = 面板宽, 不含 activity bar); 拖拽下限写 `IdeLayout.tsx` 对应 `SlotRenderer` 的 `minResize` (如 left 204). 持久化的 layout 状态 (`localStorage layout` / `global:/layout-global` 的 size) 会覆盖初始值, 属预期 (用户拖过就以拖过为准).
+- **排查方法**: 面板宽度不符合预期 → 先看 `appConfig.panelSizes` 有没有该 slot (没有则兜底 335+bar), 再看持久化 layout size 是否覆盖; 别在 React 布局组件里改 defaultSize (对 tabbar 无效).
