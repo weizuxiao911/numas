@@ -848,3 +848,10 @@ AI **仍需 `question`**:
 - **根因**: 树的高亮状态只在它自身的 `dragleave`/`drop` 流程里清; 外部拖拽时我们的 window 捕获监听 `preventDefault` + `stopPropagation` 拦下了 drop, 树收不到清理事件. 且**上传触发的 fs 变更 → 树刷新重渲染会把已清的高亮再套回去** (同步/60ms 补发 dragleave 都被覆盖).
 - **解决方案**: drop 后**等上传完成** (树重渲染稳定) 再补发 `dragleave` (目标 = drop 点元素, `bubbles: true`), 另加 300ms 兜底再清一次. 不要手动删 `mod_dragover` 类 (React 状态还在, 下次渲染会加回来).
 - **验证**: 拖拽后 `document.querySelectorAll('[class*="mod_dragover"]').length === 0` 且节点背景回到透明; playwright 合成 drop 即可复现/回归 (拖拽用 `browser_drop`).
+
+#### 51. marked 7 的 renderer 是旧式签名 (href,title,text): 按 v9+ token 解构会把链接渲染成 undefined
+
+- **现象**: markdown 预览/chat 里 `[文字](url)` 渲染成 `<a href="undefined">undefined</a>` (带 target/rel 属性, 说明自定义 renderer 生效但取不到字段).
+- **根因**: 项目装的 marked 是 **7.0.5**, `renderer.link` 签名是 `link(href: string, title, text: string): string` (旧式); 实现按 v9+ 的 token 解构 `link({ href, title, text })` 写 → 第一个参数是字符串, 解构全 undefined. (`marked.d.ts` 里 renderer 段 vs tokenizer 段容易看混.)
+- **解决方案**: 按 marked 7 签名写: `link(href, title, text) { return `<a href="${href}"${title?` title="${title}"`:''} target="_blank" rel="noopener noreferrer">${text}</a>`; }`. 升级 marked 到 v9+ 时才改回 token 解构.
+- **排查方法**: 渲染出的 `<a>` 有 target/rel 但 href/text 是 undefined = 自定义 renderer 的参数签名不匹配; 对照 `node_modules/marked/lib/marked.d.ts` 的 renderer 签名, 不要照抄网上 v9+ 示例.
