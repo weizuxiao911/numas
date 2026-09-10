@@ -8,8 +8,8 @@
  * zip 用 fflate 在浏览器端打包 (大目录吃内存, 后续可换服务端流式).
  */
 import { Autowired, Injectable } from '@opensumi/di';
-import { Domain, URI, CommandRegistry, CommandContribution } from '@opensumi/ide-core-common';
-import { BrowserModule } from '@opensumi/ide-core-browser';
+import { Domain, URI, CommandRegistry, CommandContribution, Disposable, IDisposable } from '@opensumi/ide-core-common';
+import { BrowserModule, ClientAppContribution } from '@opensumi/ide-core-browser';
 import { MenuContribution, IMenuRegistry, MenuId } from '@opensumi/ide-core-browser/lib/menu/next';
 import { TabBarToolbarContribution, ToolbarRegistry } from '@opensumi/ide-core-browser/lib/layout/accordion/tab-bar-toolbar';
 import { IFileServiceClient } from '@opensumi/ide-file-service';
@@ -20,8 +20,10 @@ import { IMessageService } from '@opensumi/ide-overlay';
 import { getWorkspace } from '../../infra/url';
 import {
   baseName,
+  dropTargetDirUri,
   parentUri,
   readBytes,
+  readDroppedEntries,
   saveBlob,
   uniqueZipUri,
   uploadEntries,
@@ -54,8 +56,10 @@ function pickFiles(directory: boolean): Promise<File[]> {
 }
 
 @Injectable()
-@Domain(CommandContribution, MenuContribution, TabBarToolbarContribution)
-export class FilesContribution implements CommandContribution, MenuContribution, TabBarToolbarContribution {
+@Domain(CommandContribution, MenuContribution, TabBarToolbarContribution, ClientAppContribution)
+export class FilesContribution
+  implements CommandContribution, MenuContribution, TabBarToolbarContribution, ClientAppContribution
+{
   @Autowired(IFileServiceClient)
   private readonly fileService!: IFileServiceClient;
 
@@ -65,10 +69,43 @@ export class FilesContribution implements CommandContribution, MenuContribution,
   @Autowired(IMessageService)
   private readonly message!: IMessageService;
 
+  private readonly toDispose = new Disposable();
+
   registerCommands(commands: CommandRegistry): void {
     commands.registerCommand(FILES_COMMANDS.upload, { execute: () => void this.upload() });
     commands.registerCommand(FILES_COMMANDS.download, { execute: () => void this.download() });
     commands.registerCommand(FILES_COMMANDS.zip, { execute: () => void this.zipSelected() });
+  }
+
+  /** 拖拽上传: 文件/目录拖到资源管理器 → 上传到落点目录 (空处=工作区根) */
+  onStart(): void {
+    const onDragOver = (e: DragEvent) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    };
+    const onDrop = (e: DragEvent) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // webkitGetAsEntry 必须在同步阶段取 (事件结束后 DataTransferItem 失效)
+      const entries = Array.from(e.dataTransfer.items)
+        .map((it) => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null))
+        .filter(Boolean);
+      // 兜底: 无 FileSystemEntry (部分环境/合成事件) 时用 files 平铺上传
+      const plainFiles = entries.length ? [] : Array.from(e.dataTransfer.files || []);
+      if (!entries.length && !plainFiles.length) return;
+      const dirUri = dropTargetDirUri(e.clientX, e.clientY) || URI.file(getWorkspace()).toString();
+      void this.dropUpload(dirUri, entries as any[], plainFiles);
+    };
+    window.addEventListener('dragover', onDragOver, true);
+    window.addEventListener('drop', onDrop, true);
+    this.toDispose.addDispose({
+      dispose: () => {
+        window.removeEventListener('dragover', onDragOver, true);
+        window.removeEventListener('drop', onDrop, true);
+      },
+    });
   }
 
   registerMenus(menus: IMenuRegistry): void {
@@ -125,13 +162,9 @@ export class FilesContribution implements CommandContribution, MenuContribution,
     return first.isDir ? uri : parentUri(uri);
   }
 
-  /** 上传入口 (合并文件/文件夹): 先选类型再开系统选择器 */
+  /** 上传入口: 直接唤起系统文件选择器 (多选文件); 文件夹走拖拽 (见 onStart) */
   private async upload(): Promise<void> {
-    const dirUri = this.targetDirUri();
-    const dirName = baseName(dirUri) || '工作区根';
-    const pick = await this.message.info(`上传到「${dirName}」`, ['选择文件', '选择文件夹']);
-    if (pick === '选择文件') await this.doUpload(dirUri, false);
-    else if (pick === '选择文件夹') await this.doUpload(dirUri, true);
+    await this.doUpload(this.targetDirUri(), false);
   }
 
   private async doUpload(dirUri: string, directory: boolean): Promise<void> {
@@ -144,6 +177,25 @@ export class FilesContribution implements CommandContribution, MenuContribution,
         : f.name;
       entries.push({ relPath: rel, bytes: new Uint8Array(await f.arrayBuffer()) });
     }
+    await this.pushEntries(dirUri, entries);
+  }
+
+  /** 拖拽目录/文件 → 递归收集后上传 */
+  private async dropUpload(dirUri: string, entries: any[], plainFiles: File[] = []): Promise<void> {
+    try {
+      this.message.info('正在读取拖入的文件…');
+      const collected = entries.length ? await readDroppedEntries(entries) : [];
+      for (const f of plainFiles) {
+        collected.push({ relPath: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
+      }
+      if (!collected.length) return;
+      await this.pushEntries(dirUri, collected);
+    } catch (e: unknown) {
+      this.message.error(`上传失败: ${(e as Error)?.message || e}`);
+    }
+  }
+
+  private async pushEntries(dirUri: string, entries: UploadEntry[]): Promise<void> {
     this.message.info(`开始上传 ${entries.length} 个文件…`);
     try {
       await uploadEntries(this.fileService, dirUri, entries);

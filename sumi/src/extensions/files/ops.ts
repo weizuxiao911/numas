@@ -76,9 +76,52 @@ export function saveBlob(data: Uint8Array, name: string, mime = 'application/oct
 }
 
 export interface UploadEntry {
-  /** 相对目标目录的路径 (可含子目录, 来自 webkitRelativePath) */
+  /** 相对目标目录的路径 (可含子目录, 来自 webkitRelativePath / 拖拽目录) */
   relPath: string;
   bytes: Uint8Array;
+}
+
+/** 拖拽 DataTransferItem 的 FileSystemEntry 递归收集 (目录展开成多个 entry).
+ *  注意: webkitGetAsEntry 必须在 drop 事件同步阶段调用 (事件结束后 DataTransferItem 失效). */
+export async function readDroppedEntries(entries: any[], prefix = ''): Promise<UploadEntry[]> {
+  const out: UploadEntry[] = [];
+  for (const entry of entries) {
+    if (!entry) continue;
+    if (entry.isFile) {
+      const file: File | null = await new Promise((resolve) => entry.file(resolve, () => resolve(null)));
+      if (file) out.push({ relPath: `${prefix}${entry.name}`, bytes: new Uint8Array(await file.arrayBuffer()) });
+      continue;
+    }
+    if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const readBatch = (): Promise<any[]> =>
+        new Promise((resolve) => reader.readEntries(resolve, () => resolve([])));
+      // readEntries 单次上限 100 条, 循环读到空
+      for (;;) {
+        const batch = await readBatch();
+        if (!batch.length) break;
+        out.push(...(await readDroppedEntries(batch, `${prefix}${entry.name}/`)));
+      }
+    }
+  }
+  return out;
+}
+
+/** 从 drop 坐标找资源管理器里的目标目录 uri: 命中的树节点是目录→它; 是文件→其父; 空处→undefined */
+export function dropTargetDirUri(x: number, y: number): string | undefined {
+  const el = document.elementFromPoint(x, y) as HTMLElement | null;
+  if (!el) return undefined;
+  let node: HTMLElement | null = el;
+  for (let i = 0; i < 8 && node; i++) {
+    const title = node.getAttribute?.('title') || '';
+    if (title.startsWith('file://')) {
+      // 目录节点的 treeitem 带 aria-expanded; 文件节点没有 → 文件回退到父目录
+      const isDir = !!node.closest('[aria-expanded]');
+      return isDir ? title : parentUri(title);
+    }
+    node = node.parentElement;
+  }
+  return undefined;
 }
 
 /** 上传: 逐个写入目标目录 (自动补建子目录) */
