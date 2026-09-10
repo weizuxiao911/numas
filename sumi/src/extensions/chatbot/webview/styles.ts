@@ -1754,8 +1754,8 @@ export const styles = `
 .oc-msg__body:hover .oc-msg__actions,
 .oc-msg__actions:focus-within { opacity: 1; pointer-events: auto; }
 .oc-icon-btn {
-  width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: none; border-radius: 6px; color: var(--ai-fg-muted);
+  width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 5px; color: var(--ai-fg-muted);
   cursor: pointer; padding: 0;
 }
 .oc-icon-btn:hover { background: var(--ai-hover); color: var(--ai-fg); }
