@@ -54,6 +54,11 @@ const styles = `
 .app-ide__toggle:hover { background: color-mix(in srgb, currentColor 14%, transparent); color: var(--editor-foreground); }
 .app-ide__toggle.is-active { color: var(--editor-foreground); }
 .app-ide__top .app-side-topbar { flex: 0 0 auto; padding: 0; }
+/* WorkBuddy 启动按钮与面板 toggle 之间的分隔线 */
+.app-ide__top-divider {
+  width: 1px; height: 16px; flex: 0 0 auto; margin: 0 6px;
+  background: color-mix(in srgb, var(--editor-foreground, #1f2328) 12%, transparent);
+}
 .app-ide__top .app-action { width: auto; min-height: 0; padding: 0; }
 /* SOLO 专用按钮在 IDE 无意义: sidebar 折叠 / aside 开关 */
 .app-ide .app-side-topbar__icon-btn { display: none !important; }
@@ -171,6 +176,23 @@ const PanelToggles: React.FC<{ rightVisible: boolean; onToggleRight: () => void 
   );
 };
 
+/** WorkBuddy 启动按钮: deep link 由浏览器 (访客本机) 拉起本地 WorkBuddy 应用.
+ *  公网/本地部署行为一致; 访客机器没装则浏览器无响应 (JS 无法检测). */
+const WorkBuddyButton: React.FC = () => (
+  <button
+    type="button"
+    className="app-ide__toggle"
+    title="打开 WorkBuddy"
+    onClick={() => { window.location.href = 'workbuddy://'; }}
+  >
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 4h6v6" />
+      <path d="M20 4l-8 8" />
+      <path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
+    </svg>
+  </button>
+);
+
 /** BoxPanel 从子元素 props 读 flex (同 SplitPanel), 用包装组件透传 flex=1 */
 const IdeBody: React.FC<{ children?: React.ReactNode; flex?: number }> = ({ children }) => (
   <div className="app-ide__body">{children}</div>
@@ -189,6 +211,8 @@ export function IdeLayout(): React.ReactElement {
             <SlotRenderer slot={SOLO_SLOTS.MainAction} />
           </div>
           <div className="app-ide__top-right">
+            <WorkBuddyButton />
+            <span className="app-ide__top-divider" />
             <PanelToggles rightVisible={rightVisible} onToggleRight={() => setRightVisible((v) => !v)} />
           </div>
         </div>
