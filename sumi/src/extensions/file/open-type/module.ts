@@ -91,11 +91,23 @@ export class OpenTypeContribution implements BrowserEditorContribution, CommandC
         const item = compId === 'code'
           ? { type: 'code' as const, weight: Number.MAX_SAFE_INTEGER }
           : { type: 'component' as const, componentId: compId, weight: Number.MAX_SAFE_INTEGER };
-        results.push(item);
+        // 放最前 + 最高权重: 编辑器默认选择实际按 results 首项 (权重之外再保一道)
+        results.unshift(item);
       } else {
-        // 已存在 (file-scheme/customEditor 也给了), 只把它的权重提到最高 → 默认选中, 不重复加
-        const existing = results.find((r) => (r as any).componentId === compId);
-        if (existing) (existing as any).weight = Number.MAX_SAFE_INTEGER;
+        // 已存在 (file-scheme/customEditor 也给了), 提到最高权重并挪到最前 → 默认选中, 不重复加
+        // 注意 code 项无 componentId, 需按 type==='code' 匹配 (否则关联 *.md=code 时提权不到, 默认不生效)
+        const existing = results.find((r) => {
+          const it = r as any;
+          return it.componentId === compId || (compId === 'code' && it.type === 'code');
+        });
+        if (existing) {
+          (existing as any).weight = Number.MAX_SAFE_INTEGER;
+          const idx = results.indexOf(existing);
+          if (idx > 0) {
+            results.splice(idx, 1);
+            results.unshift(existing);
+          }
+        }
       }
     });
   }
