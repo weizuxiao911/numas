@@ -20,7 +20,16 @@ function escapeHtml(s: string): string {
 }
 
 const pipeline = marked.use(
-  { gfm: true },
+  {
+    gfm: true,
+    renderer: {
+      // marked 7 renderer 为旧式签名 (href, title, text); 链接统一新窗口打开
+      link(href: string, title: string | null | undefined, text: string) {
+        const titleAttr = title ? ` title="${title}"` : '';
+        return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+      },
+    },
+  },
   markedKatex({ throwOnError: false, nonStandard: true }),
   markedShiki({
     highlight(code: string, lang: string) {

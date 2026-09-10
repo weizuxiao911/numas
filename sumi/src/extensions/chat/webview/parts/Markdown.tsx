@@ -17,7 +17,8 @@ import markedShiki from 'marked-shiki';
 const markedWithShiki = marked.use(
   {
     renderer: {
-      link({ href, title, text }: any) {
+      // marked 7 renderer 为旧式签名 (href, title, text); 早期按 v9+ token 解构导致链接渲染成 undefined
+      link(href: string, title: string | null | undefined, text: string) {
         const titleAttr = title ? ` title="${title}"` : '';
         return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
       },
