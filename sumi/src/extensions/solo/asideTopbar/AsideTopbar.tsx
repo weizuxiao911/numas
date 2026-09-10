@@ -32,8 +32,12 @@ export const AsideTopbar: React.FC = () => {
   const mainLayout = useInjectable<IMainLayoutService>(IMainLayoutService);
   const terminals = useInjectable<ITerminalController>(ITerminalController);
   const [view, setView] = useState<AsideView>(() => layout.state.aside.view);
+  const [explorerCollapsed, setExplorerCollapsed] = useState<boolean>(() => layout.state.aside.explorerCollapsed);
 
-  useEffect(() => layout.subscribe((s) => setView(s.aside.view)), [layout]);
+  useEffect(() => layout.subscribe((s) => {
+    setView(s.aside.view);
+    setExplorerCollapsed(s.aside.explorerCollapsed);
+  }), [layout]);
 
   // 终端模式: bottom slot 挂载后激活终端容器; 无终端实例则自动新建一个 (首次)
   useEffect(() => {
@@ -65,6 +69,25 @@ export const AsideTopbar: React.FC = () => {
     <>
       <style>{styles}</style>
       <div className="app-aside-topbar">
+        <div className="app-aside-topbar__left">
+          {/* 仅查看模式: 折叠/展开资源管理器 (无边框菜单图标, 位于胶囊左侧) */}
+          {view === 'view' && (
+            <button
+              type="button"
+              className="app-aside-topbar__menu"
+              title={explorerCollapsed ? '展开资源管理器' : '折叠资源管理器'}
+              aria-label={explorerCollapsed ? '展开资源管理器' : '折叠资源管理器'}
+              aria-pressed={!explorerCollapsed}
+              onClick={() => layout.toggleAsideExplorer()}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <line x1="4" y1="7" x2="20" y2="7" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <line x1="4" y1="17" x2="20" y2="17" />
+              </svg>
+            </button>
+          )}
+        </div>
         <div className="app-aside-topbar__capsule" data-index={index}>
           <span className="app-aside-topbar__pill" aria-hidden />
           {ITEMS.map((it) => (
@@ -79,6 +102,7 @@ export const AsideTopbar: React.FC = () => {
             </button>
           ))}
         </div>
+        <div className="app-aside-topbar__right" />
       </div>
     </>
   );

@@ -9,12 +9,26 @@ export const styles = `
   --ai-bg-elev: var(--editorWidget-background, var(--sideBar-background, #fff));
   --ai-hairline: var(--panel-border, var(--editorWidget-border, rgba(0,0,0,.1)));
 
-  display: flex; align-items: center; justify-content: center;
-  min-height: 60px; padding: 12px;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 260px) minmax(0, 1fr); align-items: center;
+  min-height: 60px; padding: 12px 0;
   box-sizing: border-box;
   user-select: none;
   background: var(--editor-background);
 }
+/* 左侧: 资源管理器折叠按钮 (仅查看模式渲染; 独立于胶囊, 靠 action 栏最左, margin 15px) */
+.app-aside-topbar__left { display: flex; justify-content: flex-start; min-width: 0; }
+.app-aside-topbar__menu {
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  margin-left: 15px;
+  width: 26px; height: 26px; padding: 0;
+  border: none; background: none; cursor: pointer;
+  color: var(--ai-fg-muted);
+  border-radius: 6px;
+  transition: color .18s ease, background .18s ease;
+}
+.app-aside-topbar__menu:hover { color: var(--ai-fg); background: color-mix(in srgb, var(--ai-fg) 7%, transparent); }
+.app-aside-topbar__right { min-width: 0; }
 /* 胶囊: 3 等分, 底部滑块 (pill) 用 transform 过渡 */
 .app-aside-topbar__capsule {
   position: relative;

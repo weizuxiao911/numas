@@ -37,7 +37,7 @@ function viewportRatioWidth(ratio: number = ASIDE_RATIO): number {
 export class LayoutServiceImpl implements ILayoutService {
   private _state: LayoutState = {
     sidebar: { collapsed: false, width: SIDEBAR_DEFAULT_W },
-    aside: { open: false, width: 0, view: 'view' },
+    aside: { open: false, width: 0, view: 'view', explorerCollapsed: false },
   };
   /** 折叠时记住展开态宽度, 展开时恢复 */
   private expandedSidebarW = SIDEBAR_DEFAULT_W;
@@ -132,6 +132,12 @@ export class LayoutServiceImpl implements ILayoutService {
     this.emit();
   }
 
+  /** 折叠/展开查看模式下的资源管理器 (aside 内 explorer; 折叠=隐藏, 编辑器占满) */
+  toggleAsideExplorer(): void {
+    this._state.aside = { ...this._state.aside, explorerCollapsed: !this._state.aside.explorerCollapsed };
+    this.emit();
+  }
+
   /** aside 打开时视口变化 → 同步 60% 宽 (resize 事件里调用) */
   syncAsideToViewport(): void {
     if (!this._state.aside.open) return;
@@ -154,6 +160,7 @@ export class LayoutCommandContribution implements CommandContribution {
     commands.registerCommand(LAYOUT_COMMANDS.asideOpen, { execute: () => this.layout.openAside() });
     commands.registerCommand(LAYOUT_COMMANDS.asideClose, { execute: () => this.layout.closeAside() });
     commands.registerCommand(LAYOUT_COMMANDS.asideToggle, { execute: () => this.layout.toggleAside() });
+    commands.registerCommand(LAYOUT_COMMANDS.asideExplorerToggle, { execute: () => this.layout.toggleAsideExplorer() });
   }
 }
 

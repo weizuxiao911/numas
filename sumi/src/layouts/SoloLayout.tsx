@@ -39,6 +39,7 @@ export function SoloLayout(): React.ReactElement {
   const asideOpen = aside.open;
   const asideW = aside.width;
   const asideView = aside.view;
+  const asideExplorerCollapsed = aside.explorerCollapsed;
 
   // 项目切换: aside 整体 unmount→mount (key={workdir}), 旧终端属于旧项目 → 先销毁再重挂
   const [workdir, setWorkdir] = React.useState<string>(() => getWorkdir());
@@ -164,8 +165,9 @@ export function SoloLayout(): React.ReactElement {
             <SlotRenderer slot={SOLO_SLOTS.AsideAction} />
           </div>
           <div className="app-solo__aside-middle">
-            {/* 查看: 官方 explorer(left 槽) + 编辑器 workbench(main 槽); 终端/浏览器: 仅容器区 */}
-            {asideView === 'view' && (
+            {/* 查看: 官方 explorer(left 槽) + 编辑器 workbench(main 槽); 终端/浏览器: 仅容器区.
+                explorer 可由 asidetopbar 菜单按钮折叠 (折叠=不渲染, 编辑器占满) */}
+            {asideView === 'view' && !asideExplorerCollapsed && (
               <div className="app-solo__aside-sidebar">
                 <SlotRenderer slot={SlotLocation.left} />
               </div>

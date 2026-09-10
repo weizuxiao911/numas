@@ -30,6 +30,8 @@ export interface AsideState {
   width: number;
   /** 当前激活视图 (默认 view = explorer + editor 左右布局) */
   view: AsideView;
+  /** 查看模式下资源管理器 (aside 内 explorer) 是否折叠 (折叠 = 隐藏, 编辑器占满) */
+  explorerCollapsed: boolean;
 }
 
 export interface LayoutState {
@@ -45,6 +47,7 @@ export const LAYOUT_COMMANDS = {
   asideOpen: { id: 'aside.open', label: '打开右列' },
   asideClose: { id: 'aside.close', label: '关闭右列' },
   asideToggle: { id: 'aside.toggle', label: '切换右列' },
+  asideExplorerToggle: { id: 'aside.explorer.toggle', label: '折叠/展开资源管理器' },
 } as const;
 
 export interface ILayoutService {
@@ -66,6 +69,8 @@ export interface ILayoutService {
   setAsideWidth(n: number): void;
   /** 切换 aside 中间区视图 (查看 | 终端 | 浏览器) */
   setAsideView(view: AsideView): void;
+  /** 折叠/展开查看模式下的资源管理器 (aside 内 explorer) */
+  toggleAsideExplorer(): void;
   /** aside 打开时视口变化 → 同步 60% 宽 (resize 事件调用) */
   syncAsideToViewport(): void;
 }
