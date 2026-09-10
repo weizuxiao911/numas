@@ -21,6 +21,7 @@ import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 import { SOLO_SLOTS } from '../config/slots';
 import { WorkspacePicker } from '../extensions/workspace/WorkspacePicker';
 import { FilePicker } from '../extensions/filepicker/FilePicker';
+import { IdeRightTopbar } from './IdeRightTopbar';
 
 /** IDE 专属样式: 顶部栏左右布局 + 面板 toggle + 右栏折叠过渡 + flat 背景/去阴影 */
 const styles = `
@@ -89,7 +90,7 @@ const styles = `
   transition: flex-basis 260ms cubic-bezier(0.22, 1, 0.36, 1), width 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .app-ide__right.is-collapsed { flex-basis: 0; width: 0; border-left: none; }
-.app-ide__right > * { flex: 1 1 auto; min-height: 0; min-width: 0; }
+.app-ide__right > *:not(.app-ide__chat-topbar) { flex: 1 1 auto; min-height: 0; min-width: 0; }
 /* 主题用 unlayered !important 定义背景/阴影, 必须放进 @layer 的 !important 才能盖过 */
 @layer numas-override {
   /* 去掉所有阴影 (flat 布局) */
@@ -196,6 +197,7 @@ export function IdeLayout(): React.ReactElement {
             </SplitPanel>
           </SplitPanel>
           <div className={`app-ide__right${rightVisible ? '' : ' is-collapsed'}`}>
+            <IdeRightTopbar />
             <SlotRenderer slot={SOLO_SLOTS.MainContainer} />
           </div>
         </IdeBody>
