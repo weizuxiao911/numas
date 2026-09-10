@@ -9,6 +9,7 @@
  *   - sidebar 折叠 = collapsed boolean (折叠时不渲染, 不用 1px 占位)
  *   - 折叠时记住展开宽度, 展开恢复
  *   - aside 打开 → 自动折叠 sidebar 让出空间 (并记下展开宽度)
+ *   - sidebar 展开 → 自动折叠 aside (两列互斥, 同一时间只展开一列)
  *   - 关闭 aside 不自动恢复 sidebar (用户自己 expand)
  *   - aside 打开时视口 resize → 宽度同步 60%
  */
@@ -75,6 +76,8 @@ export class LayoutServiceImpl implements ILayoutService {
   expandSidebar(): void {
     const next = this.expandedSidebarW;
     this._state.sidebar = { collapsed: false, width: next };
+    // 展开 sidebar → 折叠 aside (互斥: 同一时间只展开一列)
+    if (this._state.aside.open) this._state.aside = { ...this._state.aside, open: false };
     this.emit();
   }
 
