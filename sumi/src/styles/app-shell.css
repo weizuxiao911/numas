@@ -145,6 +145,13 @@
 .app-solo__aside-terminal { flex: 1 1 auto; min-width: 0; min-height: 0; flex-direction: column; }
 /* 终端模式: 隐藏底部模块 tab 条 (仅终端一个模块, 冗余; 保留终端面板自身 zsh 标题栏) */
 .app-solo__aside-container .bottom-slot .next_bottom_bar { display: none; }
+/* aside 内官方拓展视图去掉主题自带阴影 (flat 布局; left=explorer / bottom=终端 / 编辑区 tabs).
+   主题用 unlayered !important 定义阴影, 必须放进 @layer 的 !important 才能盖过 (cascade layer 规则) */
+@layer numas-override {
+  .app-solo__aside .left-slot,
+  .app-solo__aside .bottom-slot,
+  .app-solo__aside [class*="kt_editor_tabs"] { box-shadow: none !important; }
+}
 .app-solo__aside-footer { flex: 0 0 auto; min-width: 0; }
 
 /* 拖动条: 朴素 1px 主线, 折叠时跟 sidebar 一起收, 动效跟 sidebar 同步 */
