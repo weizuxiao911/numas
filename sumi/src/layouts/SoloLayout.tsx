@@ -171,7 +171,6 @@ export function SoloLayout(): React.ReactElement {
             )}
             <div className="app-solo__aside-container">
               {asideView === 'view' && <SlotRenderer key="aside-editor" slot={SlotLocation.main} />}
-              {asideView === 'browser' && <SlotRenderer key="aside-browser" slot={SOLO_SLOTS.AsideBrowser} />}
               {/* 终端常驻挂载 (非终端模式仅 display:none): TerminalClient._renderOnDemand 对已打开的 xterm
                   直接 return, 卸载重挂载不会重新 append 到新容器 → 终端空白/无法连接. 常驻后模式切换只切显隐 */}
               <div className="app-solo__aside-terminal" style={{ display: asideView === 'terminal' ? 'flex' : 'none' }}>

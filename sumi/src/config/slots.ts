@@ -41,7 +41,7 @@ export const SOLO_SLOTS = {
   MainFooter: 'solo.main.footer',
   // 右列 aside (中间段: 查看模式左=官方 SlotLocation.left explorer, 右=官方 SlotLocation.main 编辑区)
   AsideAction: 'solo.aside.action',
-  /** 浏览器视图 (asidetopbar 激活浏览器时, 中间段加载此 slot; 与 editor 互斥) */
+  /** 浏览器视图 slot — 暂下线 (内置浏览器拓展重置中); 重做后由 asidetopbar 胶囊 + SoloLayout 重新挂载 */
   AsideBrowser: 'solo.aside.browser',
   AsideFooter: 'solo.aside.footer',
 } as const;

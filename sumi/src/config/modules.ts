@@ -30,7 +30,6 @@ import { SessionsModule } from '../extensions/sessions';
 import { ActionModule } from '../extensions/action';
 import { ChatbotModule } from '../extensions/chatbot';
 import { AsideTopbarModule } from '../extensions/aside-topbar';
-import { BuiltinBrowserModule } from '../extensions/browser';
 import { WorkspaceModule } from '../extensions/workspace';
 
 export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
@@ -56,8 +55,7 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     SessionsModule,        // 左列 sidebar.container (新建会话 + 历史会话)
     ActionModule,          // 中列 main.action
     ChatbotModule,         // 中列 main.container (对话主区)
-    AsideTopbarModule,     // 右列 aside.action (查看/终端/浏览器 胶囊)
-    BuiltinBrowserModule,  // 内置浏览器 (aside.browser 视图 + numas-browser:// 编辑器 tab; browser.* 命令)
+    AsideTopbarModule,     // 右列 aside.action (查看/终端 胶囊)
 
     // workspace 根同步 (官方 explorer/editor 读 IWorkspaceService; 查看模式依赖)
     WorkspaceModule,
