@@ -3,6 +3,7 @@ import { Context, Effect, Stream } from "effect"
 import { HttpBody, HttpClient, HttpClientRequest, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { createHash } from "node:crypto"
 import { resolve as pathResolve } from "node:path"
+import { gzipSync } from "node:zlib"
 import { ProxyUtil } from "../proxy-util"
 
 /** Registry 地址 (--registry): sumi 扩展市场服务, 注入到嵌入的 web UI */
@@ -62,7 +63,12 @@ function notFound() {
   return HttpServerResponse.jsonUnsafe({ error: "Not Found" }, { status: 404 })
 }
 
-function embeddedUIResponse(file: string, body: Uint8Array, registry?: string) {
+/** gzip 缓存: key = 文件绝对路径, 命中条件 = 内容长度一致 (构建产物 contenthash 文件名天然隔离旧缓存) */
+const uiGzipCache = new Map<string, { size: number; data: Uint8Array }>()
+const UI_GZIP_MIN_BYTES = 1024
+const UI_GZIP_TYPES = /^(?:text\/|application\/(?:javascript|json|xml|ecmascript|wasm)|image\/svg)/i
+
+function embeddedUIResponse(file: string, body: Uint8Array, registry?: string, acceptEncoding?: string) {
   const mime = FSUtil.mimeType(file)
   const headers = new Headers({ "content-type": mime })
   let data = body
@@ -75,6 +81,19 @@ function embeddedUIResponse(file: string, body: Uint8Array, registry?: string) {
       data = new TextEncoder().encode(html.replace("</body>", script + "</body>"))
     }
   }
+  // 静态资源 gzip (缓存): 小带宽部署下传输量降 ~4x, 避免大 chunk 传输超时被切断
+  if (
+    acceptEncoding?.toLowerCase().includes("gzip") &&
+    data.byteLength >= UI_GZIP_MIN_BYTES &&
+    UI_GZIP_TYPES.test(mime)
+  ) {
+    const hit = uiGzipCache.get(file)
+    const gz = hit && hit.size === data.byteLength ? hit.data : new Uint8Array(gzipSync(data))
+    if (!hit || hit.size !== data.byteLength) uiGzipCache.set(file, { size: data.byteLength, data: gz })
+    headers.set("content-encoding", "gzip")
+    headers.set("vary", "accept-encoding")
+    return HttpServerResponse.raw(gz, { headers })
+  }
   return HttpServerResponse.raw(data, { headers })
 }
 
@@ -85,6 +104,7 @@ function serveDiskUI(
   fs: FSUtil.Interface,
   webRoot: string,
   registry?: string,
+  acceptEncoding?: string,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse | undefined, never, never> {
   const rootReal = FSUtil.resolve(webRoot)
   const rel = decodeURIComponent(requestPath.replace(/^\//, "")).replaceAll("\\", "/")
@@ -94,7 +114,7 @@ function serveDiskUI(
     const abs = pathResolve(rootReal, name)
     if (!FSUtil.contains(rootReal, abs)) return Effect.succeed(undefined)
     return fs.readFile(abs).pipe(
-      Effect.map((content) => embeddedUIResponse(abs, content, registry)),
+      Effect.map((content) => embeddedUIResponse(abs, content, registry, acceptEncoding)),
       Effect.catch(() => Effect.succeed(undefined as HttpServerResponse.HttpServerResponse | undefined)),
     )
   }
@@ -111,12 +131,13 @@ export function serveEmbeddedUIEffect(
   fs: FSUtil.Interface,
   embeddedWebUI: Record<string, string>,
   registry?: string,
+  acceptEncoding?: string,
 ) {
   const file = embeddedWebUI[requestPath.replace(/^\//, "")] ?? embeddedWebUI["index.html"] ?? null
   if (!file) return Effect.succeed(notFound())
 
   return fs.readFile(file).pipe(
-    Effect.map((body) => embeddedUIResponse(file, body, registry)),
+    Effect.map((body) => embeddedUIResponse(file, body, registry, acceptEncoding)),
     Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(notFound())),
   )
 }
@@ -138,15 +159,16 @@ export function serveUIEffect(
   return Effect.gen(function* () {
     const registry = services.registry
     const path = new URL(request.url, "http://localhost").pathname
+    const acceptEncoding = request.headers["accept-encoding"]
 
     // --web-ui 磁盘目录优先: 每次请求实时读盘
     if (services.webUIRoot) {
-      const disk = yield* serveDiskUI(path, services.fs, services.webUIRoot, registry)
+      const disk = yield* serveDiskUI(path, services.fs, services.webUIRoot, registry, acceptEncoding)
       if (disk) return disk
     }
 
     const embeddedWebUI = yield* Effect.promise(() => embeddedUI(services.disableEmbeddedWebUi))
-    if (embeddedWebUI) return yield* serveEmbeddedUIEffect(path, services.fs, embeddedWebUI, registry)
+    if (embeddedWebUI) return yield* serveEmbeddedUIEffect(path, services.fs, embeddedWebUI, registry, acceptEncoding)
 
     const response = yield* services.client.execute(
       HttpClientRequest.make(request.method)(upstreamURL(path), {

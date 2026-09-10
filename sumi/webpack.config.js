@@ -84,6 +84,9 @@ const config = {
         // 把 monaco-editor 这种超大模块拆到独立 chunk, 避免单个 bundle 过大
         splitChunks: {
             chunks: 'all',
+            // 单 chunk 上限 2MB: 大组 (opensumi ~11MB / vendors ~14MB) 按模块边界再切,
+            // 避免小带宽服务器上单连接传大文件被超时切断 (浏览器 ERR_INCOMPLETE_CHUNKED_ENCODING → 白屏)
+            maxSize: 2 * 1024 * 1024,
             cacheGroups: {
                 monaco: {
                     test: /[\\/]node_modules[\\/]@opensumi[\\/]monaco-editor-core[\\/]/,
