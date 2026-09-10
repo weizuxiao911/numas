@@ -8,7 +8,10 @@ import { onEvent } from '@/service/event/eventBus';
  *  - 无框触发行: 左 agent 色状态指示器 (运行=三点脉冲, 完成=subagent 图标, 失败=红 !)
  *  - 标题=专家名 (首字母大写), 副标题=任务描述 (单行截断), 后台任务加 (background)
  *  - 有输出且完成 → chevron 可展开 hairline 盒
+ *  - 子代理会话的 pending question/permission 由主会话 dock 提升展示 (session-request-tree),
+ *    本卡片只投影执行过程, 不承载作答交互
  */
+
 export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
   const commandService = useInjectable<CommandService>(CommandService);
   const status: string = part?.state?.status || 'pending';
@@ -69,7 +72,6 @@ export const SubAgentCard: React.FC<{ part: any }> = ({ part }) => {
       }
     });
   }, [subSessionId]);
-
 
   const openSession = (e: React.MouseEvent) => {
     e.stopPropagation();

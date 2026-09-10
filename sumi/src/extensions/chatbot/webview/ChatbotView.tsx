@@ -17,6 +17,9 @@ import {
   aiListProviders,
   aiGetConfig,
   aiListSessions,
+  aiListAllSessions,
+  aiListPendingQuestions,
+  aiListPendingPermissions,
   aiListMessages,
   aiDeleteSession,
   aiRevertMessage,
@@ -185,22 +188,69 @@ export const ChatbotView: React.FC = () => {
   const [showSkills, setShowSkills] = useState(false);
   const [skills, setSkills] = useState<Array<{ name: string; description?: string; location?: string }>>([]);
   const [questionRev, setQuestionRev] = useState(0);
-  // 交互状态按会话管理: sid → { question?, permission? }; 渲染时取当前会话, 切换天然跟随
+  // 交互状态按会话管理: sid → { question?, permission? }; 渲染时按当前会话树取, 切换天然跟随
   const [interactions, setInteractions] = useState<Record<string, { question?: { requestID: string; questions: any[] }; permission?: any }>>({});
+  // 会话树 (childID → parentID): 子代理会话的 pending question/permission 提升到主会话 dock
+  // (对齐官方 session-request-tree: 沿 parentID 遍历子孙会话, 取子树中第一个 pending)
+  const [sessionParentMap, setSessionParentMap] = useState<Record<string, string>>({});
   useEffect(() => {
     const sub = () => setQuestionRev((n) => n + 1);
     const unsub = subscribeQuestionChange(sub);
     return unsub;
   }, []);
-  // 当前会话未回答提问 → 输入框上方 QuestionDock (questionRev 变化时重新取 store)
+  // 当前会话 + 所有子孙会话 ID (BFS). 数据源: 会话树 map (session.list) + 当前消息里的 task part 兜底
+  const sessionTreeIDs = React.useMemo(() => {
+    if (!sessionID) return [] as string[];
+    const children = new Map<string, string[]>();
+    const addChild = (parent: string, child: string) => {
+      if (!parent || !child || parent === child) return;
+      const list = children.get(parent);
+      if (list) { if (!list.includes(child)) list.push(child); }
+      else children.set(parent, [child]);
+    };
+    for (const [child, parent] of Object.entries(sessionParentMap)) addChild(parent, child);
+    // 兜底: task part metadata.sessionId = 子会话 (树 map 未刷新时也能立即识别)
+    for (const row of rows) {
+      for (const p of row.parts || []) {
+        if (p?.type !== 'tool') continue;
+        const name = String(p.tool || '').toLowerCase();
+        if (name !== 'task' && !name.includes('subagent')) continue;
+        const child = p?.state?.metadata?.sessionId || p?.state?.metadata?.sessionID;
+        if (typeof child === 'string' && child) addChild(sessionID, child);
+      }
+    }
+    const ids = [sessionID];
+    const seen = new Set(ids);
+    for (let i = 0; i < ids.length; i++) {
+      for (const child of children.get(ids[i]) || []) {
+        if (seen.has(child)) continue;
+        seen.add(child);
+        ids.push(child);
+      }
+    }
+    return ids;
+  }, [sessionID, sessionParentMap, rows]);
+  // 会话树内第一个未回答提问 → 输入框上方 QuestionDock (questionRev 变化时重新取 store)
   const activeQuestion = React.useMemo(() => {
     void questionRev;
-    const rec = getQuestionStore().get(sessionID);
-    if (!rec?.requestID) return null;
-    const qs = normalizeQuestions(rec.questions);
-    if (!qs || qs.length === 0) return null;
-    return { requestID: rec.requestID, questions: qs };
-  }, [sessionID, questionRev, rows]);
+    const store = getQuestionStore();
+    for (const sid of sessionTreeIDs) {
+      const rec = store.get(sid);
+      if (!rec?.requestID) continue;
+      const qs = normalizeQuestions(rec.questions);
+      if (!qs || qs.length === 0) continue;
+      return { requestID: rec.requestID, questions: qs, ownerSessionID: sid };
+    }
+    return null;
+  }, [sessionTreeIDs, questionRev]);
+  // 会话树内第一个未处理权限请求 → PermissionModal (子代理会话的请求同样提升到主会话)
+  const activePermission = React.useMemo(() => {
+    for (const sid of sessionTreeIDs) {
+      const p = interactions[sid]?.permission;
+      if (p?.id) return { permission: p, ownerSessionID: sid };
+    }
+    return null;
+  }, [sessionTreeIDs, interactions]);
   const [attachments, setAttachments] = useState<Array<{ name: string; path: string; dataUrl?: string }>>([]);
   /** 上下文挂件 (编辑器选区/终端选区/文件树) — send 时拼成 formatContextNote 笔记 */
   const [contextItems, setContextItems] = useState<ChatContextItem[]>([]);
@@ -534,6 +584,49 @@ export const ChatbotView: React.FC = () => {
     }
   }, []);
 
+  /** 刷新会话树 map (childID → parentID): session.list 不带 roots=true 即含 subagent 子会话.
+   *  子代理提问/权限事件到达、会话切换、启动恢复时调用. */
+  const refreshSessionTree = useCallback(async () => {
+    try {
+      const all = await aiListAllSessions();
+      const map: Record<string, string> = {};
+      for (const s of all) {
+        if (s?.id && s?.parentID) map[s.id] = s.parentID;
+      }
+      setSessionParentMap(map);
+    } catch { /* ignore */ }
+  }, []);
+
+  /** pending 对账 (事件流丢帧/页面重载兜底): question.list + permission.list 全量拉取,
+   *  按 sessionID 回填本地 store. 跨会话返回, 树遍历负责只展示当前会话子树的请求. */
+  const recoverPendingInteractions = useCallback(async () => {
+    void refreshSessionTree();
+    try {
+      const qs = await aiListPendingQuestions();
+      for (const q of qs) {
+        if (q?.id && q?.sessionID) setQuestion(q.sessionID, { requestID: q.id, questions: q.questions || [] });
+      }
+    } catch { /* ignore */ }
+    try {
+      const ps = await aiListPendingPermissions();
+      if (ps.length) {
+        setInteractions((prev) => {
+          const next = { ...prev };
+          for (const p of ps) {
+            if (p?.id && p?.sessionID) next[p.sessionID] = { ...(next[p.sessionID] || {}), permission: p };
+          }
+          return next;
+        });
+      }
+    } catch { /* ignore */ }
+  }, [refreshSessionTree]);
+
+  // 启动/切会话时对账 pending question/permission (子代理会话的请求经树遍历提升到主会话 dock)
+  useEffect(() => {
+    if (!ready || !sessionID) return;
+    void recoverPendingInteractions();
+  }, [ready, sessionID, recoverPendingInteractions]);
+
   // 全部从事件数据直接更新 rows; 只有 session idle 时才做一次最终同步.
   // 依赖 ready（agentUrl 就绪后为 true）: 首次渲染 client 可能未创建, ready 翻转时重跑订阅
   useEffect(() => {
@@ -611,6 +704,51 @@ export const ChatbotView: React.FC = () => {
               disarmStepIdle();
               setStatusBySession((prev) => ({ ...prev, [ssid]: { type: 'idle' } }));
               flushQueueRef.current(ssid, true);
+            }
+            return;
+          }
+          // 提问/权限事件: 跨会话处理 (不参与当前会话过滤) — 子代理会话的请求要能提升到主会话 dock.
+          // 按事件 sessionID 存 store, 渲染层按会话树遍历取子树中第一个 pending (对齐官方 session-request-tree)
+          if (type === 'question.asked' || type === 'question.v2.asked') {
+            const qid = properties.id;
+            const qsid = properties.sessionID;
+            if (qid && qsid) {
+              setQuestion(qsid, { requestID: qid, questions: properties.questions || [] });
+              disarmStepIdle();
+              void refreshSessionTree();
+            }
+            return;
+          }
+          if (type === 'question.replied' || type === 'question.v2.replied') {
+            // 已回答 (可能来自其他客户端) → 清 store, dock 让位给下一个 pending
+            const rsid = properties.sessionID;
+            if (rsid) clearQuestion(rsid);
+            return;
+          }
+          if (type === 'question.rejected' || type === 'question.v2.rejected') {
+            const rsid = properties.sessionID || sessionIDRef.current;
+            if (rsid) clearQuestion(rsid);
+            return;
+          }
+          if (type === 'permission.asked' || type === 'permission.updated' || type === 'permission.v2.asked') {
+            // 工具权限请求: 按会话存 (子代理会话的请求经树遍历提升到主会话 PermissionModal)
+            if (properties?.id) {
+              const psid = properties.sessionID || sessionIDRef.current;
+              setInteractions((prev) => ({ ...prev, [psid]: { ...prev[psid], permission: properties } }));
+              void refreshSessionTree();
+            }
+            return;
+          }
+          if (type === 'permission.replied' || type === 'permission.v2.replied') {
+            const pid = properties?.permissionID;
+            if (pid) {
+              const psid = properties.sessionID || sessionIDRef.current;
+              setInteractions((prev) => {
+                const cur = prev[psid];
+                if (!cur?.permission || cur.permission.id !== pid) return prev;
+                const next = { ...cur }; delete next.permission;
+                return { ...prev, [psid]: next };
+              });
             }
             return;
           }
@@ -728,51 +866,8 @@ export const ChatbotView: React.FC = () => {
               setStatusBySession((prev) => ({ ...prev, [esid]: { type: 'idle' } }));
               break;
             }
-            case 'question.asked':
-            case 'question.v2.asked': {
-              // A2UI 提问: 存 que_xxx (持久化, QuestionCard 用它取 requestID); 卡片在消息流内直接交互, 无弹窗
-              const qid = properties.id;
-              const qsid = properties.sessionID;
-              if (qid && qsid) {
-                setQuestion(qsid, { requestID: qid, questions: properties.questions || [] });
-                disarmStepIdle();
-              }
-              break;
-            }
-            case 'question.rejected':
-            case 'question.v2.rejected': {
-              // 提问被忽略 (reject) 完成 → 清 store (官方同语义, AI 继续干活)
-              const rsid = properties.sessionID || sessionIDRef.current;
-              if (rsid) clearQuestion(rsid);
-              break;
-            }
             case 'todo.updated': {
               // todo 进度已由消息列表 todo 卡片呈现, 无需额外状态
-              break;
-            }
-            case 'permission.asked':
-            case 'permission.updated':
-            case 'permission.v2.asked': {
-              // 工具权限请求: 弹权限卡片 (once/always/reject) — 挂到对应会话
-              if (properties?.id) {
-                const psid = properties.sessionID || sessionIDRef.current;
-                setInteractions((prev) => ({ ...prev, [psid]: { ...prev[psid], permission: properties } }));
-              }
-              break;
-            }
-            case 'permission.replied':
-            case 'permission.v2.replied': {
-              // 权限已回复 → 收起卡片
-              const pid = properties?.permissionID;
-              if (pid) {
-                const psid = properties.sessionID || sessionIDRef.current;
-                setInteractions((prev) => {
-                  const cur = prev[psid];
-                  if (!cur?.permission || cur.permission.id !== pid) return prev;
-                  const next = { ...cur }; delete next.permission;
-                  return { ...prev, [psid]: next };
-                });
-              }
               break;
             }
           }
@@ -783,7 +878,7 @@ export const ChatbotView: React.FC = () => {
       stopped = true;
       off();
     };
-  }, [ready, loadMessages, refreshSessionStatuses]);
+  }, [ready, loadMessages, refreshSessionStatuses, refreshSessionTree]);
 
   // busy 状态只反映 server 真实状态 (事件流 busy/idle 事件 + 下方 15s 对账全量校准).
   // 历史版本曾有「120s 强制复位 busy」的假看门狗: 长任务 (>120s) 时 UI 周期性假空闲
@@ -1509,17 +1604,25 @@ export const ChatbotView: React.FC = () => {
   }, [input, focusAndMoveCaretToEnd]);
 
   const onReplyQuestion = useCallback(async (sid: string, rid: string, answers: string[][]) => {
-    await aiReplyQuestion(sid, rid, answers);
+    try {
+      await aiReplyQuestion(sid, rid, answers);
+      clearQuestion(sid);
+    } catch (e) {
+      // 可能是断线期间已答 (404) → 清本地并全量对账 (网络抖动时 recover 会把仍 pending 的加回来)
+      console.warn('[ai] reply question:', e);
+      clearQuestion(sid);
+      showNotice('提交回答失败, 已重新同步');
+    }
+    void recoverPendingInteractions();
     if (sid) {
       try { await loadMessages(sid); } catch { /* ignore */ }
-      // 已回答: 清 store, 避免 QRecord 重复提示待回答
-      clearQuestion(sid);
     }
-  }, [loadMessages]);
+  }, [loadMessages, showNotice, recoverPendingInteractions]);
 
-  /** 忽略提问 (官方语义): question.reject → AI 继续干活, 不 abort; dock 从 store 移除 */
-  const onSkipQuestion = useCallback(async () => {
-    const sid = sessionID;
+  /** 忽略提问 (官方语义): question.reject → AI 继续干活, 不 abort; dock 从 store 移除.
+   *  sid = 提问所属会话 (可能是子代理会话, 由主会话树遍历提升展示) */
+  const onSkipQuestion = useCallback(async (sidArg?: string) => {
+    const sid = sidArg || sessionID;
     const rec = getQuestionStore().get(sid);
     if (!sid || !rec?.requestID) return;
     try {
@@ -1528,8 +1631,9 @@ export const ChatbotView: React.FC = () => {
       console.warn('[ai] reject question:', e);
     }
     clearQuestion(sid);
+    void recoverPendingInteractions();
     try { await loadMessages(sid); } catch { /* ignore */ }
-  }, [sessionID, loadMessages]);
+  }, [sessionID, loadMessages, recoverPendingInteractions]);
 
   /** 撤销此消息 (官方同款): revert 到该消息之前, 重新拉消息流 */
   const onRevertMessage = useCallback(async (mid: string) => {
@@ -1545,26 +1649,35 @@ export const ChatbotView: React.FC = () => {
     }
   }, [sessionID, loadMessages, showNotice]);
 
-  const onReplyPermission = useCallback(async (permissionID: string, response: 'once' | 'always' | 'reject') => {
-    console.debug('[perm] click', permissionID, response);
-    const sid = sessionID;
+  /** 回复权限请求. sid = 请求所属会话 (可能是子代理会话, 由主会话树遍历提升展示) */
+  const onReplyPermission = useCallback(async (sidArg: string, permissionID: string, response: 'once' | 'always' | 'reject') => {
+    console.debug('[perm] click', sidArg, permissionID, response);
+    const sid = sidArg || sessionID;
     try {
       if (response === 'reject') {
-        // 拒绝 = abort 对话 (停止当前任务, 权限请求作废)
+        // 拒绝 = abort 该会话对话 (停止当前任务, 权限请求作废)
         try { await aiReplyPermission(sid, permissionID, 'reject'); } catch { /* ignore */ }
         await onAbort(sid);
         return;
       }
       await aiReplyPermission(sid, permissionID, response);
-      const psid = sid;
       setInteractions((prev) => {
-        const cur = prev[psid];
+        const cur = prev[sid];
         if (!cur?.permission || cur.permission.id !== permissionID) return prev;
         const next = { ...cur }; delete next.permission;
-        return { ...prev, [psid]: next };
+        return { ...prev, [sid]: next };
       });
-    } catch (e) { console.warn('[ai] reply permission:', e); }
-  }, [sessionID, onAbort]);
+    } catch (e) {
+      console.warn('[ai] reply permission:', e);
+      setInteractions((prev) => {
+        const cur = prev[sid];
+        if (!cur?.permission || cur.permission.id !== permissionID) return prev;
+        const next = { ...cur }; delete next.permission;
+        return { ...prev, [sid]: next };
+      });
+      void recoverPendingInteractions();
+    }
+  }, [sessionID, onAbort, recoverPendingInteractions]);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (showCommands && filteredCommands.length > 0) {
@@ -1738,7 +1851,7 @@ export const ChatbotView: React.FC = () => {
   }, [models]);
 
   // 官方 DockPrompt 语义: question / permission dock 出现时顶替输入发送区
-  const dockPromptActive = !!activeQuestion || !!interactions[sessionID]?.permission;
+  const dockPromptActive = !!activeQuestion || !!activePermission;
 
   return (
     <div className="chat">
@@ -1897,31 +2010,25 @@ export const ChatbotView: React.FC = () => {
               key={activeQuestion.requestID}
               questions={activeQuestion.questions}
               requestID={activeQuestion.requestID}
-              onSubmit={(rid, answers) => onReplyQuestion(sessionID, rid, answers)}
-              onCancel={onSkipQuestion}
+              onSubmit={(rid, answers) => onReplyQuestion(activeQuestion.ownerSessionID, rid, answers)}
+              onCancel={() => onSkipQuestion(activeQuestion.ownerSessionID)}
             />
           )}
-          {(() => {
-            const cur = interactions[sessionID] || {};
-            return (
-              <>
-                {cur.permission && (
-                  <PermissionModal
-                    permission={cur.permission}
-                    onReply={onReplyPermission}
-                    onDismiss={() => {
-                      setInteractions((prev) => {
-                        const c = prev[sessionID];
-                        if (!c) return prev;
-                        const next = { ...c }; delete next.permission;
-                        return { ...prev, [sessionID]: next };
-                      });
-                    }}
-                  />
-                )}
-              </>
-            );
-          })()}
+          {activePermission && (
+            <PermissionModal
+              permission={activePermission.permission}
+              onReply={(pid, resp) => onReplyPermission(activePermission.ownerSessionID, pid, resp)}
+              onDismiss={() => {
+                const psid = activePermission.ownerSessionID;
+                setInteractions((prev) => {
+                  const c = prev[psid];
+                  if (!c) return prev;
+                  const next = { ...c }; delete next.permission;
+                  return { ...prev, [psid]: next };
+                });
+              }}
+            />
+          )}
           {/* 官方顺序: Question → Permission → Followup → 输入区 */}
           <FollowupDock
             items={(queueBySession[sessionID] || []).map((q) => ({ id: q.id, text: q.displayText }))}

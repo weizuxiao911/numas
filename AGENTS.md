@@ -676,3 +676,23 @@ AI **仍需 `question`**:
   3. **「from/to 都变 basename 了」**: resolveFsPath line 95-100 把 a 跟 c 当字符串比较, mismatch 时丢 workspace 前缀只返 basename, 同时 headerPath 装的是 parent dir. 这是 caller 把 headerPath 当 "workspace 边界" 用的根本 bug — 改 caller 让它用 logical 形态算 relPath, 别用 headerPath 维度.
   4. **「playwright drag 在 codeblitz tree 不可靠」**: playwright `dragTo` 用 `page.mouse.down/move/up`, 很多 React DnD / codeblitz tree 走 react-dnd 监听 HTML5 `dragstart/dragover/drop`, 普通 mouse drag 不触发. 改用 `page.evaluate` 在 `dragstart/drop` 节点上 `dispatchEvent(new DragEvent(...))` 模拟 (DataTransfer 传空 dt, codeblitz React handler 自己读 `e.dataTransfer.getData` 或 DOM 反查 uri). 终点用 `elementFromPoint(x, y)` 找, 命中 `kt-modal-wrap` 等 overlay 是正常, codeblitz 会按坐标在 tree 里找最近 treeitem.
   5. **「opencode 端 `/api/fs/rename` 接受 logical rel 路径」**: server `filesystem.ts:rename` 走 `resolve(input.from)` (line 246, #21 修复后走 logical `path.resolve` 不 realpath), `from.absolute = path.resolve(logical_ws, '111/222') = /Users/foo/data/实验1/111/222` logical abs, chdir 穿透 symlink, `fs.rename` Node API 自己 realpath 物理化 — 成功. **不需要 server 端任何改动**.
+
+#### 34. 子代理 (task/subagent) 的 question/permission 请求在主界面不可见 → 子代理永久阻塞
+
+- **现象**: 子代理调用 `question` 工具提问 (或触发权限 ask) 时, 主会话界面无任何提示, 父会话一直 busy, 子代理阻塞在 deferred, 用户只能 abort 主会话. 默认权限下不可达, 需配置放行才触发.
+- **根因**:
+  1. **默认 subagent 没有 question 工具**: `agent.ts` defaults `question:"deny"`, 仅 `build`/`plan` 覆写 allow; `general`/`explore`/自定义子代理继承 deny, 在 `llm/request.ts:resolveTools` 被 `Permission.disabled` 过滤. 用户全局 `permission: { question: "allow" }` (或按 agent) 才可能触发.
+  2. **事件 payload messageID 位置**: `question.asked` properties = `{id, sessionID, questions, tool:{messageID,callID}}` (schema `v1/question.ts`), **没有顶层 `messageID`/`requestID`**; 内联卡片按 `props.messageID` 取会永远 undefined.
+  3. **主视图丢弃子会话事件**: `ChatbotView.tsx` 事件处理在 `properties.sessionID !== 当前` 时 return; 且无 `question.list`/`permission.list` 恢复; 无会话树遍历 → 子会话 pending 永不展示.
+- **解决方案 (对齐官方 app `session-request-tree`)**:
+  - 事件处理移到会话过滤**之前**, 按事件 sessionID 存 store (question 用 sessionStorage 持久化 store; permission 用 `interactions` state).
+  - **会话树遍历**: `session.list` 不带 `roots=true` 拿全量会话 (含子会话, `parentID` 字段), 建 childID→parentID map; 当前消息里的 task part `state.metadata.sessionId` 作兜底; BFS 取子树中**第一个** pending question/permission → 主会话 `QuestionDock`/`PermissionModal`, reply/reject/abort 都路由到 `ownerSessionID` (子会话).
+  - **pending 对账**: 启动/切会话时 `GET /question` + `GET /permission` 全量回填 store, 覆盖事件丢帧/页面重载 (官方 CLI run 同款 bootstrap).
+- **验证方法**:
+  1. 测试 workspace 写 `.opencode/opencode.jsonc`: `{ "permission": { "question": "allow", "bash": "ask" } }` (新目录 = 新 instance, config 立即生效, 不用重启 server).
+  2. 主 agent 委派 `general` 子代理, 指示它必须调用 question 工具 (或跑 bash 触发权限 ask); `GET /question` / `GET /permission` 看到 pending 的 `sessionID` = 子会话.
+  3. playwright 两条路径都验: **恢复路径** (先提问后开页面, 靠 list 对账 + 树遍历出 dock) 与 **实时路径** (页面开着事件到达). 作答后核对父会话 task output = 子代理返回值; 忽略 (reject) 后 pending 清空且流程终止不悬挂.
+- **排查方法**:
+  1. **「可见的 playwright 浏览器被人工点击」**: 自动化验证时用户可能直接点可见浏览器窗口, 造成"dock 自动提交"误判. 用受控实验区分: 注入 fetch spy 记录 `new Error().stack` (确认调用来自 `QuestionDock.submitAll` 还是未知路径), 或只观察不点击 15s+ 看 dock 是否自行消失.
+  2. **「reject 后 task 变 error 不是悬挂」**: `question.reject` → `Deferred.fail(RejectedError)` → question 工具 die → 子代理 tool error → task 工具按 `findLast(tool error)` 判失败. 这是服务端既有语义 (非 UI bug), 关键是 pending 清空且父会话回到 idle.
+  3. **「事件顺序」**: `question.asked` 一定在对应 tool part `message.part.updated` 之后 (processor 先更新 tool running 再 execute); 内联/投影方案按 `tool.messageID` 关联 message 行, dock 方案直接按 sessionID 找 store, 不依赖顺序.

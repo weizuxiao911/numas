@@ -25,6 +25,9 @@ function pickOutStr(state: any): string {
   if (!state) return '';
   const direct = state.output;
   if (direct != null && direct !== '') return safeStringify(direct);
+  // 运行中实时输出: shell 工具逐 chunk 写 state.metadata.output → 前端实时显示终端执行过程
+  const live = state?.metadata?.output;
+  if (live != null && live !== '') return safeStringify(live);
   const fromContent = contentToText(state.content);
   if (fromContent) return fromContent;
   if (state.result != null) return safeStringify(state.result);

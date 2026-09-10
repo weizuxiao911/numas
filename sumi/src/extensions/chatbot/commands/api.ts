@@ -107,6 +107,44 @@ export async function aiListSessions(): Promise<any[]> {
   return Array.isArray(list) ? list : [];
 }
 
+/** 全部会话 (含 subagent 子会话) — GET /session (不带 roots=true).
+ *  用于会话树遍历: 子代理会话的 pending question/permission 提升到主会话 dock. */
+export async function aiListAllSessions(): Promise<any[]> {
+  await waitForAiReady();
+  const client = getAiClient();
+  if (!client) return [];
+  const workdir = getGlobalOpencodeRuntime().cwd || '';
+  const r = workdir
+    ? await (client as any).session.list({ directory: workdir })
+    : await (client as any).session.list();
+  const list: any[] = Array.isArray(r) ? r
+    : (Array.isArray(r?.data) ? r.data
+    : (Array.isArray(r?.data?.data) ? r.data.data : []));
+  return Array.isArray(list) ? list : [];
+}
+
+/** 待回答提问 (跨会话, 含子代理会话) — GET /question.
+ *  事件流丢帧/页面重载后对账用, 返回 QuestionRequest[]: { id, sessionID, questions, tool? } */
+export async function aiListPendingQuestions(): Promise<any[]> {
+  await waitForAiReady();
+  const client = getAiClient();
+  if (!client) return [];
+  const r = await (client as any).question.list();
+  const list: any[] = Array.isArray(r) ? r : (Array.isArray(r?.data) ? r.data : []);
+  return Array.isArray(list) ? list : [];
+}
+
+/** 待处理权限请求 (跨会话, 含子代理会话) — GET /permission.
+ *  返回 PermissionRequest[]: { id, sessionID, permission, patterns, metadata, always, tool? } */
+export async function aiListPendingPermissions(): Promise<any[]> {
+  await waitForAiReady();
+  const client = getAiClient();
+  if (!client) return [];
+  const r = await (client as any).permission.list();
+  const list: any[] = Array.isArray(r) ? r : (Array.isArray(r?.data) ? r.data : []);
+  return Array.isArray(list) ? list : [];
+}
+
 /** 会话消息列表 — v2.session.messages({ sessionID }) */
 export async function aiListMessages(sessionID: string): Promise<any[]> {
   await waitForAiReady();
