@@ -1289,6 +1289,15 @@ export const ChatbotView: React.FC = () => {
         }
         // 2) 切 workdir (同步派 workdir:changed → service 重建 SDK client, header 跟随)
         state.setWorkdir(dir);
+        // 2.5) 自动触发实例重载 (等同设置里「重新加载」): 重读新项目磁盘配置
+        //      (.opencode/agent|skill / opencode.json / ~/.config/opencode), 完成后
+        //      instance.reloaded 事件自动刷新 agents/skills/models/providers.
+        //      先 await 保证服务端已替换实例, 后续 listSessions 命中重载后的新实例.
+        try {
+          await opencodeFetch('/instance/reload', { method: 'POST' });
+        } catch (e) {
+          console.warn('[chatbot] 切项目自动重载实例失败:', e);
+        }
         // 3) 找新项目下最新有消息会话加载; 没有就清空不建.
         try {
           const list = await aiListSessions();
