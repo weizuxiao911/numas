@@ -72,7 +72,8 @@ function embeddedUIResponse(file: string, body: Uint8Array, registry?: string, a
   const mime = FSUtil.mimeType(file)
   const headers = new Headers({ "content-type": mime })
   let data = body
-  if (mime.startsWith("text/html")) {
+  const isHtml = mime.startsWith("text/html")
+  if (isHtml) {
     const html = new TextDecoder().decode(body)
     headers.set("content-security-policy", cspForHtml(html))
     // 注入 registry 地址: sumi 前端读 window.__APP_CONFIG__.registryBaseUrl (运行时优先)
@@ -80,18 +81,24 @@ function embeddedUIResponse(file: string, body: Uint8Array, registry?: string, a
       const script = `<script>window.__APP_CONFIG__ = Object.assign({}, window.__APP_CONFIG__, { registryBaseUrl: ${JSON.stringify(registry)} });</script>`
       data = new TextEncoder().encode(html.replace("</body>", script + "</body>"))
     }
+    // index.html 文件名不带 contenthash: 浏览器启发式缓存会拿到旧 HTML (引用旧 chunk).
+    // 强制每次 revalidate (HTML 很小, 成本可忽略).
+    headers.set("cache-control", "no-cache")
   }
-  // 静态资源 gzip (缓存): 小带宽部署下传输量降 ~4x, 避免大 chunk 传输超时被切断
+  // 静态资源 gzip (缓存): 小带宽部署下传输量降 ~4x, 避免大 chunk 传输超时被切断.
+  // 只缓存带 contenthash 的静态资源; HTML 不走缓存 — 内容变了但字节数相同 (如 chunk hash
+  // 等长替换) 时 size 比对会误命中旧内容, 服务端会一直吐 stale HTML (浏览器永远加载旧 chunk).
   if (
     acceptEncoding?.toLowerCase().includes("gzip") &&
     data.byteLength >= UI_GZIP_MIN_BYTES &&
     UI_GZIP_TYPES.test(mime)
   ) {
+    headers.set("content-encoding", "gzip")
+    headers.set("vary", "accept-encoding")
+    if (isHtml) return HttpServerResponse.raw(new Uint8Array(gzipSync(data)), { headers })
     const hit = uiGzipCache.get(file)
     const gz = hit && hit.size === data.byteLength ? hit.data : new Uint8Array(gzipSync(data))
     if (!hit || hit.size !== data.byteLength) uiGzipCache.set(file, { size: data.byteLength, data: gz })
-    headers.set("content-encoding", "gzip")
-    headers.set("vary", "accept-encoding")
     return HttpServerResponse.raw(gz, { headers })
   }
   return HttpServerResponse.raw(data, { headers })
