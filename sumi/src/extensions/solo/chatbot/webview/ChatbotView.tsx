@@ -1728,18 +1728,14 @@ export const ChatbotView: React.FC = () => {
     if (!files || !files.length) return;
     if (!fs?.write) { setError('沙箱文件系统未就绪'); return; }
     const added: Array<{ name: string; path: string }> = [];
-    const ts = Date.now();
-    const rnd = Math.random().toString(36).slice(2, 8);
-    let idx = 0;
+    // /api/fs/write 不建父目录 → 先 mkdir -p .tmp
+    try { await fs.mkdirp('.tmp'); } catch { /* ignore */ }
     for (const f of Array.from(files)) {
       try {
         const buf = await f.arrayBuffer();
-        // 路径: 原名-时间戳-随机-idx, 避免覆盖 (同名多次上传不盖)
-        const ext = (f.name.match(/\.[a-z0-9]{1,5}$/i)?.[0] || '').toLowerCase();
-        const base = f.name.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/[^\w.\-\u4e00-\u9fa5]/g, '_').slice(0, 60);
-        const safe = base || 'file';
-        const path = `/${safe}-${ts}-${rnd}-${idx}${ext}`;
-        idx++;
+        // 落盘: .tmp/{原文件名} (文件名不改, 同名覆盖); 父目录由 fs.write 自动 mkdir -p
+        const name = f.name || 'file';
+        const path = `.tmp/${name}`;
         // 上传时显示进度 (service/fs.write 按 4KB 分块回调 onProgress)
         setUploadProgress((p) => ({ ...p, [path]: 0 }));
         await fs.write(path, { base64: bytesToBase64(new Uint8Array(buf)) }, (done, total) => {
@@ -1747,7 +1743,7 @@ export const ChatbotView: React.FC = () => {
         });
         setUploadProgress((p) => ({ ...p, [path]: 1 }));
         setTimeout(() => setUploadProgress((p) => { const { [path]: _, ...rest } = p; return rest; }), 1000);
-        added.push({ name: path.replace(/^\//, ''), path });
+        added.push({ name, path });
       } catch (e) { setError(`上传 ${f.name} 失败: ${String((e as any)?.message || e)}`); }
     }
     if (added.length) setAttachments((prev) => [...prev, ...added]);
@@ -1762,23 +1758,18 @@ export const ChatbotView: React.FC = () => {
     e.preventDefault();
     if (!fs?.write) { setError('沙箱文件系统未就绪'); return; }
     const added: Array<{ name: string; path: string; dataUrl?: string }> = [];
-    const ts = Date.now();
-    const rnd = Math.random().toString(36).slice(2, 8);
-    let idx = 0;
+    // /api/fs/write 不建父目录 → 先 mkdir -p .tmp
+    try { await fs.mkdirp('.tmp'); } catch { /* ignore */ }
     for (const it of fileItems) {
       try {
         const f = it.getAsFile();
         if (!f) continue;
         const mime = f.type || 'application/octet-stream';
-        // 路径: 原名-时间戳-随机-idx 避免覆盖
         const ext = (f.name?.match(/\.[a-z0-9]{1,5}$/i)?.[0]
           || (mime.split('/')[1]?.split(';')[0].replace(/[^\w]/g, '') ? `.${mime.split('/')[1].split(';')[0].replace(/[^\w]/g, '')}` : '')).toLowerCase();
-        const base = (f.name || 'paste')
-          .replace(/\.[a-z0-9]{1,5}$/i, '')
-          .replace(/[^\w.\-\u4e00-\u9fa5]/g, '_')
-          .slice(0, 60) || 'paste';
-        const path = `/${base}-${ts}-${rnd}-${idx}${ext}`;
-        idx++;
+        // 落盘: .tmp/{原文件名} (无名字的粘贴内容回退 paste{ext})
+        const name = f.name || `paste${ext}`;
+        const path = `.tmp/${name}`;
         const buf = new Uint8Array(await f.arrayBuffer());
         // 走 PTY shell 写文件 (service/fs.write → FsPty.exec → base64 写), 按 4KB 分块回调进度
         setUploadProgress((p) => ({ ...p, [path]: 0 }));
@@ -1797,7 +1788,7 @@ export const ChatbotView: React.FC = () => {
             fr.readAsDataURL(f);
           });
         }
-        added.push({ name: path.replace(/^\//, ''), path, dataUrl });
+        added.push({ name, path, dataUrl });
       } catch (err) { setError(`粘贴文件失败: ${String((err as any)?.message || err)}`); }
     }
     if (added.length) setAttachments((prev) => [...prev, ...added]);
@@ -2102,16 +2093,43 @@ export const ChatbotView: React.FC = () => {
               if (files && files.length) void onUploadFile(files);
             }}
           >
-            <textarea
-              ref={taRef}
-              className="chat__input"
-              value={input}
-              onChange={onInput}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              placeholder="输入/ 可以召唤魔法; 输入@ 可以选择智能体 🎉"
-              rows={1}
-            />
+            {attachments.length > 0 && (
+              <div className="chat__attach">
+                {attachments.map((a, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`chat__attach-card${uploadProgress[a.path] !== undefined && uploadProgress[a.path] < 1 ? ' is-uploading' : ''}`}
+                    onClick={() => setPreviewAttachment(a)}
+                    title={uploadProgress[a.path] !== undefined && uploadProgress[a.path] < 1
+                      ? `上传中 ${Math.round((uploadProgress[a.path] || 0) * 100)}%`
+                      : '点击查看'}
+                  >
+                    {a.dataUrl ? (
+                      <img className="chat__attach-thumb" src={a.dataUrl} alt={a.name} />
+                    ) : (
+                      <span className="chat__attach-ic">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                      </span>
+                    )}
+                    <span className="chat__attach-name">{a.name}</span>
+                    {uploadProgress[a.path] !== undefined && uploadProgress[a.path] < 1 && (
+                      <span className="chat__attach-progress" title={`上传中 ${Math.round(uploadProgress[a.path] * 100)}%`}>
+                        <span className="chat__attach-progress-bar" style={{ width: `${Math.round(uploadProgress[a.path] * 100)}%` }} />
+                      </span>
+                    )}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="chat__attach-x"
+                      title="移除"
+                      onClick={(e) => { e.stopPropagation(); setAttachments((prev) => prev.filter((_, j) => j !== i)); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setAttachments((prev) => prev.filter((_, j) => j !== i)); } }}
+                    >×</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {contextItems.length > 0 && (
               <div className="chat__input-chips">
                 {contextItems.map((c) => {
@@ -2162,43 +2180,16 @@ export const ChatbotView: React.FC = () => {
                 })}
               </div>
             )}
-            {attachments.length > 0 && (
-              <div className="chat__attach">
-                {attachments.map((a, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={`chat__attach-card${uploadProgress[a.path] !== undefined && uploadProgress[a.path] < 1 ? ' is-uploading' : ''}`}
-                    onClick={() => setPreviewAttachment(a)}
-                    title={uploadProgress[a.path] !== undefined && uploadProgress[a.path] < 1
-                      ? `上传中 ${Math.round((uploadProgress[a.path] || 0) * 100)}%`
-                      : '点击查看'}
-                  >
-                    {a.dataUrl ? (
-                      <img className="chat__attach-thumb" src={a.dataUrl} alt={a.name} />
-                    ) : (
-                      <span className="chat__attach-ic">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      </span>
-                    )}
-                    <span className="chat__attach-name">{a.name}</span>
-                    {uploadProgress[a.path] !== undefined && uploadProgress[a.path] < 1 && (
-                      <span className="chat__attach-progress" title={`上传中 ${Math.round(uploadProgress[a.path] * 100)}%`}>
-                        <span className="chat__attach-progress-bar" style={{ width: `${Math.round(uploadProgress[a.path] * 100)}%` }} />
-                      </span>
-                    )}
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      className="chat__attach-x"
-                      title="移除"
-                      onClick={(e) => { e.stopPropagation(); setAttachments((prev) => prev.filter((_, j) => j !== i)); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setAttachments((prev) => prev.filter((_, j) => j !== i)); } }}
-                    >×</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <textarea
+              ref={taRef}
+              className="chat__input"
+              value={input}
+              onChange={onInput}
+              onKeyDown={onKeyDown}
+              onPaste={onPaste}
+              placeholder="输入/ 可以召唤魔法; 输入@ 可以选择智能体 🎉"
+              rows={1}
+            />
             <div className="chat__input-bar">
               {/* 上传附件: 用 File System Access API (localhost 支持) 绕开 CodeBlitz 对原生 file chooser 的拦截 */}
               {workspace && (
