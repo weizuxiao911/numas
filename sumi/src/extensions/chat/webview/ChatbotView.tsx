@@ -287,7 +287,8 @@ export const ChatbotView: React.FC = () => {
   const showNotice = useCallback((msg: string) => {
     setNotice(msg);
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(''), 5000);
+    // 每个提示最多显示 10s, 到点自动关闭 (也可手动点 ×)
+    noticeTimer.current = setTimeout(() => setNotice(''), 10000);
   }, []);
   const setApiError = useCallback((e: any, ctx?: string) => {
     const tag = e?.data?._tag || e?.name || '';
@@ -1230,6 +1231,9 @@ export const ChatbotView: React.FC = () => {
     if (!target || !client) return;
     try { await client.session.abort({ sessionID: target }); }
     catch (e) { console.warn('[ai] abort:', e); }
+    // 底部提示信息 abort 后自动消失 (含计时器)
+    setNotice('');
+    if (noticeTimer.current) { clearTimeout(noticeTimer.current); noticeTimer.current = null; }
     // 暂停排队自动续发 (排队项保留在 dock): 下次任意发送解除暂停, 逐条补送
     if ((queueBySessionRef.current[target] || []).length) setQueuePaused(target, true);
     // 乐观复位为 idle; 服务端随后会发真实终态 (若停在 retry 循环上, abort 打断后发 idle)
@@ -2030,37 +2034,6 @@ export const ChatbotView: React.FC = () => {
         </div>
       )}
 
-      {notice && (
-        <div className="chat__notice">
-          <span className="chat__notice-text">{notice}</span>
-          <button onClick={() => setNotice('')}>×</button>
-        </div>
-      )}
-
-      {/* 会话状态条: 只在非 busy/idle (retry 退避/限额) 时出现, 展示服务端原因.
-          busy 由停止按钮 + 流式动画表达, idle 无文案, 均不占这块区域 */}
-      {curStatus?.type === 'retry' && (
-        <div className="chat__status">
-          <svg className="chat__status-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          <div className="chat__status-main">
-            <div className="chat__status-title">
-              {curStatus.action?.title || '正在自动重试'}
-              <span className="chat__status-next">
-                第 {curStatus.attempt} 次 · 下次 {formatStatusTime(curStatus.next)}
-              </span>
-            </div>
-            <div className="chat__status-msg">
-              {curStatus.action?.message || curStatus.message}
-            </div>
-          </div>
-          {curStatus.action?.link && (
-            <a className="chat__status-link" href={curStatus.action.link} target="_blank" rel="noreferrer">
-              {curStatus.action.label || '查看详情'}
-            </a>
-          )}
-        </div>
-      )}
-
       {ready && (
         <div className="chat__composer">
           {/* 子代理会话: 只读查看执行过程; 仅一个「返回」按钮 */}
@@ -2479,12 +2452,37 @@ export const ChatbotView: React.FC = () => {
             </div>
           </div>
           )}
-          {/* 消耗行固定占位: 无论有无数据都渲染 (min-height 占位), 避免出现/消失时输入框位移 */}
+          {/* 底部固定区 (与消耗行复用; 优先级: 重试状态 > 消息提醒 > 消耗统计):
+              单行省略号, hover (title) 看完整 */}
           <div
             className="chat__session-stats"
             title={sessionStats ? `输入 ${sessionStats.input.toLocaleString()} / 输出 ${sessionStats.output.toLocaleString()} / 推理 ${sessionStats.reasoning.toLocaleString()} / 缓存读 ${sessionStats.cacheRead.toLocaleString()} tokens` : undefined}
           >
-            {sessionStats && (
+            {curStatus?.type === 'retry' ? (
+              <>
+                <svg className="chat__status-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                <span
+                  className="chat__session-stats-notice is-warning"
+                  title={`${curStatus.action?.title || '正在自动重试'} · 第 ${curStatus.attempt} 次 · 下次 ${formatStatusTime(curStatus.next)}${curStatus.action?.message || curStatus.message ? ` — ${curStatus.action?.message || curStatus.message}` : ''}`}
+                >
+                  {curStatus.action?.title || '正在自动重试'}
+                  <span className="chat__session-stats-dim"> · 第 {curStatus.attempt} 次 · 下次 {formatStatusTime(curStatus.next)}</span>
+                  {(curStatus.action?.message || curStatus.message) && (
+                    <span className="chat__session-stats-dim"> — {curStatus.action?.message || curStatus.message}</span>
+                  )}
+                </span>
+                {curStatus.action?.link && (
+                  <a className="chat__session-stats-link" href={curStatus.action.link} target="_blank" rel="noreferrer">
+                    {curStatus.action.label || '查看详情'}
+                  </a>
+                )}
+              </>
+            ) : notice ? (
+              <>
+                <span className="chat__session-stats-notice" title={notice}>{notice}</span>
+                <button type="button" className="chat__session-stats-x" title="关闭提醒" onClick={() => setNotice('')}>×</button>
+              </>
+            ) : sessionStats ? (
               <>
                 <span className="chat__session-stats-item">消耗</span>
                 {sessionStats.durationMs > 0 && (
@@ -2495,7 +2493,7 @@ export const ChatbotView: React.FC = () => {
                 )}
                 {formatCost(sessionStats.cost) && <span className="chat__session-stats-item">{formatCost(sessionStats.cost)}</span>}
               </>
-            )}
+            ) : null}
           </div>
         </div>
       )}

@@ -398,39 +398,10 @@ export const styles = `
   padding: 3px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;
 }
 
-/* 信息/成功提示 (非错误) — 蓝色调, 与红色错误区分 */
-.chat__notice {
-  margin: 0 12px 8px;
-  padding: 8px 12px;
-  background: var(--ai-accent-soft);
-  border: 1px solid var(--ai-border);
-  border-radius: 8px;
-  color: var(--ai-fg); font-size: 12px;
-  display: flex; align-items: center; gap: 10px;
-  white-space: pre-wrap; word-break: break-word;
-}
-.chat__notice-text { flex: 1; min-width: 0; }
-.chat__notice button {
-  flex-shrink: 0;
-  background: transparent; border: none; color: var(--ai-fg-muted);
-  cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 4px;
-}
-.chat__notice button:hover { color: var(--ai-fg); }
 
-/* Session status bar: 只承载非 busy/idle 状态 (retry 退避/限额) — 琥珀警示调 */
-.chat__status {
-  margin: 0 12px 8px;
-  padding: 8px 10px;
-  background: color-mix(in srgb, var(--ai-warning) 14%, var(--ai-bg-elev));
-  border: 1px solid color-mix(in srgb, var(--ai-warning) 35%, transparent);
-  border-radius: 8px;
-  color: var(--ai-fg);
-  font-size: 12px;
-  display: flex; align-items: flex-start; gap: 8px;
-  white-space: pre-wrap; word-break: break-word;
-}
+/* 重试 spinner (底部固定区内使用) — 琥珀警示调 */
 .chat__status-spin {
-  flex-shrink: 0; margin-top: 2px;
+  flex-shrink: 0;
   color: var(--ai-warning);
   animation: chat-status-rotate 1.4s linear infinite;
 }
@@ -438,22 +409,6 @@ export const styles = `
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-.chat__status-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.chat__status-title { font-weight: 600; color: var(--ai-warning); line-height: 1.35; }
-.chat__status-next { margin-left: 6px; font-weight: 400; opacity: 0.85; }
-.chat__status-msg { line-height: 1.45; }
-.chat__status-link {
-  flex-shrink: 0;
-  margin-top: 1px;
-  background: var(--ai-hover);
-  border: 1px solid var(--ai-border);
-  color: var(--ai-fg);
-  text-decoration: none;
-  padding: 3px 10px; border-radius: 5px;
-  font-size: 11px; line-height: 1.4;
-  white-space: nowrap;
-}
-.chat__status-link:hover { background: var(--ai-active); color: var(--ai-accent); }
 
 /* Composer — 官方 prompt input 卡片风: rounded-12 + hairline 边框 + 无霓虹/无金属渐变 */
 .chat__composer {
@@ -644,6 +599,26 @@ export const styles = `
 .chat__session-stats-item { white-space: nowrap; flex: 0 0 auto; }
 .chat__session-stats-item:not(:first-child) { min-width: 72px; }
 .chat__session-stats-item:first-child { color: var(--ai-fg-muted); font-weight: 500; }
+/* 底部固定区复用的消息提醒: 单行省略号, hover (title) 看完整; 红色字 (警示) */
+.chat__session-stats-notice {
+  flex: 1 1 auto; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--ai-danger);
+}
+.chat__session-stats-x {
+  flex: 0 0 auto;
+  background: transparent; border: none; color: var(--ai-fg-muted);
+  cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px;
+}
+.chat__session-stats-x:hover { color: var(--ai-fg); }
+/* 重试状态 (复用同一行): 琥珀警示 + 次要信息淡色 + 详情链接 */
+.chat__session-stats-notice.is-warning { color: var(--ai-warning); }
+.chat__session-stats-dim { color: var(--ai-fg-muted); }
+.chat__session-stats-link {
+  flex: 0 0 auto; color: var(--focusBorder, #2563eb); font-size: 11px;
+  text-decoration: none; white-space: nowrap;
+}
+.chat__session-stats-link:hover { text-decoration: underline; }
 .chat__select { position: relative; min-width: 0; flex: 0 1 auto; }
 .chat__bar-spacer { flex: 1; }
 /* 设置 popover: 输入框底部齿轮 → 菜单 (重新加载实例); 视觉对齐 modal (96% 玻璃 + 圆角 + 弹层阴影) */
