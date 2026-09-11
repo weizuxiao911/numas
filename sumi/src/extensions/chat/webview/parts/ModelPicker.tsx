@@ -325,7 +325,10 @@ export const ModelPicker: React.FC<Props> = ({
               )}
               {selectGroups.map((g) => (
                 <div key={g.pid} className="chat__modal-group">
-                  <div className="chat__modal-group-title">{g.label}</div>
+                  <div className="chat__modal-group-title">
+                    <ProviderIcon id={g.pid} name={g.label} size={14} />
+                    <span className="chat__modal-group-name">{g.label}</span>
+                  </div>
                   {g.items.map((it) => {
                     const active = isCurrent(it);
                     const idx = (navItems as SelectItem[]).indexOf(it);

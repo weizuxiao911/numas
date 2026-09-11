@@ -129,7 +129,7 @@ const styles = `
 .app-ide__hist-search input::placeholder { color: var(--descriptionForeground, #8f8f8f); }
 .app-ide__hist-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 12px 16px; }
 .app-ide__hist-group-title {
-  padding: 12px 14px 6px;
+  padding: 14px 14px 8px; margin-top: 8px;
   font-size: 11.5px; font-weight: 600; color: var(--descriptionForeground, #8f8f8f);
   text-transform: uppercase; letter-spacing: 0.5px; user-select: none;
 }

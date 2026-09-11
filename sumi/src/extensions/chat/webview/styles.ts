@@ -850,13 +850,15 @@ export const styles = `
 }
 
 /* select view: 分组模型列表 */
-.chat__modal-group { padding: 2px 0; }
+.chat__modal-group { padding: 2px 0; margin: 8px 0; }
 .chat__modal-group-title {
-  padding: 12px 14px 6px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 14px 14px 8px;
   font-size: 11.5px; font-weight: 600; color: var(--ai-fg-muted);
   text-transform: uppercase; letter-spacing: 0.5px;
   user-select: none;
 }
+.chat__modal-group-name { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat__modal-item {
   width: 100%; display: flex; align-items: center; gap: 12px;
   padding: 8px 12px;
@@ -867,6 +869,9 @@ export const styles = `
   transition: background .1s;
 }
 .chat__modal-item:hover { background: var(--ai-hover); }
+/* 分组下的模型项: 左缩进对齐分组标题的服务商文字开头 (标题 padding 14 + icon 14 + gap 6 - 项 padding 12 = 22).
+   注意 width 必须改 auto: item 基础 width:100% + margin-left 会撑出横向滚动条 */
+.chat__modal-group .chat__modal-item { margin-left: 22px; width: auto; }
 .chat__modal-item.is-active {
   background: var(--ai-active);
   color: var(--ai-fg);
