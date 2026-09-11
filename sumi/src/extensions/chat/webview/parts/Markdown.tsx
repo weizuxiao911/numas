@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { marked } from 'marked';
-import { codeToHtml } from 'shiki';
 import markedShiki from 'marked-shiki';
+
+// shiki 懒加载: 首次渲染代码块时才拉取 (含 ~3MB oniguruma wasm), 不拖启动
+let shikiModule: Promise<typeof import('shiki')> | null = null;
+const loadShiki = (): Promise<typeof import('shiki')> => (shikiModule ??= import('shiki'));
 
 /**
  * Markdown 渲染 — 对齐官方 packages/web content-markdown.tsx 实现
@@ -27,16 +30,18 @@ const markedWithShiki = marked.use(
   markedShiki({
     highlight(code: string, lang: string) {
       const language = String(lang || 'text').replace(/[^a-zA-Z0-9#+._-]/g, '') || 'text';
-      return codeToHtml(code, {
-        lang: language,
-        themes: {
-          light: 'github-light',
-          dark: 'github-dark',
-        },
-      }).then((html) => (
-        // 注入 data-lang: CSS 在 macOS 窗口风标题栏里展示语言标签 (text 不标)
-        language === 'text' ? html : html.replace('<pre ', `<pre data-lang="${language}" `)
-      ));
+      return loadShiki()
+        .then(({ codeToHtml }) => codeToHtml(code, {
+          lang: language,
+          themes: {
+            light: 'github-light',
+            dark: 'github-dark',
+          },
+        }))
+        .then((html) => (
+          // 注入 data-lang: CSS 在 macOS 窗口风标题栏里展示语言标签 (text 不标)
+          language === 'text' ? html : html.replace('<pre ', `<pre data-lang="${language}" `)
+        ));
     },
   }),
 );
