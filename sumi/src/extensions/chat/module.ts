@@ -44,6 +44,8 @@ export const CHATBOT_COMMANDS = {
   getProject: { id: 'chatbot.getProject', label: '当前项目路径' },
   /** 挂上下文到输入栏 (跨拓展契约, 入参 = ChatContextItem) */
   addContext: { id: 'chatbot.addContext', label: '添加对话上下文' },
+  /** 直接发送一条指令 (跨拓展契约: 自动发送, 不等用户点发送) */
+  send: { id: 'chatbot.send', label: '发送指令' },
 } as const;
 
 @Injectable()
@@ -99,6 +101,9 @@ export class ChatbotCommandContribution implements CommandContribution {
     });
     commands.registerCommand(CHATBOT_COMMANDS.addContext, {
       execute: (item: unknown) => getChatPanelApi()?.addContext(item as never),
+    });
+    commands.registerCommand(CHATBOT_COMMANDS.send, {
+      execute: (text: unknown) => getChatPanelApi()?.send(String(text ?? '')),
     });
   }
 }
