@@ -2,7 +2,7 @@
   "name": "docx",
   "displayName": "Docx Viewer",
   "description": "DOCX 阅读器 (vscode 自定义编辑器; fork 自 show-docx 1.2.1, MIT; 高保真渲染/主题适配)",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "publisher": "numas",
   "license": "MIT",
   "author": {
