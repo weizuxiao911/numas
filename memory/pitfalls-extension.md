@@ -72,3 +72,10 @@
 - **复现**: 网关模式下打开 docx → console 报 stylesheet violates CSP; 页面无样式.
 - **解决方案**: 扩展 shell 的 CSP 把资源实际 origin 显式加进 style-src/font-src/img-src (`new URL(styleUri).origin`) — host source 不限路径.
 - **排查方法**: 「本地好、网关坏」+ 无样式/资源 404 的观感 → 先看 console 的 CSP violation 与 cspSource 的实际取值.
+
+#### 69. 同版本 vsix 重打包后浏览器仍加载旧 webview → 修复"不生效"
+
+- **问题描述**: 调试期反复 `npm run package` 重打包同版本 vsix (如 0.1.2), 刷新页面后新 webview 逻辑不生效 (如运行代码仍走旧的 vscode 终端路径), 误判"改了没用".
+- **根因**: vsix 内 `dist/webview.js` 以同版本 URL 提供, 浏览器按缓存策略命中旧文件; 页面刷新只重载拓展壳, 不保证重新拉取 webview bundle.
+- **解决方案**: 每次重打包后 **bump 版本** (`package.json` version +1) 再 package, 新版本 URL 天然破缓存; 验证时确认 market metadata 已显示新版本 (如 `pdf: ['0.1.3']`). 参考 #11 (镜像没重建的"改了没修复"假象) 同类问题.
+- **排查方法**: 「代码改了、构建成功、刷新后行为没变」→ 先查 market metadata 版本号与当前 vsix 文件是否一致; 再在页面 console 找旧逻辑的日志/错误路径佐证.
