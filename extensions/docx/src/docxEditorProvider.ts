@@ -421,7 +421,9 @@ export class DocxEditorProvider implements vscode.CustomReadonlyEditorProvider<D
       await entry.panel.webview.postMessage({
         type: 'document',
         ...meta,
-        data: Buffer.from(data).toString('base64'),
+        // numas: 直传 Uint8Array (结构化克隆), 不走 base64 — 大文件省掉
+        // 编码/解码 + 10MB 级字符串拼接 (主线程卡顿主因)
+        data,
       });
       return;
     }
@@ -449,7 +451,8 @@ export class DocxEditorProvider implements vscode.CustomReadonlyEditorProvider<D
         type: 'documentChunk',
         transferId,
         index,
-        data: Buffer.from(chunk).toString('base64'),
+        // numas: 裸 Uint8Array 分片 (结构化克隆), 不走 base64
+        data: chunk,
       })) {
         await this.abortTransfer(entry, meta.fileName);
         return;

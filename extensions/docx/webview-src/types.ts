@@ -144,7 +144,7 @@ export interface IncomingMessage {
   page?: number;
   structure?: DocumentStructure;
   reload?: boolean;
-  data?: string;
+  data?: string | Uint8Array | ArrayBuffer;
   index?: number;
   totalChunks?: number;
   message?: string;

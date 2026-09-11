@@ -213,7 +213,7 @@ async function handleMessage(message: IncomingMessage): Promise<void> {
         const meta = readDocumentMeta(message);
         // A single-message document supersedes any transfer still in flight.
         clearTransfer();
-        await acceptDocument(decodeBase64(message.data), meta);
+        await acceptDocument(toBytes(message.data), meta);
       }
       break;
     case 'documentStart': {
@@ -324,7 +324,7 @@ function receiveChunk(message: IncomingMessage): void {
     return;
   }
 
-  chunkTransfer.chunks[message.index] = decodeBase64(message.data);
+  chunkTransfer.chunks[message.index] = toBytes(message.data);
   armTransferWatchdog();
   const received = chunkTransfer.chunks.filter(Boolean).length;
   const percent = 5 + Math.round((received / chunkTransfer.totalChunks) * 45);
@@ -783,6 +783,17 @@ function readDocumentMeta(message: IncomingMessage): DocumentMeta {
     savedState: message.savedState,
     reload: message.reload ?? false,
   };
+}
+
+/** numas: 传输载荷兼容 — 新 host 发裸 Uint8Array/ArrayBuffer (结构化克隆), 旧格式为 base64 字符串. */
+function toBytes(data: string | Uint8Array | ArrayBuffer): Uint8Array {
+  if (typeof data === 'string') {
+    return decodeBase64(data);
+  }
+  if (data instanceof Uint8Array) {
+    return data;
+  }
+  return new Uint8Array(data);
 }
 
 function decodeBase64(value: string): Uint8Array {
