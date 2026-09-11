@@ -41,6 +41,8 @@ export const styles = `
   flex-direction: column;
   background: transparent;
   overflow: hidden;
+  /* 基础字号 14px (原继承 16px): 正文/非标题统一 14px, 标题/logo 各自覆写 */
+  font-size: 14px;
 }
 
 /* ChatbotView 根 (.chat) 在 container 内撑满, 背景透明跟主区一致 */

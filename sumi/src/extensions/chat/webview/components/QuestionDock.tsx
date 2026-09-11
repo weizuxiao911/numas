@@ -173,8 +173,8 @@ export const QuestionDock: React.FC<{
             )}
           </div>
       </div>
-      </div>
 
+      {/* 操作区与内容同框 (footer), 不做独立 tray 卡片 */}
       <div className="oc-qd__tray">
           <button type="button" className="oc-qd__btn oc-qd__btn--ghost" disabled={submitting} onClick={skipAll}>忽略</button>
           <div className="oc-qd__footer-actions">
@@ -184,6 +184,7 @@ export const QuestionDock: React.FC<{
             </button>
           </div>
         </div>
+      </div>
     </div>
   );
 };

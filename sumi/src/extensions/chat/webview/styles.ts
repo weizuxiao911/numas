@@ -893,13 +893,13 @@ export const styles = `
 }
 /* 单行 item (跟 ModelPicker 一致: icon + name + tag + check) */
 .chat__modal-item-emoji {
-  font-size: 16px; line-height: 1; flex-shrink: 0;
+  font-size: 14px; line-height: 1; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   width: 20px; flex-shrink: 0;
 }
 .chat__modal-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.chat__modal-item-icon { font-size: 16px; line-height: 1; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 22px; }
-.chat__modal-item-icon--lg { font-size: 18px; width: 28px; height: 28px; background: var(--ai-accent-soft); border-radius: 8px; }
+.chat__modal-item-icon { font-size: 14px; line-height: 1; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 22px; }
+.chat__modal-item-icon--lg { font-size: 14px; width: 28px; height: 28px; background: var(--ai-accent-soft); border-radius: 8px; }
 .chat__modal-item-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .chat__modal-item-desc { font-size: 11.5px; color: var(--ai-fg-muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .chat__modal-item-check { color: var(--ai-accent); display: inline-flex; flex-shrink: 0; }
@@ -1141,7 +1141,7 @@ export const styles = `
 .chat__agent-icon {
   width: 28px; height: 28px; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 15px;
+  font-size: 14px;
   background: var(--ai-hover);
   border-radius: 7px;
 }
@@ -1710,7 +1710,7 @@ export const styles = `
   background: var(--ai-active);
   border-color: var(--ai-accent);
 }
-.chat__agent-card-icon { font-size: 16px; }
+.chat__agent-card-icon { font-size: 14px; }
 .chat__agent-card-name { font-size: 13px; font-weight: 600; }
 .chat__agent-card-desc { font-size: 10.5px; color: var(--ai-fg-muted); line-height: 1.4; }
 
@@ -1730,7 +1730,7 @@ export const styles = `
   box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 2px 8px color-mix(in srgb, #000 16%, transparent);
 }
 .chat__suggest:hover { background: var(--ai-hover); }
-.chat__suggest-icon { font-size: 16px; flex-shrink: 0; }
+.chat__suggest-icon { font-size: 14px; flex-shrink: 0; }
 .chat__suggest-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .chat__suggest-title { font-size: 12px; font-weight: 500; }
 .chat__suggest-desc { font-size: 10.5px; color: var(--ai-fg-muted); line-height: 1.4; }
@@ -2103,13 +2103,13 @@ export const styles = `
     每级灰 = color-mix(fg N%, bg) → 浅色主题近官方, 深色主题自动反转.
    ============================================================ */
 .oc-qd {
+  /* question/ask 底: 与 chat 同用白底 token (--editorWidget-background = #fff), 靠 hairline+阴影区分 */
   --oc-bg: var(--ai-bg-elev, var(--editorWidget-background, #ffffff));
   --oc-fg: var(--ai-fg, #1f2328);
   --oc-muted: var(--ai-fg-muted, var(--descriptionForeground, #6e7681));
   --oc-strong: color-mix(in srgb, var(--oc-fg) 88%, #000000);
   --oc-hairline: color-mix(in srgb, var(--oc-fg) 12%, transparent);
   --oc-line: color-mix(in srgb, var(--oc-fg) 16%, var(--oc-bg));
-  --oc-tray: color-mix(in srgb, var(--oc-fg) 3.5%, var(--oc-bg));
   --oc-opt: color-mix(in srgb, var(--oc-fg) 2.5%, var(--oc-bg));
   --oc-opt-hover: color-mix(in srgb, var(--oc-fg) 6%, var(--oc-bg));
   --oc-accent: var(--focusBorder, var(--button-background, #2563eb));
@@ -2123,9 +2123,10 @@ export const styles = `
   position: relative; z-index: 10;
   background: var(--oc-bg);
   border-radius: 12px; overflow: clip;
-  padding: 12px 12px 0;
+  padding: 12px;
+  /* 边框用真实 border (不是 box-shadow ring): IDE 模式 flat 覆盖会杀掉所有 box-shadow */
+  border: 1px solid var(--oc-hairline);
   box-shadow:
-    0 0 0 1px var(--oc-hairline),
     0 1px 2px -1px rgba(19, 16, 16, 0.04),
     0 1px 2px 0 rgba(19, 16, 16, 0.06),
     0 12px 28px rgba(19, 16, 16, 0.09);
@@ -2154,6 +2155,7 @@ export const styles = `
 .oc-qd__seg[data-active] { background: var(--oc-accent); }
 .oc-qd__seg[data-answered]:not([data-active]) { background: var(--oc-fg); opacity: .5; }
 .oc-qd__hint { font-size: 13px; line-height: 1.5; color: var(--oc-muted); padding: 8px 12px 20px; }
+.oc-qd__text { font-size: 14px; line-height: 1.5; color: var(--oc-strong); }
 .oc-qd__options { display: flex; flex-direction: column; gap: 10px; padding: 0 4px; }
 .oc-qd__option {
   display: flex; align-items: flex-start; gap: 9px; width: 100%;
@@ -2198,14 +2200,12 @@ export const styles = `
 }
 .oc-qd__custom textarea::placeholder { color: var(--oc-muted); }
 /* DockTray: footer 按钮行 — 与 shell 交叠 (官方 -24px / 上 32px 垫高) */
+/* 操作区: 与内容同框的简单 footer (无独立卡片/负边距/背景/分隔线) */
 .oc-qd__tray {
-  position: relative; z-index: 0;
-  margin-top: -24px;
-  padding: 36px 12px 12px;
+  flex: 0 0 auto;
+  margin-top: 8px;
+  padding: 6px 2px 0;
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  border-radius: 12px;
-  background: var(--oc-tray);
-  border: 1px solid var(--oc-line);
 }
 .oc-qd__footer-actions { display: flex; gap: 8px; margin-left: auto; }
 .oc-qd__btn {
