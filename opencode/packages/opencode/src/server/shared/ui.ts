@@ -20,7 +20,9 @@ export const csp = (hash = "") =>
   //   - default-src * (允许所有协议/host)
   //   - script/worker/style/img/font/connect/frame/manifest 全 *
   //   - 不限制 unsafe-inline / unsafe-eval / wasm-unsafe-eval
-  `default-src *; script-src * 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src * 'unsafe-inline'; img-src * data: blob:; font-src * data:; media-src * data: blob:; connect-src * data: blob:; worker-src * blob:; frame-src *; manifest-src *; object-src *; base-uri *; form-action *`
+  //   - script-src 必须显式列 blob:: CSP 里 `*` 不匹配 blob:/data: 特殊 scheme,
+  //     而 pdf.js 的 fake worker 走主线程 import(blob:) / vsix 常用 blob 脚本 (历史坑)
+  `default-src *; script-src * blob: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; style-src * 'unsafe-inline'; img-src * data: blob:; font-src * data:; media-src * data: blob:; connect-src * data: blob:; worker-src * blob:; frame-src *; manifest-src *; object-src *; base-uri *; form-action *`
 export const DEFAULT_CSP = csp()
 
 export function themePreloadHash(body: string) {

@@ -100,7 +100,7 @@ const PdfViewer: React.FC = () => {
   /** PDF 目录树 (pdf.getOutline() 嵌套结构) */
   const [outline, setOutline] = useState<any[]>([]);
   /** 目录面板是否展开 */
-  const [tocOpen, setTocOpen] = useState(true);
+  const [tocOpen, setTocOpen] = useState(false); // 目录默认隐藏
   /** resize/缩放触发重建的 tick */
   const [rebuildTick, setRebuildTick] = useState(0);
   /** 页码输入框 (非受控, 输入时不被滚动同步抢走) */
