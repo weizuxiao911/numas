@@ -302,6 +302,15 @@ export const ChatbotView: React.FC = () => {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const modelSearchRef = useRef<HTMLInputElement>(null);
 
+  // 输入框高度跟随内容 (onChange 只覆盖手输; 发送清空/命令插入/切换会话等程序化改值
+  // 不触发 onChange, 高度会停在放大后的值不还原 — 这里统一按 input 重算)
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 220) + 'px';
+  }, [input]);
+
   // 全局 opencode 用户信息 (webapp 启动期挂载, 无独立登录逻辑)
   const globalUser = useMemo(() => {
     const rt = (window as any).__APP_OPENCODE_RUNTIME__;
