@@ -5,6 +5,7 @@ import {
   aiListProviders,
   type ProviderInfo,
 } from '@/extensions/chat/commands/api';
+import { ProviderIcon } from './ProviderIcon';
 
 interface ModelInfo {
   id: string;
@@ -406,14 +407,7 @@ export const ModelPicker: React.FC<Props> = ({
                       onClick={() => { setView({ kind: 'apikey', provider: p }); setApiKey(''); setError(''); }}
                     >
                       <span className="chat__modal-caticon" aria-hidden="true">
-                        {p.public
-                          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>
-                          : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M2 12a10 10 0 0 1 20 0"/>
-                              <path d="M5 12a7 7 0 0 1 14 0"/>
-                              <path d="M8 12a4 4 0 0 1 8 0"/>
-                              <circle cx="12" cy="12" r="1"/>
-                            </svg>}
+                        <ProviderIcon id={p.id} name={p.name} size={16} />
                       </span>
                       <span className="chat__modal-catname">{p.name} ({p.id})</span>
                     </button>

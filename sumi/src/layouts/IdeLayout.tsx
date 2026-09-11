@@ -166,6 +166,8 @@ const styles = `
   /* 去掉所有阴影 (flat 布局) */
   .app-ide,
   .app-ide * { box-shadow: none !important; }
+  /* 例外: chat 设置 popover 保留弹层阴影 (与 chat modal 一致; 在 .chat 内可解析 --ai-pop-shadow) */
+  .app-ide .chat__settings-pop { box-shadow: var(--ai-pop-shadow) !important; }
   /* top + activity bar 背景跟 SOLO sidebar 一致 (偏灰 token; 主题默认半透明白) */
   .app-ide .left-slot,
   .app-ide [class*="left_tab"],

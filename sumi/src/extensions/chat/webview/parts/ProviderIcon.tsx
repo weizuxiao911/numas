@@ -358,11 +358,33 @@ export function ProviderDefs() {
   return null;
 }
 
-export const ProviderIcon: React.FC<{ id?: string; size?: number; className?: string }> = ({ id, size = 14, className }) => {
-  const resolved = id && KNOWN.includes(id) ? id : 'synthetic';
+export const ProviderIcon: React.FC<{ id?: string; name?: string; size?: number; className?: string }> = ({ id, name, size = 14, className }) => {
+  // 已知服务商 → sprite 真实 logo
+  if (id && KNOWN.includes(id)) {
+    return (
+      <svg className={className} width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" style={{ flexShrink: 0, display: 'inline-block', verticalAlign: '-0.2em' }}>
+        <use href={`#oc-pi-${id}`} />
+      </svg>
+    );
+  }
+  // 未知服务商 → 首字母 monogram 徽标 (圆角方底), 比通用占位图标更规整可辨
+  const letter = String(name || id || '?').trim().charAt(0).toUpperCase() || '?';
   return (
-    <svg className={className} width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" style={{ flexShrink: 0, display: 'inline-block', verticalAlign: '-0.2em' }}>
-      <use href={`#oc-pi-${resolved}`} />
-    </svg>
+    <span
+      className={className}
+      aria-hidden="true"
+      style={{
+        width: size, height: size,
+        borderRadius: Math.max(4, Math.round(size * 0.3)),
+        background: 'var(--ai-input-bg, rgba(127,127,127,0.12))',
+        color: 'var(--ai-fg-muted, #8f8f8f)',
+        fontSize: Math.round(size * 0.55),
+        fontWeight: 600, lineHeight: 1,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, userSelect: 'none',
+      }}
+    >
+      {letter}
+    </span>
   );
 };

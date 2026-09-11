@@ -641,27 +641,27 @@ export const styles = `
 .chat__session-stats-item:first-child { color: var(--ai-fg-muted); font-weight: 500; }
 .chat__select { position: relative; min-width: 0; flex: 0 1 auto; }
 .chat__bar-spacer { flex: 1; }
-/* 设置 popover: 输入框底部齿轮 → 菜单 (重新加载实例) */
+/* 设置 popover: 输入框底部齿轮 → 菜单 (重新加载实例); 视觉对齐 modal (96% 玻璃 + 圆角 + 弹层阴影) */
 .chat__settings-pop {
   position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 80;
   min-width: 220px; padding: 4px;
-  background: var(--ai-glass-bg);
+  background: color-mix(in srgb, var(--ai-bg-elev) 96%, transparent);
   -webkit-backdrop-filter: var(--ai-glass-blur);
   backdrop-filter: var(--ai-glass-blur);
-  border-radius: 10px;
-  box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 12px 32px color-mix(in srgb, #000 40%, transparent);
+  border-radius: 12px;
+  box-shadow: var(--ai-pop-shadow);
 }
 .chat__settings-item {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 8px 10px; background: none; border: none; border-radius: 7px;
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 8px 12px; background: none; border: none; border-radius: 8px;
   cursor: pointer; text-align: left; font-family: inherit; color: var(--ai-fg);
 }
 .chat__settings-item:hover:not(:disabled) { background: var(--ai-hover); }
 .chat__settings-item:disabled { opacity: .6; cursor: default; }
 .chat__settings-ic { flex-shrink: 0; display: inline-flex; color: var(--ai-fg-muted); }
 .chat__settings-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.chat__settings-name { font-size: 12.5px; font-weight: 500; }
-.chat__settings-desc { font-size: 11px; color: var(--ai-fg-muted); }
+.chat__settings-name { font-size: 13px; font-weight: 500; }
+.chat__settings-desc { font-size: 11.5px; color: var(--ai-fg-muted); }
 .chat__bar-btn {
   display: inline-flex; align-items: center; gap: 5px;
   height: 28px; padding: 0 8px;
@@ -759,6 +759,7 @@ export const styles = `
   box-shadow: var(--ai-pop-shadow);
   display: flex; flex-direction: column;
   overflow: hidden;
+  font-size: 13px; color: var(--ai-fg);
   animation: chat-pop .14s ease-out;
 }
 @keyframes chat-pop {
@@ -777,12 +778,12 @@ export const styles = `
 }
 .chat__modal-header-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .chat__modal-title {
-  font-size: 17px; font-weight: 600; color: var(--ai-fg);
+  font-size: 14px; font-weight: 600; color: var(--ai-fg);
   display: inline-flex; align-items: center; gap: 8px;
 }
 .chat__modal-title-icon { color: var(--ai-accent); display: inline-flex; }
 .chat__modal-count {
-  font-size: 12px; font-weight: 400; color: var(--ai-fg-muted);
+  font-size: 11.5px; font-weight: 400; color: var(--ai-fg-muted);
   margin-left: 2px;
 }
 .chat__modal-subtitle {
@@ -954,9 +955,10 @@ export const styles = `
 /* providers view: catalog 列表 */
 .chat__modal-cat { padding: 2px 4px 12px; }
 .chat__modal-cat-title {
-  padding: 8px 12px;
-  font-size: 13px; color: var(--ai-fg-muted);
-  font-weight: 500;
+  padding: 12px 14px 6px;
+  font-size: 11.5px; color: var(--ai-fg-muted);
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  user-select: none;
 }
 .chat__modal-catrow {
   width: 100%; display: flex; align-items: center; gap: 12px;
@@ -984,12 +986,12 @@ export const styles = `
 /* apikey view */
 .chat__modal-apikey-desc {
   margin: 4px 0 18px;
-  font-size: 14px; line-height: 1.6;
+  font-size: 13px; line-height: 1.6;
   color: var(--ai-fg-muted);
 }
 .chat__modal-apikey-label {
   display: block;
-  font-size: 14px; font-weight: 600;
+  font-size: 13px; font-weight: 600;
   color: var(--ai-fg);
   margin-bottom: 8px;
 }
