@@ -621,27 +621,6 @@ export const styles = `
 .chat__session-stats-link:hover { text-decoration: underline; }
 .chat__select { position: relative; min-width: 0; flex: 0 1 auto; }
 .chat__bar-spacer { flex: 1; }
-/* 设置 popover: 输入框底部齿轮 → 菜单 (重新加载实例); 视觉对齐 modal (96% 玻璃 + 圆角 + 弹层阴影) */
-.chat__settings-pop {
-  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 80;
-  min-width: 220px; padding: 4px;
-  background: color-mix(in srgb, var(--ai-bg-elev) 96%, transparent);
-  -webkit-backdrop-filter: var(--ai-glass-blur);
-  backdrop-filter: var(--ai-glass-blur);
-  border-radius: 12px;
-  box-shadow: var(--ai-pop-shadow);
-}
-.chat__settings-item {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  padding: 8px 12px; background: none; border: none; border-radius: 8px;
-  cursor: pointer; text-align: left; font-family: inherit; color: var(--ai-fg);
-}
-.chat__settings-item:hover:not(:disabled) { background: var(--ai-hover); }
-.chat__settings-item:disabled { opacity: .6; cursor: default; }
-.chat__settings-ic { flex-shrink: 0; display: inline-flex; color: var(--ai-fg-muted); }
-.chat__settings-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.chat__settings-name { font-size: 13px; font-weight: 500; }
-.chat__settings-desc { font-size: 11.5px; color: var(--ai-fg-muted); }
 .chat__bar-btn {
   display: inline-flex; align-items: center; gap: 5px;
   height: 28px; padding: 0 8px;

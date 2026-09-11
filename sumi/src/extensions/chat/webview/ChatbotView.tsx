@@ -2405,23 +2405,39 @@ export const ChatbotView: React.FC = () => {
                   </svg>
                 </button>
                 {showSettings && (
-                  <div className="chat__settings-pop" role="menu">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="chat__settings-item"
-                      disabled={reloading}
-                      onClick={onReloadInstance}
+                  <Portal>
+                    <div
+                      className="chat__modal-overlay"
+                      onMouseDown={(e) => {
+                        if (e.target === e.currentTarget) {
+                          setShowSettings(false);
+                          requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus()));
+                        }
+                      }}
                     >
-                      <span className="chat__settings-ic">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
-                      </span>
-                      <span className="chat__settings-body">
-                        <span className="chat__settings-name">重新加载</span>
-                        <span className="chat__settings-desc">重载 agents / skills / tools / 配置</span>
-                      </span>
-                    </button>
-                  </div>
+                      <div className="chat__modal" style={{ width: 460, maxHeight: 'min(calc(100vh - 72px), 420px)' }} role="dialog" aria-modal="true">
+                        <div className="chat__modal-header chat__modal-header--page">
+                          <div className="chat__modal-title">设置</div>
+                        </div>
+                        <div className="chat__modal-body">
+                          <button
+                            type="button"
+                            className="chat__modal-item chat__modal-item--row"
+                            disabled={reloading}
+                            onClick={onReloadInstance}
+                          >
+                            <span className="chat__modal-item-icon">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>
+                            </span>
+                            <span className="chat__modal-item-body">
+                              <span className="chat__modal-item-name">重新加载</span>
+                              <span className="chat__modal-item-desc">重载 agents / skills / tools / 配置</span>
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </Portal>
                 )}
               </div>
 
