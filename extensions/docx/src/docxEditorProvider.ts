@@ -752,13 +752,24 @@ export class DocxEditorProvider implements vscode.CustomReadonlyEditorProvider<D
       'webview',
       'main.css',
     );
+    // numas: 网关市场下 webview.cspSource 带 path (…/api/v2/agent-registry/plugins),
+    // 浏览器按路径匹配失败 → 样式表/字体被 CSP 拦 (表现为 hidden 面板全露、图标缺失).
+    // 把资源实际 origin 显式加进 style/font/img-src (host source 不限路径).
+    const assetOrigin = (() => {
+      try {
+        return new URL(styleUri.toString()).origin;
+      } catch {
+        return '';
+      }
+    })();
+    const extraSource = assetOrigin ? ` ${assetOrigin}` : '';
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob:; font-src ${webview.cspSource} data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}${extraSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource}${extraSource} data: blob:; font-src ${webview.cspSource}${extraSource} data:;">
   <link rel="stylesheet" href="${styleUri}">
   <title>Docx</title>
 </head>
