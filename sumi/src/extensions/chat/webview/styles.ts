@@ -2126,11 +2126,21 @@ export const styles = `
     0 1px 2px -1px rgba(19, 16, 16, 0.04),
     0 1px 2px 0 rgba(19, 16, 16, 0.06),
     0 12px 28px rgba(19, 16, 16, 0.09);
+  /* 超长选项防溢出: shell 限高 (多选项兜底) + body 内部滚动, header 与 tray 按钮始终可见可点;
+     常规 4-5 个选项 (每个限高后) 整体放得下, 不触发外层滚动 */
+  display: flex; flex-direction: column;
+  max-height: min(78vh, 640px);
 }
-.oc-qd__header { display: flex; align-items: center; gap: 12px; min-height: 26px; padding: 4px 12px 16px; }
+.oc-qd__header { display: flex; align-items: center; gap: 12px; min-height: 26px; padding: 4px 12px 16px; flex: 0 0 auto; }
 /* 底部内边距: 选项与 tray 按钮之间留出 shell 背景呼吸区 (官方 options 16px + footer 8px ≈ 24px,
-   本仓 tray 36/-24 → +12, 故 body 12px 后总间距 ≈24px) */
-.oc-qd__body { padding-bottom: 12px; }
+   本仓 tray 36/-24 → +12, 故 body 12px 后总间距 ≈24px)
+   外框不出现滚动条: overflow 仅作极端多选项兜底, 滚动条隐藏 (常规 4-5 选项不触发滚动) */
+.oc-qd__body {
+  padding-bottom: 12px; flex: 1 1 auto; min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.oc-qd__body::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .oc-qd__title { font-size: 14px; font-weight: 600; color: var(--oc-strong); min-width: 0; white-space: nowrap; }
 .oc-qd__header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .oc-qd__progress { display: flex; gap: 4px; }
@@ -2168,9 +2178,16 @@ export const styles = `
 .oc-qd-box[data-picked] { background: var(--oc-accent); border-color: var(--oc-accent); }
 .oc-qd-dot { width: 6px; height: 6px; border-radius: 999px; background: transparent; }
 .oc-qd-box[data-picked] .oc-qd-dot { background: var(--oc-accent-fg); }
+/* 每个选项固定 2 行: 标题 (1 行) + 描述 (1 行); 描述超出省略号, hover 显示完整描述 (title 提示) */
 .oc-qd__option-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.oc-qd__label { font-size: 13px; color: var(--oc-strong); user-select: none; }
-.oc-qd__desc { font-size: 12px; color: var(--oc-muted); line-height: 1.4; }
+.oc-qd__label {
+  font-size: 13px; color: var(--oc-strong); user-select: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.oc-qd__desc {
+  font-size: 12px; color: var(--oc-muted); line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .oc-qd__custom textarea {
   flex: 1; min-width: 0; background: transparent; border: none; outline: none;
   color: var(--oc-strong); font-family: inherit; font-size: 13px; padding: 0; resize: none;

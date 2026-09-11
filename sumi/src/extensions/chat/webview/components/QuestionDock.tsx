@@ -134,7 +134,7 @@ export const QuestionDock: React.FC<{
             {options.map((opt, i) => {
               const picked = curAnswers().includes(opt.label);
               return (
-                <button key={i} type="button" className="oc-qd__option" data-picked={picked || undefined} disabled={submitting} onClick={() => selectOption(i)}>
+                <button key={i} type="button" className="oc-qd__option" data-picked={picked || undefined} disabled={submitting} onClick={() => selectOption(i)} title={[opt.label, opt.description].filter(Boolean).join('\n')}>
                   <Mark picked={picked} />
                   <span className="oc-qd__option-main">
                     <span className="oc-qd__label">{opt.label}</span>
@@ -162,7 +162,7 @@ export const QuestionDock: React.FC<{
                   </span>
                 </form>
               ) : (
-                <button type="button" className="oc-qd__option oc-qd__custom" data-picked={isOn() || undefined} disabled={submitting} onClick={openCustom}>
+                <button type="button" className="oc-qd__option oc-qd__custom" data-picked={isOn() || undefined} disabled={submitting} onClick={openCustom} title={curInput() || undefined}>
                   <Mark picked={isOn()} />
                   <span className="oc-qd__option-main">
                     <span className="oc-qd__label">输入自己的答案</span>
