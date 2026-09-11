@@ -893,3 +893,11 @@ AI **仍需 `question`**:
   `asWebviewUri` 走 codeblitz 静态资源解析 (sumi `resolveStaticResource`), 自动适配两种市场路径 (内置无 authority → `<base>/<id>/...`; 网关带 authority → `<host>/<path>/file/...`), 不依赖 `__APP_CONFIG__` (ext host 拿不到).
 - **排查方法**: ① 网络面板看 webview bundle/pdfjs 请求 URL 与 status: 手拼的 URL 与 metadata.uri 形态不一致 = 此坑; ② 对照第三方拓展 (show-docx 等) 的 `asWebviewUri` 用法; ③ 若 webview bundle 正常但 pdf.js 报 "Invalid Root reference" 且 pdfinfo 也报语法错 = 文件本身损坏, 非拓展 bug.
 - **附带**: `extensions/scripts/copy-vsix-to-home.js` (打包后 cp 到 `~/.numas/extensions`) 已删除, 打包只产出 `registry/vsix/*.vsix`; 运行时扩展来源走 `--extensions-dir` / `--registry` 配置.
+
+#### 54. SOLO 布局持久化后跨模式消费: sidebar.collapsed 被 IDE 模式 ActionBar 镜像逻辑读取 → 模式切换按钮重复
+
+- **现象**: SOLO 下折叠 sidebar 后切到 IDE 模式, 顶栏出现**两个** SOLO/IDE 模式切换按钮.
+- **根因**: `ActionBar` (MainAction 槽, SOLO/IDE 都渲染) 有「sidebar 折叠时镜像显示 mode-switch + 展开按钮」逻辑, 读 `layout.state.sidebar.collapsed`. IDE 顶栏同时渲染 `SideTopbar` (SidebarAction 槽, 自带 mode-switch) → 持久化把 SOLO 的折叠态带进 IDE → 镜像也渲染 → 重复.
+  - 持久化前 `sidebar.collapsed` 每次刷新重置 false, 所以该 bug 被掩盖; 加持久化 (AGENTS 布局状态全量持久化) 后暴露.
+- **解决方案**: 镜像逻辑加模式判断 `getAppMode() === 'solo'` — IDE 下不渲染 SOLO 的镜像元素 (mode-switch/expand 对 IDE 左栏无意义, IDE 左栏显隐走 IMainLayoutService).
+- **排查方法**: 「某按钮/元素重复」先查同一 slot 被几个布局同时渲染 (IDE 顶栏渲染 SidebarAction + MainAction 两个槽) + 该元素是否被跨模式共享的状态驱动; 持久化改动上线后, 复查所有消费该状态的组件是否按模式 guard.
