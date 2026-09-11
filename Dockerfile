@@ -54,7 +54,15 @@ ENV HOME=/home
 #   zsh = root 默认交互 shell (oh-my-zsh), nvm + node 22 走 ~/.nvm 在 zsh 交互时自动加载.
 #     sumi 前端跑浏览器, opencode binary 自含运行时 — 容器内 node 22 仅供工作区 AI agent / 用户的
 #     脚本/工具链使用, 不用作 opencode 自身运行依赖.
-RUN apt-get update \
+#   apt 源: 内建阿里云镜像 (mirrors.aliyun.com/ubuntu, arm64 走 ubuntu-ports),
+#   服务器/国内网络构建不直连官方源. ubuntu 24.04 用 deb822 格式
+#   (/etc/apt/sources.list.d/ubuntu.sources 的 URIs: 行).
+RUN sed -i \
+      -e 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.aliyun.com/ubuntu/|g' \
+      -e 's|http://security.ubuntu.com/ubuntu/|https://mirrors.aliyun.com/ubuntu/|g' \
+      -e 's|http://ports.ubuntu.com/ubuntu-ports/|https://mirrors.aliyun.com/ubuntu-ports/|g' \
+      /etc/apt/sources.list.d/ubuntu.sources \
+  && apt-get update \
   && apt-get install -y --no-install-recommends \
        ca-certificates tini \
        # shell
