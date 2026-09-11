@@ -11,7 +11,8 @@
  *   - aside 打开 → 自动折叠 sidebar 让出空间 (并记下展开宽度)
  *   - sidebar 展开 → 自动折叠 aside (两列互斥, 同一时间只展开一列)
  *   - 关闭 aside 不自动恢复 sidebar (用户自己 expand)
- *   - aside 打开时视口 resize → 宽度同步 60%
+ *   - aside 打开时视口 resize → 未手动拖过宽度才同步 60%; 手动拖过则保留 (只做上限收敛)
+ *   - 全量状态持久化到 localStorage (刷新恢复上次布局; 手动宽度标记一并持久化)
  */
 
 import { Injectable, Autowired } from '@opensumi/di';
@@ -29,8 +30,31 @@ const ASIDE_RATIO = 0.6;
 /** sidebar 默认宽度 = 固定 300px */
 const SIDEBAR_DEFAULT_W = 300;
 
+/** 布局状态持久化 key (全量: sidebar 折叠/宽 + aside 开合/宽/视图/explorer 折叠 + 手动宽度标记) */
+const STORAGE_KEY = 'NUMAS_SOLO_LAYOUT_V1';
+const VALID_VIEWS: AsideView[] = ['view', 'terminal', 'browser'];
+
 function viewportRatioWidth(ratio: number = ASIDE_RATIO): number {
   return Math.round(window.innerWidth * ratio);
+}
+
+function clampSidebarW(n: number): number {
+  return Math.max(MIN_SIDEBAR_W, Math.min(MAX_SIDEBAR_W, n));
+}
+
+function clampAsideW(n: number): number {
+  return Math.max(MIN_ASIDE_W, Math.min(window.innerWidth - 200, n));
+}
+
+function loadPersisted(): any {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch {
+    return {};
+  }
 }
 
 @Injectable()
@@ -41,7 +65,46 @@ export class LayoutServiceImpl implements ILayoutService {
   };
   /** 折叠时记住展开态宽度, 展开时恢复 */
   private expandedSidebarW = SIDEBAR_DEFAULT_W;
+  /** aside 宽度是否被手动拖过 (拖过则 resize 不再按 60% 重置) */
+  private asideWidthManual = false;
   private listeners = new Set<(s: LayoutState) => void>();
+
+  constructor() {
+    this.restore();
+  }
+
+  /** 从 localStorage 恢复状态 (字段校验 + 范围收敛; 损坏数据静默回默认) */
+  private restore(): void {
+    const p = loadPersisted();
+    const sb = p.sidebar || {};
+    const as = p.aside || {};
+    const sbW = Number.isFinite(sb.width) ? clampSidebarW(sb.width) : SIDEBAR_DEFAULT_W;
+    this.expandedSidebarW = Number.isFinite(p.expandedSidebarW) ? clampSidebarW(p.expandedSidebarW) : sbW;
+    this._state.sidebar = { collapsed: !!sb.collapsed, width: sbW };
+    const asW = Number.isFinite(as.width) && as.width > 0 ? clampAsideW(as.width) : 0;
+    this._state.aside = {
+      open: !!as.open,
+      width: asW,
+      view: VALID_VIEWS.includes(as.view) ? as.view : 'view',
+      explorerCollapsed: !!as.explorerCollapsed,
+    };
+    this.asideWidthManual = !!as.widthManual;
+    // 互斥不变量: aside 打开时 sidebar 必须折叠 (与 openAside 行为一致)
+    if (this._state.aside.open && !this._state.sidebar.collapsed) {
+      this._state.sidebar = { ...this._state.sidebar, collapsed: true };
+    }
+  }
+
+  /** 写回 localStorage (每次状态变更时同步写, payload 很小) */
+  private persist(): void {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        sidebar: this._state.sidebar,
+        aside: { ...this._state.aside, widthManual: this.asideWidthManual },
+        expandedSidebarW: this.expandedSidebarW,
+      }));
+    } catch { /* 存储不可用忽略 */ }
+  }
 
   get state(): LayoutState {
     return {
@@ -58,6 +121,7 @@ export class LayoutServiceImpl implements ILayoutService {
   }
 
   private emit(): void {
+    this.persist();
     const snap = this.state;
     this.listeners.forEach((cb) => {
       try { cb(snap); } catch { /* 订阅方异常忽略 */ }
@@ -120,7 +184,8 @@ export class LayoutServiceImpl implements ILayoutService {
   }
 
   setAsideWidth(n: number): void {
-    const next = Math.max(MIN_ASIDE_W, Math.min(window.innerWidth - 200, n));
+    const next = clampAsideW(n);
+    this.asideWidthManual = true;
     this._state.aside = { ...this._state.aside, width: next };
     this.emit();
   }
@@ -138,10 +203,12 @@ export class LayoutServiceImpl implements ILayoutService {
     this.emit();
   }
 
-  /** aside 打开时视口变化 → 同步 60% 宽 (resize 事件里调用) */
+  /** aside 打开时视口变化 → 未手动拖过宽度才同步 60%; 手动宽度只做上限收敛 (不重置) */
   syncAsideToViewport(): void {
     if (!this._state.aside.open) return;
-    this._state.aside = { ...this._state.aside, width: viewportRatioWidth() };
+    const next = this.asideWidthManual ? clampAsideW(this._state.aside.width) : viewportRatioWidth();
+    if (next === this._state.aside.width) return;
+    this._state.aside = { ...this._state.aside, width: next };
     this.emit();
   }
 }

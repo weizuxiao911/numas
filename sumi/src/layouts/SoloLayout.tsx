@@ -29,6 +29,13 @@ import { SOLO_SLOTS } from '../config/slots';
 import { LayoutToken, type ILayoutService } from '../service/layout';
 import { getWorkdir, subscribeWorkdir } from '../infra/url';
 
+/** aside 中间左栏 (explorer) 宽度持久化: 默认 280, 范围 160-520 */
+const ASIDE_SIDEBAR_W_KEY = 'NUMAS_SOLO_ASIDE_SIDEBAR_W';
+const loadAsideSidebarW = (): number => {
+  const n = Number(localStorage.getItem(ASIDE_SIDEBAR_W_KEY));
+  return Number.isFinite(n) && n > 0 ? Math.min(520, Math.max(160, n)) : 280;
+};
+
 export function SoloLayout(): React.ReactElement {
   const layout = useInjectable<ILayoutService>(LayoutToken);
   const terminals = useInjectable<ITerminalController>(ITerminalController);
@@ -113,6 +120,35 @@ export function SoloLayout(): React.ReactElement {
     document.body.style.userSelect = 'none';
   };
 
+  /* ─────────────── aside 内部左栏 (explorer) 拖拽 ─────────────── */
+  const [asideSidebarW, setAsideSidebarW] = React.useState<number>(loadAsideSidebarW);
+  const asideInnerDragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const onAsideInnerResizerDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    asideInnerDragRef.current = { startX: e.clientX, startW: asideSidebarW };
+    const onMove = (ev: MouseEvent) => {
+      if (!asideInnerDragRef.current) return;
+      const dx = ev.clientX - asideInnerDragRef.current.startX;
+      const next = asideInnerDragRef.current.startW + dx;
+      setAsideSidebarW(Math.min(520, Math.max(160, next)));
+    };
+    const onUp = () => {
+      asideInnerDragRef.current = null;
+      setAsideSidebarW((w) => {
+        try { localStorage.setItem(ASIDE_SIDEBAR_W_KEY, String(w)); } catch { /* */ }
+        return w;
+      });
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
   return (
     <div className="app-solo">
       {/* 左列: sidebar (action / container / footer) */}
@@ -163,11 +199,23 @@ export function SoloLayout(): React.ReactElement {
           </div>
           <div className="app-solo__aside-middle">
             {/* 查看: 官方 explorer(left 槽) + 编辑器 workbench(main 槽); 终端/浏览器: 仅容器区.
-                explorer 可由 asidetopbar 菜单按钮折叠 (折叠=不渲染, 编辑器占满) */}
+                explorer 可由 asidetopbar 菜单按钮折叠 (折叠=不渲染, 编辑器占满);
+                左栏宽度可拖拽 (resizer 在 sidebar 右缘, localStorage 持久化) */}
             {asideView === 'view' && !asideExplorerCollapsed && (
-              <div className="app-solo__aside-sidebar">
-                <SlotRenderer slot={SlotLocation.left} />
-              </div>
+              <>
+                <div
+                  className="app-solo__aside-sidebar"
+                  style={{ flexBasis: asideSidebarW, width: asideSidebarW }}
+                >
+                  <SlotRenderer slot={SlotLocation.left} />
+                </div>
+                <div
+                  className="app-solo__aside-resizer app-solo__aside-resizer--inner"
+                  onMouseDown={onAsideInnerResizerDown}
+                  role="separator"
+                  aria-orientation="vertical"
+                />
+              </>
             )}
             <div className="app-solo__aside-container">
               {asideView === 'view' && <SlotRenderer key="aside-editor" slot={SlotLocation.main} />}
