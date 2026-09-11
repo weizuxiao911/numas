@@ -550,8 +550,8 @@ ins, .docx-ins {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
+  gap: 1px;
+  padding: 0 4px;
   border-radius: 999px;
   background: #fff;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
@@ -562,8 +562,9 @@ ins, .docx-ins {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
+  font-size: 11px;
   padding: 0;
   color: var(--showdocx-button-fg);
   background: transparent;
@@ -577,17 +578,35 @@ ins, .docx-ins {
 }
 
 .zoom-bar-slider {
-  width: 110px;
-  height: 14px;
+  width: 90px;
+  height: 10px;
   margin: 0;
-  accent-color: var(--vscode-charts-blue, #3794ff);
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
   cursor: pointer;
+  outline: none;
 }
+.zoom-bar-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(17, 24, 39, 0.18);
+}
+.zoom-bar-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: var(--vscode-charts-blue, #3794ff);
+}
+.zoom-bar-slider:focus,
+.zoom-bar-slider:focus-visible { outline: none; }
 
 .zoom-bar-value {
-  min-width: 40px;
+  min-width: 30px;
   text-align: right;
-  font-size: 0.85em;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   color: var(--showdocx-muted);
 }
