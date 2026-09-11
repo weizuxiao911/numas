@@ -39,6 +39,18 @@ function copyDir(src, dst) {
   }
 }
 copyDir(SRC_DIST, path.join(STAGE, 'extension', 'dist'))
+// codicon.ttf (docx 同款图标字体; 从 docx 的依赖复制 — 同仓库本地资源)
+const CODICON_CANDIDATES = [
+  path.join(ROOT, '..', 'docx', 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'),
+  path.join(ROOT, 'node_modules', '@vscode', 'codicons', 'dist', 'codicon.ttf'),
+]
+const codiconSrc = CODICON_CANDIDATES.find((f) => fs.existsSync(f))
+if (codiconSrc) {
+  fs.copyFileSync(codiconSrc, path.join(STAGE, 'extension', 'dist', 'codicon.ttf'))
+  console.log('[pdf]   bundled codicon:', codiconSrc, '→', 'extension/dist/codicon.ttf')
+} else {
+  console.warn('[pdf]   codicon.ttf 未找到, 缩放按钮图标将回退为文本')
+}
 const PDFJS_SRC = path.join(ROOT, 'pdfjs')
 if (fs.existsSync(PDFJS_SRC)) {
   copyDir(PDFJS_SRC, path.join(STAGE, 'extension', 'pdfjs'))

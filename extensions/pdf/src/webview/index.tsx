@@ -16,17 +16,54 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import { AnnotateLayer, ANNO_STYLES, type Annotation, type AnnoCapability, type AnnoRect } from './annotate';
+
+/** vscode webview API (与 pdf 拓展宿主通信: 标注读写/AI 生成/终端执行) */
+const vscode = (window as any).acquireVsCodeApi ? (window as any).acquireVsCodeApi() : null;
+
 const CFG = ((window as any).__PDF_CFG__ || {}) as {
   registryBase?: string;
   name?: string;
   pdfjsBase?: string;
   fetch?: { rel?: string; headerDir?: string; error?: string };
+  distBase?: string;
 };
 // pdfjs 基址由 extension host 用 asWebviewUri 解析 (自适应内置/网关市场路径);
 // 兜底: 老 shell 无 pdfjsBase 时按 registryBase 拼 (内置市场形态).
 const PDFJS_BASE = String(
   CFG.pdfjsBase || `${String(CFG.registryBase || '').replace(/\/+$/, '')}/numas.pdf-0.1.0/pdfjs`,
 ).replace(/\/+$/, '');
+
+/* ===== codicon 图标字体 (docx 同款; 字体 URL 由 host asWebviewUri 注入) ===== */
+const DIST_BASE = String((CFG as any).distBase || '.').replace(/\/+$/, '');
+if (typeof document !== 'undefined' && !document.getElementById('pdf-codicon-styles')) {
+  const el = document.createElement('style');
+  el.id = 'pdf-codicon-styles';
+  el.textContent = `
+@font-face { font-family: codicon; font-display: block; src: url('${DIST_BASE}/codicon.ttf') format('truetype'); }
+.codicon {
+  font: normal normal normal 16px/1 codicon;
+  display: inline-block;
+  text-decoration: none;
+  text-rendering: auto;
+  text-align: center;
+  text-transform: none;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+.codicon-zoom-out:before { content: '\\eb82'; }
+.codicon-zoom-in:before { content: '\\eb81'; }
+`;
+  document.head.appendChild(el);
+}
+
+/* ===== 标注样式注入 (module 加载时; webview 文档内) ===== */
+if (typeof document !== 'undefined' && !document.getElementById('pdf-anno-styles')) {
+  const annoStyleEl = document.createElement('style');
+  annoStyleEl.id = 'pdf-anno-styles';
+  annoStyleEl.textContent = ANNO_STYLES;
+  document.head.appendChild(annoStyleEl);
+}
 
 /* ===== pdf.js 加载 (module script → window.pdfjsLib; worker 走 blob 规避跨域) ===== */
 function loadScript(src: string): Promise<void> {
@@ -83,24 +120,286 @@ const PdfViewer: React.FC = () => {
   const lazyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** rebuildViewer 并发守卫: 每次入口 +1, await 后检查; 不一致 → 旧 build bail (连续点缩放防撞车) */
   const buildIdRef = useRef(0);
-  /** 用户缩放档位: 0..4 对应 [50%, 75%, 100%, 125%, 150%]; 高度主导缩放 */
-  const [userScaleIdx, setUserScaleIdx] = useState(2);
-  const USER_SCALES = [0.5, 0.75, 1.0, 1.25, 1.5];
+  /** 缩放百分比 (50-200, step 5; 与 docx 缩放条一致); 高度主导缩放 */
+  const [zoomPct, setZoomPct] = useState(100);
+  /** 最新缩放 (rebuild/懒渲染读 ref, 避免 zoomPct 进 rebuildViewer deps 触发重建) */
+  const zoomPctRef = useRef(100);
+  // 与 docx ZoomController 对齐: 25-400, 步进 10, 任意整数
+  const MIN_ZOOM = 25;
+  const MAX_ZOOM = 400;
+  const ZOOM_STEP = 10;
+  const clampZoom = (n: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(n)));
+  /**
+   * 缩放 (docx 同款: CSS `zoom` 属性缩放布局盒, 不重建 DOM).
+   * 视觉锚点: 记录当前页视觉 top, 缩放后恢复 → 视野不跳.
+   */
+  const applyZoom = (n: number) => {
+    const viewer = viewerRef.current;
+    const anchor = viewer ? pageElsRef.current.get(currentPageRef.current) : null;
+    const beforeTop = anchor ? anchor.getBoundingClientRect().top : null;
+    const v = clampZoom(n);
+    setZoomPct(v);
+    // docx updateZoom 同款: 非聚焦时同步 slider (聚焦中不抢拖动)
+    const slider = viewer?.parentElement?.querySelector<HTMLInputElement>('.ab-pdf__zoombar-slider');
+    if (slider && document.activeElement !== slider) slider.value = String(v);
+    if (viewer && beforeTop !== null) {
+      requestAnimationFrame(() => {
+        const el = pageElsRef.current.get(currentPageRef.current);
+        if (el) viewer.scrollTop += el.getBoundingClientRect().top - beforeTop;
+      });
+    }
+  };
+  const zoomIn = () => applyZoom(zoomPctRef.current + ZOOM_STEP);
+  const zoomOut = () => applyZoom(zoomPctRef.current - ZOOM_STEP);
+  const zoomReset = () => applyZoom(100);
+
+  // Ctrl/Cmd + 滚轮缩放 (docx handleWheel 同款)
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      applyZoom(zoomPctRef.current - e.deltaY * 0.1);
+    };
+    viewer.addEventListener('wheel', onWheel, { passive: false });
+    return () => viewer.removeEventListener('wheel', onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ─────────── 标注: anno 文件 I/O (同源 /api/fs/*, 宿主不碰 fs) ───────────
+
+  const fsHeaders = useCallback(() => ({ 'x-opencode-directory': encodeURI(CFG.fetch?.headerDir || '') }), []);
+  const hostDir = () => {
+    const p = CFG.hostPath || '';
+    const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+    return i > 0 ? p.slice(0, i) : p;
+  };
+  const relDir = () => {
+    const rel = CFG.fetch?.rel || '';
+    const i = rel.lastIndexOf('/');
+    return i >= 0 ? rel.slice(0, i + 1) : '';
+  };
+  const hash8 = async (name: string): Promise<string> => {
+    try {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(name));
+      return Array.from(new Uint8Array(digest)).slice(0, 4).map((b) => b.toString(16).padStart(2, '0')).join('');
+    } catch {
+      let h = 5381;
+      for (let i = 0; i < name.length; i++) h = ((h << 5) + h + name.charCodeAt(i)) | 0;
+      return (h >>> 0).toString(16).padStart(8, '0');
+    }
+  };
+  const annoRel = useCallback(async () => `${relDir()}.${await hash8(CFG.name || 'document.pdf')}.anno`, []);
+  const productAbs = useCallback(async (id: string, ext: string) => `${hostDir()}/.${await hash8(CFG.name || 'document.pdf')}.anno.${id}.${ext}`, []);
+
+  const readAnnoRemote = useCallback(async (): Promise<Annotation[]> => {
+    try {
+      const res = await fetch(`/api/fs/read/${encodeURIComponent(await annoRel())}`, { headers: fsHeaders() });
+      if (!res.ok) return [];
+      const parsed = await res.json();
+      return Array.isArray(parsed?.annotations) ? parsed.annotations : [];
+    } catch {
+      return [];
+    }
+  }, [annoRel, fsHeaders]);
+
+  const writeAnnoRemote = useCallback(async (list: Annotation[]): Promise<void> => {
+    try {
+      await fetch('/api/fs/write', {
+        method: 'POST',
+        headers: { ...fsHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({
+          path: await annoRel(),
+          content: `${JSON.stringify({ version: 1, file: CFG.name || '', annotations: list }, null, 2)}\n`,
+        }),
+      });
+    } catch { /* ignore */ }
+  }, [annoRel, fsHeaders]);
+
+  const productExistsRemote = useCallback(async (id: string, ext: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/fs/read/${encodeURIComponent(`${relDir()}.${await hash8(CFG.name || 'document.pdf')}.anno.${id}.${ext}`)}`, { headers: fsHeaders() });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }, [fsHeaders]);
+
+  // 初始加载 anno
+  useEffect(() => {
+    void readAnnoRemote().then((list) => setAnnotations(list));
+  }, [readAnnoRemote]);
+
+  /** 提取页内 rect 区域的文本 (pdf.js textContent, 归一化坐标重叠过滤) */
+  const extractTextForRect = useCallback(async (page: number, rect: AnnoRect): Promise<string> => {
+    const pdf = pdfDocRef.current;
+    if (!pdf) return '';
+    try {
+      const p = await pdf.getPage(page);
+      const vp = p.getViewport({ scale: 1 });
+      const content = await p.getTextContent();
+      const parts: string[] = [];
+      for (const item of content.items as any[]) {
+        const tr = item.transform || [];
+        const ix = (tr[4] || 0) / vp.width;
+        const iy = 1 - (tr[5] || 0) / vp.height - Math.abs(item.height || 10) / vp.height;
+        const iw = Math.abs(item.width || 0) / vp.width;
+        const ih = Math.abs(item.height || 10) / vp.height;
+        const overlap = ix < rect.x + rect.w && ix + iw > rect.x && iy < rect.y + rect.h && iy + ih > rect.y;
+        if (overlap && item.str) parts.push(item.str);
+      }
+      return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+    } catch {
+      return '';
+    }
+  }, []);
+
+  /** 生成标注: 释放即完成 (默认色, 提取文本后立即落盘); 返回新标注 id */
+  const onCreateRegion = useCallback(async (page: number, rect: AnnoRect, color: string): Promise<string | null> => {
+    const list = await readAnnoRemote();
+    const maxId = list.reduce((m, a) => {
+      const mm = /^a(\d+)$/.exec(a.id);
+      return mm ? Math.max(m, Number(mm[1])) : m;
+    }, 0);
+    const id = `a${maxId + 1}`;
+    const text = await extractTextForRect(page, rect);
+    const next = [...list, { id, page, rect, color, text, createdAt: Date.now() }];
+    setAnnotations(next);
+    await writeAnnoRemote(next);
+    return id;
+  }, [readAnnoRemote, writeAnnoRemote, extractTextForRect]);
+
+  const onRecolor = useCallback((id: string, color: string) => {
+    void (async () => {
+      const list = await readAnnoRemote();
+      const a = list.find((x) => x.id === id);
+      if (!a) return;
+      a.color = color;
+      setAnnotations([...list]);
+      await writeAnnoRemote(list);
+    })();
+  }, [readAnnoRemote, writeAnnoRemote]);
+
+  const onDelete = useCallback((id: string) => {
+    void (async () => {
+      const list = (await readAnnoRemote()).filter((x) => x.id !== id);
+      setAnnotations(list);
+      await writeAnnoRemote(list);
+    })();
+  }, [readAnnoRemote, writeAnnoRemote]);
+
+  /** AI 生成 prompt (标注信息 + 能力指令 + 产物确定性路径) */
+  const buildPrompt = useCallback((kind: 'animation' | 'code', a: Annotation, productAbsPath: string): string => {
+    const rect = [a.rect.x, a.rect.y, a.rect.w, a.rect.h].map((n) => n.toFixed(4)).join(', ');
+    const head = [
+      'PDF 圈选标注:',
+      `- 源文件: ${CFG.hostPath || ''}`,
+      `- 页码: ${a.page}`,
+      `- 圈选区域(页内归一化 x,y,w,h): [${rect}]`,
+      a.text ? `- 圈选内容: ${a.text}` : '- 圈选内容: (未能自动提取, 请依据源文件与页码位置自行读取)',
+    ].join('\n');
+    const task = kind === 'animation'
+      ? [
+          '任务: 为该区域内容生成一个"可交互的 HTML5 动画讲解"页面.',
+          '要求:',
+          '1. 单文件自包含 (所有 CSS/JS 内联, 不引用任何外部资源/CDN)',
+          '2. 提供数据输入框 (如逗号分隔数字/文本), 用户可输入任意数据',
+          '3. 点击「开始演示」后用动画逐步演示算法/概念过程 (每一步有高亮与说明)',
+          '4. 控制按钮: 开始 / 暂停 / 重置',
+          '5. 界面美观 (深色/浅色自适应), 中文文案',
+        ].join('\n')
+      : [
+          '任务: 为该区域内容生成一个可直接运行的代码示例文件.',
+          '要求:',
+          '1. 代码自包含, 不依赖外部服务; 使用 Python 3 标准库优先 (需要三方库时在文件头注释 pip 安装命令)',
+          '2. 关键逻辑有中文注释; 运行后打印清晰结果',
+          '3. 只输出代码文件内容, 不要解释',
+        ].join('\n');
+    return [head, '', task, '', `产物要求: 直接写入文件 ${productAbsPath} (不要创建其它文件, 不要输出解释文字)`].join('\n');
+  }, []);
+
+  /** 生成动画/代码: 置 generating → chatbot.send → 轮询产物 → ready */
+  const onGenerate = useCallback((id: string, action: 'animation' | 'code') => {
+    void (async () => {
+      const list = await readAnnoRemote();
+      const a = list.find((x) => x.id === id);
+      if (!a) return;
+      const ext = action === 'animation' ? 'html' : 'py';
+      const abs = await productAbs(id, ext);
+      const cap: AnnoCapability = { status: 'generating' };
+      if (action === 'animation') a.animation = cap;
+      else a.code = cap;
+      setAnnotations([...list]);
+      await writeAnnoRemote(list);
+      vscode?.postMessage({ type: 'ai.send', prompt: buildPrompt(action, a, abs) });
+      // 轮询产物 (2s; 5 分钟超时)
+      const deadline = Date.now() + 5 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2000));
+        if (await productExistsRemote(id, ext)) {
+          const l2 = await readAnnoRemote();
+          const a2 = l2.find((x) => x.id === id);
+          if (!a2) return;
+          const done: AnnoCapability = { status: 'ready', file: abs };
+          if (action === 'code') done.command = `python3 "${abs}"`;
+          if (action === 'animation') a2.animation = done;
+          else a2.code = done;
+          setAnnotations([...l2]);
+          await writeAnnoRemote(l2);
+          return;
+        }
+      }
+      const l3 = await readAnnoRemote();
+      const a3 = l3.find((x) => x.id === id);
+      if (!a3) return;
+      const failed: AnnoCapability = { status: 'failed', error: '生成超时 (5 分钟)' };
+      if (action === 'animation') a3.animation = failed;
+      else a3.code = failed;
+      setAnnotations([...l3]);
+      await writeAnnoRemote(l3);
+    })();
+  }, [readAnnoRemote, writeAnnoRemote, productAbs, productExistsRemote, buildPrompt]);
+
+  /** 动画演示: 宿主 vscode.open 打开产物 HTML */
+  const onPlayAnimation = useCallback((id: string) => {
+    void (async () => {
+      const a = (await readAnnoRemote()).find((x) => x.id === id);
+      if (a?.animation?.file) vscode?.postMessage({ type: 'openFile', path: a.animation.file });
+    })();
+  }, [readAnnoRemote]);
+
+  /** 运行代码: 宿主 vscode 终端执行 */
+  const onRunCode = useCallback((id: string) => {
+    void (async () => {
+      const a = (await readAnnoRemote()).find((x) => x.id === id);
+      if (a?.code?.command) vscode?.postMessage({ type: 'runCommand', command: a.code.command });
+    })();
+  }, [readAnnoRemote]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [numPages, setNumPages] = useState(0);
   /** 当前页码 (ref, 避免放入 rebuildViewer deps 触发死循环) */
   const currentPageRef = useRef<number>(1);
-  /** 缩放锚点页: 点击缩放按钮瞬间记录真实页 (rebuild 异步触发, 期间 onScroll 会污染 currentPageRef 成 1) */
-  const zoomAnchorPageRef = useRef<number | null>(null);
   /** rebuild 进行中 (计数): 期间 onScroll 不更新 currentPageRef (防 innerHTML='' 后 scrollTop 归零污染成 1) */
   const rebuildingRef = useRef(0);
   const [currentPage, _setCurrentPage] = useState(1);
   /** PDF 目录树 (pdf.getOutline() 嵌套结构) */
   const [outline, setOutline] = useState<any[]>([]);
-  /** 目录面板是否展开 */
-  const [tocOpen, setTocOpen] = useState(false); // 目录默认隐藏
+  /** 侧栏模式: none | toc(目录) | activity(交互活动) — 互斥切换 */
+  const [sidebarMode, setSidebarMode] = useState<'none' | 'toc' | 'activity'>('none');
+  const tocOpen = sidebarMode === 'toc';
+  const setTocOpen = (v: boolean | ((prev: boolean) => boolean)) => {
+    setSidebarMode((prev) => {
+      const next = typeof v === 'function' ? (v as any)(prev === 'toc') : v;
+      return next ? 'toc' : 'none';
+    });
+  };
+  /** 标注信息 (默认显示) */
+  const [annoVisible, setAnnoVisible] = useState(true);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const hostPathRef = useRef<string>(CFG.hostPath || '');
   /** resize/缩放触发重建的 tick */
   const [rebuildTick, setRebuildTick] = useState(0);
   /** 页码输入框 (非受控, 输入时不被滚动同步抢走) */
@@ -164,7 +463,7 @@ const PdfViewer: React.FC = () => {
     if (renderedRef.current.has(pageIdx)) return;
 
     const div = pageElsRef.current.get(pageIdx);
-    if (!div || div.parentNode !== viewer) return;
+    if (!div || !div.parentNode) return;
 
     // 高度主导缩放: 视口高 × 档位
     const viewBaseH = Math.max(viewer.clientHeight || 1, 1);
@@ -175,7 +474,7 @@ const PdfViewer: React.FC = () => {
     const pb = p.getViewport({ scale: 1 });
 
     const pageW = div.clientWidth || div.offsetWidth;
-    const renderScale = (pageW / pb.width) * dpr;
+    const renderScale = (pageW / pb.width) * dpr * (zoomPctRef.current / 100);
     const viewport = p.getViewport({ scale: renderScale });
     const canvas = document.createElement('canvas');
     canvas.className = 'ab-pdf-canvas';
@@ -215,21 +514,25 @@ const PdfViewer: React.FC = () => {
     if (!pdf) return;
     const myBuildId = ++buildIdRef.current;
 
-    // 高度主导缩放: div 高 = viewer 视口高 × userScale, 宽按 PDF aspect-ratio
-    const viewBaseH = Math.max(viewer.clientHeight || 1, 1);
-    const viewH = viewBaseH * USER_SCALES[userScaleIdx];
+    // 宽度适配 (与 docx 一致): 页面基准宽 = viewer 视口宽; 缩放走 surface 的 CSS `zoom` 属性
+    const viewW = Math.max(viewer.clientWidth || 1, 1);
     const pageGap = 8;
 
-    // 用局部变量记当前页: 优先缩放锚点 (点击瞬间真实页), 否则 currentPageRef
-    const prevPage = zoomAnchorPageRef.current ?? currentPageRef.current;
-    zoomAnchorPageRef.current = null;
-    // 记"页内偏移", 重建后精确恢复
+    // 重建前记当前页 + 页顶相对视口的视觉偏移 (兼容 CSS zoom)
+    const prevPage = currentPageRef.current;
     const prevPageEl = pageElsRef.current.get(prevPage);
-    const prevOffset = prevPageEl ? viewer.scrollTop - prevPageEl.offsetTop : 0;
+    const prevOffset = prevPageEl
+      ? prevPageEl.getBoundingClientRect().top - viewer.getBoundingClientRect().top
+      : 0;
     // 重建期间屏蔽 onScroll 页码更新
     rebuildingRef.current++;
     try {
       viewer.innerHTML = '';
+      // surface: 内容承载 + CSS zoom (布局盒缩放, 滚动条正确; 与 docx .zoom-surface 同款)
+      const surface = document.createElement('div');
+      surface.className = 'ab-pdf__surface';
+      surface.style.zoom = String(zoomPctRef.current / 100);
+      viewer.appendChild(surface);
       pageElsRef.current.clear();
       renderedRef.current.clear();
 
@@ -245,13 +548,13 @@ const PdfViewer: React.FC = () => {
             aspect = 0.75; // A4 兜底
           }
         }
-        const pageH = viewH;
-        const pageW = viewH * aspect;
+        const pageW = viewW;
+        const pageH = aspect > 0 ? pageW / aspect : pageW / 0.75;
         const div = document.createElement('div');
         div.className = 'ab-pdf-page ab-pdf-page--skeleton';
         div.dataset['page'] = String(i);
-        div.style.cssText = `width:${pageW}px;height:${pageH}px;margin:0 auto ${pageGap}px;`;
-        viewer.appendChild(div);
+        div.style.cssText = `position:relative;width:${pageW}px;height:${pageH}px;margin:0 auto ${pageGap}px;`;
+        surface.appendChild(div);
         pageElsRef.current.set(i, div);
       }
 
@@ -266,10 +569,13 @@ const PdfViewer: React.FC = () => {
       requestAnimationFrame(() => {
         if (buildIdRef.current !== myBuildId) return; // 期间又有新 build → 放弃
         const target = pageElsRef.current.get(prevPage);
-        if (target) viewer.scrollTop = target.offsetTop + prevOffset;
+        if (target) {
+          const delta = target.getBoundingClientRect().top - viewer.getBoundingClientRect().top;
+          viewer.scrollTop = viewer.scrollTop + delta - prevOffset;
+        }
       });
     }
-  }, [numPages, rebuildTick, userScaleIdx, lazyLoadRange]);
+  }, [numPages, rebuildTick, lazyLoadRange]);
 
   // ---------- 滚动同步当前页码 ----------
   useEffect(() => {
@@ -278,15 +584,12 @@ const PdfViewer: React.FC = () => {
     if (!viewer) return;
     const onScroll = () => {
       if (rebuildingRef.current > 0) return;
-      // 用 viewer 可视区中点的 y 找当前页: 中点下方第一页 = 当前页
-      const midY = viewer.scrollTop + viewer.clientHeight / 2;
-      // 按 DOM 顺序 (offsetTop) 遍历, 不依赖 Map 插入序
-      const pages = Array.from(pageElsRef.current.entries())
-        .filter(([, el]) => !!el)
-        .sort((a, b) => (a[1] as HTMLElement).offsetTop - (b[1] as HTMLElement).offsetTop);
+      // 用 viewer 可视区中点的 y 找当前页 (视觉坐标, 兼容 CSS zoom)
+      const midY = viewer.getBoundingClientRect().top + viewer.clientHeight / 2;
+      const pages = Array.from(pageElsRef.current.entries()).filter(([, el]) => !!el);
       let current = 1;
       for (const [idx, el] of pages) {
-        if (midY >= el.offsetTop) current = idx;
+        if (midY >= el.getBoundingClientRect().top) current = idx;
       }
       if (currentPageRef.current !== current) {
         currentPageRef.current = current;
@@ -320,11 +623,45 @@ const PdfViewer: React.FC = () => {
     return () => { disposed = true; };
   }, [numPages, rebuildViewer]);
 
+  // ---------- 缩放同步: surface 的 CSS zoom (docx 同款, 不重建 DOM) ----------
+  React.useLayoutEffect(() => {
+    zoomPctRef.current = zoomPct;
+    const surface = viewerRef.current?.querySelector('.ab-pdf__surface') as HTMLElement | null;
+    if (surface) surface.style.zoom = String(zoomPct / 100);
+  }, [zoomPct]);
+
+  // 缩放稳定后重渲染可见页 (位图分辨率跟上新缩放, 防糊)
+  useEffect(() => {
+    if (!numPages) return;
+    const timer = setTimeout(() => {
+      renderedRef.current.clear();
+      void lazyLoadRange(currentPageRef.current);
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [zoomPct, numPages, lazyLoadRange]);
+
   // ---------- 页宽变化 (窗口 resize) → 重建 ----------
   useEffect(() => {
     const onResize = () => setRebuildTick((t) => t + 1);
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  /** 交互活动列表: 按页码+位置排序 */
+  const sortedAnno = React.useMemo(
+    () => [...annotations].sort((a, b) => a.page - b.page || a.rect.y - b.rect.y || a.rect.x - b.rect.x),
+    [annotations],
+  );
+
+  /** 跳转到标注区域 (滚动 + 视觉居中偏上) */
+  const jumpToAnno = useCallback((a: Annotation) => {
+    const viewer = viewerRef.current;
+    const el = pageElsRef.current.get(a.page);
+    if (!viewer || !el) return;
+    const er = el.getBoundingClientRect();
+    const vr = viewer.getBoundingClientRect();
+    const top = viewer.scrollTop + (er.top - vr.top) + a.rect.y * er.height - vr.height * 0.3;
+    viewer.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   }, []);
 
   const jumpToPage = useCallback((n: number) => {
@@ -373,56 +710,117 @@ const PdfViewer: React.FC = () => {
   return (
     <div className="ab-pdf">
       <style>{STYLES}</style>
+      {/* 顶部功能区 (与 docx 阅读器统一: 白底/无边框/34px) */}
+      <header className="ab-pdf__toolbar">
+        <span className="ab-pdf__toolbar-file" title={CFG.name || ''}>{CFG.name || 'PDF'}</span>
+        <span className="ab-pdf__toolbar-spacer" />
+        {!loading && !error && (
+          <>
+            <button
+              className={sidebarMode === 'toc' ? 'ab-pdf__toolbar-btn is-on' : 'ab-pdf__toolbar-btn'}
+              title="目录"
+              onClick={() => setSidebarMode((m) => (m === 'toc' ? 'none' : 'toc'))}
+            >
+              <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
+                <path d="M2.5 4.5h11M4.5 8h9M6.5 11.5h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              </svg>
+            </button>
+            <button
+              className={sidebarMode === 'activity' ? 'ab-pdf__toolbar-btn is-on' : 'ab-pdf__toolbar-btn'}
+              title="交互活动"
+              onClick={() => setSidebarMode((m) => (m === 'activity' ? 'none' : 'activity'))}
+            >
+              <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="5.75" stroke="currentColor" strokeWidth="1.3" />
+                <path d="M6.6 5.9l4 2.1-4 2.1z" fill="currentColor" />
+              </svg>
+            </button>
+            <button
+              className={annoVisible ? 'ab-pdf__toolbar-btn is-on' : 'ab-pdf__toolbar-btn'}
+              title={annoVisible ? '隐藏标注' : '显示标注'}
+              onClick={() => setAnnoVisible((v) => !v)}
+            >
+              <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
+                <path d="M1.6 8s2.3-4 6.4-4 6.4 4 6.4 4-2.3 4-6.4 4S1.6 8 1.6 8z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                <circle cx="8" cy="8" r="1.9" stroke="currentColor" strokeWidth="1.3" />
+              </svg>
+            </button>
+          </>
+        )}
+      </header>
       <div className="ab-pdf__body">
         {/* 目录侧边栏 (可折叠); 折叠时 width:0 完全隐藏 */}
-        {!loading && !error && (
-          <div className={tocOpen ? 'ab-pdf__toc ab-pdf__toc--open' : 'ab-pdf__toc'}>
+        {!loading && !error && sidebarMode !== 'none' && (
+          <div className="ab-pdf__toc ab-pdf__toc--open">
             <div className="ab-pdf__toc-head">
-              <span className="ab-pdf__toc-title">目录</span>
+              <span className="ab-pdf__toc-title">{sidebarMode === 'toc' ? '目录' : '交互活动'}</span>
               <span className="ab-pdf__toc-pageno">{currentPage} / {numPages}</span>
-              <button className="ab-pdf__toc-toggle" title="折叠目录" onClick={() => setTocOpen(false)}>‹</button>
+              <button className="ab-pdf__toc-toggle" title="收起" onClick={() => setSidebarMode('none')}>‹</button>
             </div>
-            {tocOpen && (
+            {sidebarMode === 'toc' ? (
               <div className="ab-pdf__toc-tree">
                 {outline.length === 0
                   ? <div className="ab-pdf__toc-empty">暂无目录</div>
                   : <TocTree items={outline} depth={0} defaultCollapsed={new Set<string>()} onJump={jumpToOutlineDest} />}
               </div>
+            ) : (
+              <div className="ab-pdf__toc-tree">
+                {sortedAnno.length === 0
+                  ? <div className="ab-pdf__toc-empty">暂无标注</div>
+                  : sortedAnno.map((a) => (
+                    <button
+                      key={a.id}
+                      className="ab-pdf__activity-item"
+                      title={a.text || `第 ${a.page} 页标注`}
+                      onClick={() => jumpToAnno(a)}
+                    >
+                      <span className="ab-pdf__activity-page">P{a.page}</span>
+                      <span className="ab-pdf__activity-text">{a.text || '(无文本)'}</span>
+                      <span className="ab-pdf__activity-badges">
+                        {a.animation?.status === 'ready' && <span title="动画已就绪">🎬</span>}
+                        {a.code?.status === 'ready' && <span title="代码已就绪">▶</span>}
+                      </span>
+                      <span className="ab-pdf__activity-dot" style={{ background: a.color }} />
+                    </button>
+                  ))}
+              </div>
             )}
           </div>
         )}
+        {/* 标注层: 蒙层 + 手势 + 弹层 (全在阅读器内) */}
+        {!loading && !error && (
+          <AnnotateLayer
+            visible={annoVisible}
+            annotations={annotations}
+            getPageEl={(p) => pageElsRef.current.get(p) || null}
+            scrollHost={viewerRef.current}
+            onCreateRegion={onCreateRegion}
+            onGenerate={onGenerate}
+            onRecolor={onRecolor}
+            onDelete={onDelete}
+            onPlayAnimation={onPlayAnimation}
+            onRunCode={onRunCode}
+            renderTick={rebuildTick}
+          />
+        )}
         {/* viewer div: 永不包含 React children, page DOM 全部手动插入 */}
         <div className="ab-pdf__viewerContainer" ref={viewerRef} />
-        {/* 折叠后的展开入口: viewer 左上角浮动按钮 */}
-        {!tocOpen && !loading && !error && (
-          <button className="ab-pdf__toc-open-btn" title="展开目录" onClick={() => setTocOpen(true)}>☰ 目录</button>
-        )}
-        {/* 缩放档位: 右下角浮动按钮 (-/100%/+), 切 userScaleIdx */}
+        {/* 底部缩放条 (与 docx 统一: −/滑块/+/百分比, 右下角悬浮) */}
         {!loading && !error && (
-          <div className="ab-pdf__zoom">
-            <button
-              className="ab-pdf__zoom-btn"
-              title="缩小"
-              disabled={userScaleIdx === 0}
-              onClick={() => {
-                zoomAnchorPageRef.current = currentPageRef.current;
-                setUserScaleIdx((prev) => Math.max(0, prev - 1));
-                setRebuildTick((t) => t + 1);
-              }}
-            >−</button>
-            <button className="ab-pdf__zoom-btn ab-pdf__zoom-btn--current" title="当前缩放比例" disabled>
-              {Math.round(USER_SCALES[userScaleIdx] * 100)}%
-            </button>
-            <button
-              className="ab-pdf__zoom-btn"
-              title="放大"
-              disabled={userScaleIdx === USER_SCALES.length - 1}
-              onClick={() => {
-                zoomAnchorPageRef.current = currentPageRef.current;
-                setUserScaleIdx((prev) => Math.min(USER_SCALES.length - 1, prev + 1));
-                setRebuildTick((t) => t + 1);
-              }}
-            >+</button>
+          <div className="ab-pdf__zoombar">
+            <button className="ab-pdf__zoombar-btn" title="缩小" onClick={zoomOut}><span className="codicon codicon-zoom-out" /></button>
+            <input
+              className="ab-pdf__zoombar-slider"
+              type="range"
+              min={MIN_ZOOM}
+              max={MAX_ZOOM}
+              step={1}
+              defaultValue={zoomPct}
+              title="缩放"
+              onChange={(e) => applyZoom(Number(e.target.value))}
+            />
+            <button className="ab-pdf__zoombar-btn" title="放大" onClick={zoomIn}><span className="codicon codicon-zoom-in" /></button>
+            <button className="ab-pdf__zoombar-value" title="点击恢复 100%" onClick={zoomReset}>{zoomPct}%</button>
           </div>
         )}
       </div>
@@ -485,11 +883,126 @@ function TocTree({ items, depth, defaultCollapsed, onJump }: {
 }
 
 const STYLES = `
+/* 顶部功能区 (与 docx 阅读器统一: 白底/无边框/34px) */
+.ab-pdf__toolbar {
+  display: flex;
+  flex: none;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  background: #fff;
+  color: var(--vscode-editor-foreground, #1f2329);
+}
+.ab-pdf__toolbar-file {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ab-pdf__toolbar-spacer { flex: 1; }
+.ab-pdf__toolbar-btn {
+  height: 24px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--vscode-editor-foreground, #1f2329);
+  background: transparent;
+  border: 1px solid var(--panel-border, rgba(17,24,39,0.14));
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ab-pdf__toolbar-btn:hover { background: color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 10%, transparent); }
+.ab-pdf__toolbar-btn.is-on {
+  color: #fff;
+  background: var(--button-background, #6d5ef5);
+  border-color: transparent;
+}
+/* 底部缩放条 (与 docx 统一: −/滑块/+/百分比, 右下角悬浮) */
+.ab-pdf__zoombar {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  color: var(--vscode-editor-foreground, #1f2329);
+}
+.ab-pdf__zoombar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--vscode-editor-foreground, #1f2329);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ab-pdf__zoombar-btn:hover { background: color-mix(in srgb, var(--vscode-editor-foreground, #1f2329) 10%, transparent); }
+.ab-pdf__zoombar-btn:focus,
+.ab-pdf__zoombar-btn:focus-visible { outline: none; }
+.ab-pdf__zoombar,
+.ab-pdf__zoombar * { user-select: none; -webkit-user-select: none; }
+.ab-pdf__zoombar-slider {
+  width: 90px;
+  height: 10px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+.ab-pdf__zoombar-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(17, 24, 39, 0.18);
+}
+.ab-pdf__zoombar-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: var(--vscode-charts-blue, #3794ff);
+}
+.ab-pdf__zoombar-slider:focus,
+.ab-pdf__zoombar-slider:focus-visible,
+.ab-pdf__zoombar-slider:active {
+  outline: none;
+  box-shadow: none;
+}
+.ab-pdf__zoombar-value {
+  min-width: 30px;
+  padding: 0 2px;
+  text-align: right;
+  font-size: 10px;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--vscode-descriptionForeground, #8f8f8f);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ab-pdf__zoombar-value:hover { background: color-mix(in srgb, var(--vscode-editor-foreground, #1f2329) 10%, transparent); }
 .ab-pdf {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
   background: transparent;
-  color: var(--editor-foreground);
+  color: var(--vscode-editor-foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", sans-serif;
   overflow: hidden;
 }
@@ -528,7 +1041,7 @@ const STYLES = `
 .ab-pdf__toc-title { flex: 1; text-align: left; }
 .ab-pdf__toc-pageno {
   font-size: 11px; font-weight: 400;
-  color: var(--descriptionForeground, var(--vscode-descriptionForeground, #9ca3af));
+  color: var(--vscode-descriptionForeground, #8f8f8f);
   white-space: nowrap;
 }
 .ab-pdf__toc-tree {
@@ -536,7 +1049,44 @@ const STYLES = `
   overflow-y: auto; overflow-x: hidden;
   padding: 4px 0;
 }
-.ab-pdf__toc-empty { padding: 12px 10px; font-size: 12px; color: var(--descriptionForeground, #888); }
+.ab-pdf__activity-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  color: var(--vscode-editor-foreground, #1f2329);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ab-pdf__activity-item:hover { background: color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 10%, transparent); }
+.ab-pdf__activity-page {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #8f8f8f);
+  font-variant-numeric: tabular-nums;
+}
+.ab-pdf__activity-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ab-pdf__activity-badges { flex-shrink: 0; font-size: 11px; }
+.ab-pdf__activity-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.12);
+}
+.ab-pdf__toc-empty { padding: 12px 10px; font-size: 12px; color: var(--vscode-descriptionForeground, #8f8f8f); }
 .ab-pdf__toc-list { list-style: none; margin: 0; padding: 0; }
 .ab-pdf__toc-item { margin: 0; }
 .ab-pdf__toc-row { display: flex; align-items: center; min-height: 24px; }
@@ -556,18 +1106,11 @@ const STYLES = `
   border-radius: 4px;
 }
 .ab-pdf__toc-label:hover { background: var(--list-hoverBackground, rgba(128,128,128,0.2)); }
-.ab-pdf__toc-open-btn {
-  position: absolute;
-  top: 8px; left: 8px;
-  z-index: 10;
-  padding: 4px 10px;
-  background: var(--button-secondaryBackground, rgba(128,128,128,0.15));
-  color: inherit;
-  border: 1px solid var(--panel-border, var(--vscode-panel-border, rgba(128,128,128,0.2)));
-  border-radius: 6px;
-  font-size: 12px; cursor: pointer;
+.ab-pdf__surface {
+  /* 内容承载 + CSS zoom 缩放 (与 docx .zoom-surface 同款: 布局盒缩放, 滚动条正确) */
+  min-height: 100%;
+  padding: 0 0 8px;
 }
-.ab-pdf__toc-open-btn:hover { background: var(--button-secondaryHoverBackground, rgba(128,128,128,0.3)); }
 .ab-pdf__viewerContainer {
   flex: 1; min-height: 0;
   position: relative;
@@ -601,7 +1144,7 @@ const STYLES = `
   margin: auto;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 14px;
-  color: var(--descriptionForeground, var(--vscode-descriptionForeground, #9ca3af)); font-size: 13px;
+  color: var(--vscode-descriptionForeground, #8f8f8f); font-size: 13px;
   background: var(--editor-background, var(--vscode-editor-background));
   z-index: 5;
 }
@@ -610,85 +1153,6 @@ const STYLES = `
 .ab-pdf__progressBar { height: 100%; background: var(--progressBar-background, var(--vscode-progressBar-background, #2563eb)); transition: width .12s linear; }
 @keyframes ab-pdf-indet { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
 /* ===== 缩放控件 (浮在 viewer 右下角) ===== */
-.ab-pdf__zoom {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  z-index: 30;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  background: var(--editorWidget-background, var(--vscode-editorWidget-background, #2d2d30));
-  border-radius: 10px;
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.06),
-    0 4px 12px rgba(0, 0, 0, 0.12),
-    0 16px 40px rgba(0, 0, 0, 0.20),
-    0 0 0 1px rgba(0, 0, 0, 0.04);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-.ab-pdf__zoom-btn {
-  width: 26px;
-  height: 24px;
-  padding: 0;
-  background: transparent;
-  color: var(--editor-foreground, var(--vscode-editor-foreground, #e5e7eb));
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s ease, transform 0.12s ease, color 0.12s ease;
-}
-.ab-pdf__zoom-btn:hover:not(:disabled) {
-  background: var(--button-hoverBackground, var(--vscode-button-hoverBackground, rgba(255, 255, 255, 0.1)));
-  transform: scale(1.05);
-}
-.ab-pdf__zoom-btn:active:not(:disabled) {
-  background: var(--button-activeBackground, var(--vscode-button-activeBackground, rgba(255, 255, 255, 0.18)));
-  transform: scale(0.94);
-}
-.ab-pdf__zoom-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.ab-pdf__zoom-btn--current {
-  width: 42px;
-  height: 24px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--textLink-foreground, var(--vscode-textLink-foreground, #3794ff));
-  position: relative;
-  margin: 0 2px;
-}
-.ab-pdf__zoom-btn--current::before,
-.ab-pdf__zoom-btn--current::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 1px;
-  height: 60%;
-  background: var(--panel-border, var(--vscode-panel-border, rgba(128,128,128,0.2)));
-}
-.ab-pdf__zoom-btn--current::before { left: -2px; }
-.ab-pdf__zoom-btn--current::after { right: -2px; }
-.ab-pdf__zoom-btn--current:hover:not(:disabled) {
-  background: var(--textLink-foreground, var(--vscode-textLink-foreground, #3794ff));
-  color: var(--editor-background, var(--vscode-editor-background, #1e1e1e));
-  transform: scale(1.05);
-}
-.ab-pdf__zoom-btn--current:hover:not(:disabled)::before,
-.ab-pdf__zoom-btn--current:hover:not(:disabled)::after {
-  background: transparent;
-}
 `;
 
 const el = document.getElementById('root');

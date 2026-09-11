@@ -2,7 +2,7 @@
   "name": "pdf",
   "displayName": "PDF Viewer",
   "description": "PDF 阅读器 (vscode 自定义编辑器 + pdf.js 渲染; pdfjs 静态资源随 vsix 打包, 不依赖 CDN)",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "numas",
   "engines": {
     "vscode": "^1.75.0"
