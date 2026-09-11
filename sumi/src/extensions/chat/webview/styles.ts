@@ -457,7 +457,7 @@ export const styles = `
 
 /* Composer — 官方 prompt input 卡片风: rounded-12 + hairline 边框 + 无霓虹/无金属渐变 */
 .chat__composer {
-  padding: 8px 12px 32px;
+  padding: 8px 12px 3px;
   flex-shrink: 0;
   position: relative;
 }
@@ -630,6 +630,15 @@ export const styles = `
 .chat__input-bar {
   display: flex; align-items: center; gap: 4px;
 }
+/* 会话累计统计: 输入框下方单独一行淡字 (耗时 / tokens / 费用) */
+.chat__session-stats {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px;
+  padding: 10px 4px 0;
+  font-size: 11px; line-height: 1.4; color: var(--ai-fg-muted);
+  user-select: none;
+}
+.chat__session-stats-item { white-space: nowrap; }
+.chat__session-stats-item:first-child { color: var(--ai-fg-muted); font-weight: 500; }
 .chat__select { position: relative; min-width: 0; flex: 0 1 auto; }
 .chat__bar-spacer { flex: 1; }
 /* 设置 popover: 输入框底部齿轮 → 菜单 (重新加载实例) */

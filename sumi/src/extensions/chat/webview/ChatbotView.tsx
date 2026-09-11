@@ -25,6 +25,7 @@ import {
   aiRevertMessage,
   isAiReady,
   opencodeFetch,
+  aiGetSessionInfo,
 } from '@/extensions/chat/commands/api';
 import { modelPrefs } from '@/extensions/chat/commands/modelPrefs';
 import { getWorkspace, subscribeWorkspace } from '@/infra/url';
@@ -36,7 +37,8 @@ import { ModelPicker } from './parts/ModelPicker';
 
 import {
   Row, HIDDEN_AGENTS, AGENT_ICONS, AGENT_DESC, CLIENT_COMMANDS,
-  extractText, formatDuration, bytesToBase64,
+  extractText, formatDuration, formatDurationHMS, formatTokens, formatCost, bytesToBase64,
+  sumMessagesStats, type SessionStats,
   getQuestionStore, subscribeQuestionChange, setQuestion, clearQuestion,
 } from './helpers';
 import { registerChatPanelApi, contextItemKey, formatContextNote, type ChatContextItem, type AddContextResult } from '../commands/chatApi';
@@ -177,6 +179,8 @@ export const ChatbotView: React.FC = () => {
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentProvider, setCurrentProvider] = useState<string>('');
   const [currentTitle, setCurrentTitle] = useState<string>('');
+  /** 当前会话累计统计 (会话列表 / session.updated 事件回填): { cost, tokens, durationMs } */
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [showAgents, setShowAgents] = useState(false);
   const [agentQuery, setAgentQuery] = useState('');
   const [agentActiveIndex, setAgentActiveIndex] = useState(0);
@@ -535,6 +539,8 @@ export const ChatbotView: React.FC = () => {
         providerID: m.info?.providerID || undefined,
         agent: m.info?.agent || undefined,
         mode: m.info?.mode || undefined,
+        tokens: m.info?.tokens || undefined,
+        cost: m.info?.cost,
       }));
       setRows(rs);
     } catch (e: any) {
@@ -555,9 +561,16 @@ export const ChatbotView: React.FC = () => {
   }, [client, setApiError]);
 
   useEffect(() => {
-    if (sessionID) loadMessages(sessionID);
+    if (sessionID) {
+      loadMessages(sessionID);
+    }
     else setRows([]);
   }, [sessionID, loadMessages]);
+
+  // 会话累计统计: 由当前 rows 逐条求和 (cost/tokens/耗时); rows 随流式/加载实时变化
+  useEffect(() => {
+    setSessionStats(rows.length ? sumMessagesStats(rows) : null);
+  }, [rows]);
 
   // 启动恢复: 默认加载当前 workdir 下的最新会话 (按 time.updated 倒序, 取首条非空草稿)
   // 规则:
@@ -662,12 +675,12 @@ export const ChatbotView: React.FC = () => {
     // 订阅前先对账一次
     void refreshSessionStatuses();
     let stopped = false;
-    const upsertRow = (id: string, role: Row['role'], parts: any[], time?: { created?: number; completed?: number }) => {
+    const upsertRow = (id: string, role: Row['role'], parts: any[], time?: { created?: number; completed?: number }, meta?: { modelID?: string; providerID?: string; agent?: string; mode?: string; tokens?: Row['tokens']; cost?: number }) => {
       setRows((prev) => {
         const idx = prev.findIndex((r) => r.id === id);
-        if (idx < 0) return [...prev, { id, role, parts, time }];
+        if (idx < 0) return [...prev, { id, role, parts, time, ...meta }];
         const next = [...prev];
-        next[idx] = { ...next[idx], parts, ...(time ? { time } : {}) };
+        next[idx] = { ...next[idx], parts, ...(time ? { time } : {}), ...(meta ? meta : {}) };
         return next;
       });
     };
@@ -853,7 +866,14 @@ export const ChatbotView: React.FC = () => {
                   return prev;
                 });
               } else if (info.parts?.length) {
-                upsertRow(info.id, info.role, info.parts, info.time);
+                upsertRow(info.id, info.role, info.parts, info.time, {
+                  modelID: info.modelID,
+                  providerID: info.providerID,
+                  agent: info.agent,
+                  mode: info.mode,
+                  tokens: info.tokens,
+                  cost: info.cost,
+                });
               }
               break;
             }
@@ -2446,6 +2466,18 @@ export const ChatbotView: React.FC = () => {
               )}
             </div>
           </div>
+          )}
+          {sessionStats && (
+            <div className="chat__session-stats" title={`输入 ${sessionStats.input.toLocaleString()} / 输出 ${sessionStats.output.toLocaleString()} / 推理 ${sessionStats.reasoning.toLocaleString()} / 缓存读 ${sessionStats.cacheRead.toLocaleString()} tokens`}>
+              <span className="chat__session-stats-item">消耗</span>
+              {sessionStats.durationMs > 0 && (
+                <span className="chat__session-stats-item">{formatDurationHMS(sessionStats.durationMs)}</span>
+              )}
+              {sessionStats.input + sessionStats.output + sessionStats.reasoning > 0 && (
+                <span className="chat__session-stats-item">{formatTokens({ input: sessionStats.input, output: sessionStats.output, reasoning: sessionStats.reasoning })}</span>
+              )}
+              {formatCost(sessionStats.cost) && <span className="chat__session-stats-item">{formatCost(sessionStats.cost)}</span>}
+            </div>
           )}
         </div>
       )}

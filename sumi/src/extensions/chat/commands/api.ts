@@ -76,8 +76,7 @@ export async function aiCreateSession(title?: string): Promise<string> {
 
 /** 当前实例工作目录 — client.path.get() → directory (server 启动 cwd) */
 export async function aiGetCwd(): Promise<string> {
-  await waitForAiReady();
-  const client = getAiClient()!;
+  await waitForAiReady();  const client = getAiClient()!;
   const { data } = await (client as any).path.get();
   return typeof data?.directory === 'string' ? data.directory : '';
 }
@@ -121,6 +120,19 @@ export async function aiListAllSessions(): Promise<any[]> {
     : (Array.isArray(r?.data) ? r.data
     : (Array.isArray(r?.data?.data) ? r.data.data : []));
   return Array.isArray(list) ? list : [];
+}
+
+/** 单个会话信息 (含 cost / tokens / time) — GET /session/<id>.
+ *  会话累计统计输入框下方展示用; 会话刚建/无数据时可能 404, 调用方要容错. */
+export async function aiGetSessionInfo(sessionID: string): Promise<any | null> {
+  await waitForAiReady();
+  const client = getAiClient();
+  if (!client) return null;
+  try {
+    const r = await (client as any).session.get(sessionID);
+    const info = r?.data ?? r ?? null;
+    return info || null;
+  } catch { return null; }
 }
 
 /** 待回答提问 (跨会话, 含子代理会话) — GET /question.

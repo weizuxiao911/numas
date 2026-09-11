@@ -29,7 +29,63 @@ export interface Row {
   /** 专家/模式名 (assistant 消息 info.agent / info.mode) */
   agent?: string;
   mode?: string;
+  /** 该消息消耗 tokens (输入/输出/推理/缓存读) — 服务端每条 assistant 消息累计 */
+  tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
+  /** 该消息费用 (USD, 服务端按模型定价计算) */
+  cost?: number;
 }
+
+export function formatTokens(tokens?: Row['tokens']): string {
+  const t = tokens || {};
+  const input = t.input || 0;
+  const output = t.output || 0;
+  const reasoning = t.reasoning || 0;
+  const total = input + output + reasoning;
+  if (!total) return '';
+  const parts = [`${total.toLocaleString()} tok`];
+  return parts.join(' · ');
+}
+
+export function formatCost(cost?: number): string {
+  if (!cost || !Number.isFinite(cost) || cost <= 0) return '';
+  if (cost < 0.01) return `$${(cost).toFixed(4)}`;
+  return `$${(cost).toFixed(2)}`;
+}
+
+/** 会话累计统计 — 由会话内所有消息逐条求和得到 (非 session 级墙钟时间/累计字段) */
+export interface SessionStats {
+  cost: number;
+  input: number;
+  output: number;
+  reasoning: number;
+  cacheRead: number;
+  /** 会话内所有对话消息的时间消耗累计 (每条 time.completed - time.created 求和) */
+  durationMs: number;
+}
+
+/** 消息数组 → 逐条统计求和: { cost, tokens 各项, durationMs }.
+ *  每条取 m.info.tokens/cost/time; 单条缺失/非法字段跳过, 不影响其它条. */
+export function sumMessagesStats(msgs: any[]): SessionStats {
+  const out: SessionStats = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, durationMs: 0 };
+  for (const m of msgs || []) {
+    const info = m?.info || m;
+    if (!info) continue;
+    const t = info.tokens || {};
+    const cache = t.cache || {};
+    if (typeof info.cost === 'number' && Number.isFinite(info.cost)) out.cost += info.cost;
+    out.input += t.input || 0;
+    out.output += t.output || 0;
+    out.reasoning += t.reasoning || 0;
+    out.cacheRead += cache.read || 0;
+    const time = info.time || {};
+    if (time.created && time.completed && time.completed >= time.created) {
+      out.durationMs += time.completed - time.created;
+    }
+  }
+  return out;
+}
+
+
 
 export const HIDDEN_AGENTS = new Set(['compaction', 'title', 'summary']);
 
@@ -82,6 +138,19 @@ export function formatDuration(start?: number, end?: number): string {
   if (ms < 1000) return `${ms}ms`;
   const sec = Math.round(ms / 100) / 10;
   return `${sec}秒`;
+}
+
+/** 耗时 → "x时x分x秒": 时/分只在达到时显示, 秒恒显示 (会话累计统计用) */
+export function formatDurationHMS(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}时`);
+  if (m > 0) parts.push(`${m}分`);
+  parts.push(`${s}秒`);
+  return parts.join('');
 }
 
 const questionStore = new Map<string, { requestID: string; questions: any[] }>();

@@ -2,7 +2,7 @@ import React from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { IMessageService } from '@opensumi/ide-overlay';
 import { PartRenderer } from '../parts/PartRenderer';
-import { getQuestionStore, extractText, formatDuration, type Row } from '../helpers';
+import { getQuestionStore, extractText, formatDuration, formatTokens, formatCost, type Row } from '../helpers';
 
 /**
  * MessageRow — 按官方 (session-ui message-part) 直接重写:
@@ -181,7 +181,6 @@ const MessageRowInner: React.FC<{
   const duration = formatDuration(start, end);
   const textParts = row.parts?.filter((p: any) => p?.type === 'text') || [];
   const fullText = textParts.map((p: any) => p.text).join('\n');
-  const hasText = textParts.some((p: any) => String(p.text || '').trim());
   const hasTool = (row.parts || []).some((p: any) => p?.type === 'tool');
   const hasContent = (row.parts || []).some((p: any) =>
     (p?.type === 'text' && String(p.text || '').trim()) ||
@@ -193,7 +192,9 @@ const MessageRowInner: React.FC<{
   const showWaiting = !hasContent && (streaming || busy);
   const agentLabel = cap(row.mode || row.agent || '');
   const modelName = (resolveModelName ? resolveModelName(modelID, row.providerID) : '') || modelID;
-  const metaText = [agentLabel, modelName, duration].filter(Boolean).join(' · ');
+  const tokenLabel = formatTokens(row.tokens);
+  const costLabel = formatCost(row.cost);
+  const metaText = [agentLabel, modelName, duration, tokenLabel, costLabel].filter(Boolean).join(' · ');
 
   return (
     <div className="oc-msg is-assistant">
@@ -221,7 +222,7 @@ const MessageRowInner: React.FC<{
             />
           );
         })}
-        {!streaming && hasContent && hasText && (
+        {!streaming && hasContent && (
           <div className="oc-msg__meta">
             <div className="oc-msg__meta-inner">
               <button
