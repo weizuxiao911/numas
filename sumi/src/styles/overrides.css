@@ -207,6 +207,8 @@ body.vs-light,
 body.vs,
 .codeblitz-root.codeblitz-light {
   --editor-background: #ffffff;
+  /* 正文文字: #333333 → #1F2329 (对比度 ~14.9:1, 笔画变实; 次要文字 descriptionForeground 保持) */
+  --editor-foreground: #1f2329;
   --app-panel-bg: #ffffff;
   --app-panel-fg: #1f2328;
   --app-border: rgba(0, 0, 0, 0.1);
@@ -233,15 +235,37 @@ body.vs,
   --sideBar-background: #ffffff;
   --activityBar-background: #ffffff;
 
-  /* Solo 布局 (亮主题): sidebar/aside 偏灰, 中间主区保持白 */
+  /* Solo 布局 (亮主题): sidebar 底 #F4F5F6 (与白底拉开 10-11 阶), 中间主区保持白 */
   .app-solo__sidebar {
-    background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
+    background: #f4f5f6 !important;
   }
   .app-solo__aside {
     background: color-mix(in srgb, var(--editor-background, #ffffff) 97%, var(--editor-foreground, #1f2328)) !important;
   }
   .app-solo__main {
     background: var(--editor-background, #ffffff) !important;
+  }
+  /* 分隔线: sidebar 右侧 1px #EBEBEB (resizer 主线) */
+  .app-solo__resizer::before {
+    background: #ebebeb;
+  }
+  /* 会话列表文字: 正文 #1F2329 / 强调(当前会话) #0A0A0A; 次要文字 (时间等) 保持 */
+  .app-solo__sidebar .app-sessions__item,
+  .app-solo__sidebar .app-sessions__item-name {
+    color: #1f2329;
+  }
+  .app-solo__sidebar .app-sessions__item.is-active,
+  .app-solo__sidebar .app-sessions__item.is-active .app-sessions__item-name {
+    color: #0a0a0a;
+  }
+  /* 新建会话按钮: 文字 #1F2329, 底 #E8E9EB */
+  .app-solo__sidebar .app-sessions__new {
+    background: #e8e9eb;
+    color: #1f2329;
+  }
+  .app-solo__sidebar .app-sessions__new:hover {
+    background: #e1e2e5;
+    color: #1f2329;
   }
 }
 
