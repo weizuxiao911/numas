@@ -54,6 +54,10 @@ export interface AnnotateLayerProps {
   onRunCode: (id: string) => void;
   /** 页面骨架重建计数 (rebuild 后蒙层需重新挂载) */
   renderTick?: number;
+  /** 页面总数 (0 → N 变化表示骨架就绪; 标注先于骨架加载时需重挂) */
+  pageCount?: number;
+  /** 骨架构建完成计数 (rebuild 末尾递增; 子 effect 先于父 rebuild 执行, 靠它触发重挂) */
+  pagesBuilt?: number;
 }
 
 interface PopoverState {
@@ -64,7 +68,7 @@ interface PopoverState {
 const MIN_SIZE = 5;
 
 export const AnnotateLayer: React.FC<AnnotateLayerProps> = (props) => {
-  const { visible, annotations, getPageEl, scrollHost, renderTick } = props;
+  const { visible, annotations, getPageEl, scrollHost, renderTick, pageCount, pagesBuilt } = props;
   const rootRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [popover, setPopover] = useState<PopoverState | null>(null);
@@ -208,25 +212,33 @@ export const AnnotateLayer: React.FC<AnnotateLayerProps> = (props) => {
       mark.title = anno.text || '';
       mark.style.cssText = `left:${anno.rect.x * 100}%;top:${anno.rect.y * 100}%;width:${anno.rect.w * 100}%;height:${anno.rect.h * 100}%;background:${anno.color};`;
 
-      const actions: Array<{ label: string; busy?: boolean; onClick: () => void }> = [];
-      if (anno.animation?.status === 'ready') actions.push({ label: '动画演示', onClick: () => props.onPlayAnimation(anno.id) });
-      else if (anno.animation?.status === 'generating') actions.push({ label: '动画生成中…', busy: true, onClick: () => {} });
-      if (anno.code?.status === 'ready') actions.push({ label: '运行代码', onClick: () => props.onRunCode(anno.id) });
-      else if (anno.code?.status === 'generating') actions.push({ label: '代码生成中…', busy: true, onClick: () => {} });
-      actions.push({ label: '✕', onClick: () => props.onDelete(anno.id) });
+      const actions: Array<{ label: string; icon?: string; busy?: boolean; onClick: () => void }> = [];
+      if (anno.animation?.status === 'ready') actions.push({ label: '动画演示', icon: 'play', onClick: () => props.onPlayAnimation(anno.id) });
+      else if (anno.animation?.status === 'generating') actions.push({ label: '动画生成中', busy: true, onClick: () => {} });
+      if (anno.code?.status === 'ready') actions.push({ label: '运行代码', icon: 'code', onClick: () => props.onRunCode(anno.id) });
+      else if (anno.code?.status === 'generating') actions.push({ label: '代码生成中', busy: true, onClick: () => {} });
 
-      if (actions.length > 1) {
+      if (actions.length > 0) {
         const bar = doc.createElement('div');
         bar.className = 'pdf-anno-actions';
         for (const a of actions) {
           const btn = doc.createElement('button');
           btn.type = 'button';
           btn.className = a.busy ? 'pdf-anno-action is-busy' : 'pdf-anno-action';
-          btn.textContent = a.label;
+          if (a.icon) {
+            const ic = doc.createElement('span');
+            ic.className = `codicon codicon-${a.icon}`;
+            btn.appendChild(ic);
+          }
+          const tx = doc.createElement('span');
+          tx.textContent = a.label;
+          btn.appendChild(tx);
           btn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (!a.busy) a.onClick();
           });
+          // 交互按钮不得触发标注的 dblclick (popover 编辑态)
+          btn.addEventListener('dblclick', (e) => e.stopPropagation());
           bar.appendChild(btn);
         }
         mark.appendChild(bar);
@@ -239,7 +251,7 @@ export const AnnotateLayer: React.FC<AnnotateLayerProps> = (props) => {
       pageEl.appendChild(mark);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [annotations, visible, renderTick]);
+  }, [annotations, visible, renderTick, pageCount, pagesBuilt]);
 
   return (
     <div ref={rootRef} className="pdf-anno-layer" style={{ pointerEvents: 'none' }}>
@@ -311,31 +323,47 @@ export const ANNO_STYLES = `
   box-shadow: inset 0 0 0 1.5px var(--vscode-charts-blue, #3794ff);
 }
 .pdf-anno-actions {
+  /* 交互工具条: 标注区域内右下角, 深色 widget 风格, 淡入出现 */
   position: absolute;
-  right: 2px;
-  bottom: 2px;
-  display: none;
+  right: 3px;
+  bottom: 3px;
+  z-index: 6;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  height: 24px;
+  padding: 0 2px;
   white-space: nowrap;
+  background: var(--vscode-editorWidget-background, #252526);
+  border: 1px solid var(--vscode-editorWidget-border, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  pointer-events: none;
 }
 .pdf-anno-mark:hover .pdf-anno-actions {
-  display: inline-flex;
+  opacity: 1;
+  pointer-events: auto;
 }
 .pdf-anno-action {
-  height: 20px;
-  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 19px;
+  padding: 0 6px;
   font-size: 11px;
   font-family: inherit;
-  color: var(--vscode-editor-foreground, #1f2329);
-  background: #ffffff;
-  border: 1px solid rgba(17,24,39,0.14);
-  border-radius: 6px;
-  box-shadow: 0 1px 2px rgba(17,24,39,0.08);
+  color: var(--vscode-editorWidget-foreground, #cccccc);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
   cursor: pointer;
 }
-.pdf-anno-action:hover { background: color-mix(in srgb, var(--vscode-charts-blue, #3794ff) 12%, #fff); }
+.pdf-anno-action .codicon { font-size: 13px; line-height: 1; }
+.pdf-anno-action:hover { background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.08)); }
 .pdf-anno-action.is-busy { opacity: 0.6; cursor: default; }
+.pdf-anno-action.is-busy:hover { background: transparent; }
 .pdf-anno-dragbox {
   position: fixed;
   z-index: 10045;
