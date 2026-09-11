@@ -19,7 +19,7 @@
 #   docker run --rm -p 4096:4096 numas:latest
 #   docker run --rm -p 4096:4096 -v $(pwd):/home/community numas:latest
 #   docker run --rm -p 9000:9000 -e PORT=9000 numas:latest
-#   docker run --rm -p 4096:4096 -e REGISTRY=/extensions numas:latest   (覆盖回内置市场)
+#   docker run --rm -p 4096:4096 -e REGISTRY=https://host:7790 numas:latest   (外部自建市场)
 #   docker run --rm -p 4096:4096 -e WEB_UI=/ui numas:latest
 #   docker run --rm -p 4096:4096 -e SUBCMD=serve numas:latest
 

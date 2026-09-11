@@ -152,7 +152,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
 # -e PORT=8080 替换默认 4096 — entrypoint 读值规则: 短名优先, 长名兜底, 再默认)
 ENV NUMAS_HOST=0.0.0.0
 ENV NUMAS_PORT=4096
-ENV NUMAS_REGISTRY=https://gateway.cloudlab.top/api/v2/agent-registry/plugins
+ENV NUMAS_REGISTRY=https://gateway.cloudlab.top/api/v2/agent-registry/pluginshttps://gateway.cloudlab.top/api/v2/agent-registry/plugins
 
 EXPOSE 4096
 
