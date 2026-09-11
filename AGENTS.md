@@ -874,3 +874,22 @@ AI **仍需 `question`**:
   - 服务端 `ui.ts` 注入 `registryBaseUrls` 数组 (内置 `/extensions` 恒有 + `--registry` 外部追加去重), 前端多源合并按 name 去重 (内置优先)
 - **排查方法**: ① 区分「metadata 拉不到」vs「metadata 有但文件 404」: 看 network 里 `metadata.json` 404 还是 `<id>/file/...` 404; ② 网关端点探测顺序: `curl <base>/plugins/metadata` (无 /plugins 的 base) 或 `<base>/metadata` (带 /plugins 的 base); ③ 来源路由 bug 的指纹: 内置扩展的 extension.js 请求指向外部网关 = sourceByExtId 查不到 → 查 uri 首段 id 与 map key 是否一致 (name ≠ versioned id).
 - **注**: `dev.js` 默认不再传 `--extensions-dir` (需 `NUMAS_EXTENSIONS_DIR` 显式指定); Docker 镜像默认 registry = `https://gateway.cloudlab.top/api/v2/agent-registry/plugins`.
+
+#### 53. vsix 拓展 webview 资源不能手拼 registryBase 路径: 网关/内置两种市场形态不同, 必须用 asWebviewUri
+
+- **现象**: pdf 拓展在网关市场下白屏/显示 "webview bundle 加载失败" 或 pdf.js "无法加载: Invalid Root reference."; 本地内置市场 (dev) 却正常 — 典型「本地好, 部署服务器坏」.
+- **根因**: pdf 拓展 shell HTML 手拼 `${registryBase}/${VSIX_ID}/dist/webview.js` + `${registryBase}/${VSIX_ID}/pdfjs/...` — 这只匹配**内置市场**路径形态 (`/extensions/<id>/<file>`); 网关形态是 `<base>/plugins/<id>/file/<file>` (多一段 `/file`), 手拼必 404 → webview bundle / pdf.js / worker 全加载失败.
+  - 实测: `.../plugins/numas.pdf-0.1.0/dist/webview.js` → 404; `.../plugins/numas.pdf-0.1.0/file/dist/webview.js` → 200.
+- **解决方案 (标准 vscode 姿势, docx/html 等第三方拓展同款)**:
+  ```ts
+  webviewPanel.webview.options = {
+    enableScripts: true, retainContextWhenHidden: true,
+    localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'dist'), ...],
+  }
+  const jsUri = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview.js')).toString()
+  const pdfjsBase = webviewPanel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'pdfjs')).toString().replace(/\/+$/, '')
+  // shell: <script src="${jsUri}"> + window.__PDF_CFG__.pdfjsBase = pdfjsBase
+  ```
+  `asWebviewUri` 走 codeblitz 静态资源解析 (sumi `resolveStaticResource`), 自动适配两种市场路径 (内置无 authority → `<base>/<id>/...`; 网关带 authority → `<host>/<path>/file/...`), 不依赖 `__APP_CONFIG__` (ext host 拿不到).
+- **排查方法**: ① 网络面板看 webview bundle/pdfjs 请求 URL 与 status: 手拼的 URL 与 metadata.uri 形态不一致 = 此坑; ② 对照第三方拓展 (show-docx 等) 的 `asWebviewUri` 用法; ③ 若 webview bundle 正常但 pdf.js 报 "Invalid Root reference" 且 pdfinfo 也报语法错 = 文件本身损坏, 非拓展 bug.
+- **附带**: `extensions/scripts/copy-vsix-to-home.js` (打包后 cp 到 `~/.numas/extensions`) 已删除, 打包只产出 `registry/vsix/*.vsix`; 运行时扩展来源走 `--extensions-dir` / `--registry` 配置.
