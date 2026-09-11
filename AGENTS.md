@@ -340,6 +340,7 @@ AI **仍需 `question`**:
 - **52** vsix 多市场合并 (内置 /extensions + 外部 gateway): 契约差异 + 来源路由
 - **53** vsix webview 资源不能手拼 registryBase, 必须用 asWebviewUri
 - **63** 网关市场下 vsix webview 子资源被 CSP 拦 (cspSource 带 path 不匹配)
+- **69** 同版本 vsix 重打包后浏览器仍加载旧 webview → 修复不生效
 - **64** React createPortal 进命令式 DOM 容器 → 蒙层不渲染 (静默)
 - **65** 弹层用释放点固定坐标 → 滚动后不跟随目标元素
 - **66** 滚动内容上的覆盖层用视口坐标 → 滚动漂移
