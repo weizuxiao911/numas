@@ -44,8 +44,8 @@ v() {
 HOST=$(v NUMAS_HOST HOST 0.0.0.0)
 PORT=$(v NUMAS_PORT PORT 4096)
 CORS=$(v NUMAS_CORS CORS '*')
-# 扩展市场默认同源内置控制器 /extensions (opencode fork 扫 --extensions-dir);
-# 外部自建市场可 -e NUMAS_REGISTRY=https://host:port 覆盖
+# 扩展市场默认走网关 agent-registry (vsix + 插件元数据);
+# 外部自建市场/内置市场可 -e NUMAS_REGISTRY=... 覆盖 (内置市场传 /extensions)
 REGISTRY=$(v NUMAS_REGISTRY REGISTRY https://gateway.cloudlab.top/api/v2/agent-registry/plugins)
 # 默认指向镜像内拷贝的 sumi 静态产物 (替换 UI = 本地重 build sumi + 重构建镜像)
 WEB_UI=$(v NUMAS_WEB_UI WEB_UI /home/.numas/ui)
