@@ -148,10 +148,13 @@ export const ActionBar: React.FC = () => {
   const layout = useInjectable<ILayoutService>(LayoutToken);
   const commandService = useInjectable<CommandService>(CommandService);
 
-  // sidebar 折叠时才显示 mode-switch + expand (展开态它们在 sidebar 顶部)
-  const [mirrorVisible, setMirrorVisible] = useState<boolean>(() => layout.state.sidebar.collapsed);
+  // sidebar 折叠时才显示 mode-switch + expand (展开态它们在 sidebar 顶部).
+  // 仅 SOLO 模式镜像: IDE 顶栏同时渲染 SideTopbar (SidebarAction 槽, 自带 mode-switch),
+  // 若这里也渲染会重复; 且 SOLO 的 sidebar 折叠态与 IDE 左栏显隐无关.
+  const isSoloMode = (): boolean => getAppMode() === 'solo';
+  const [mirrorVisible, setMirrorVisible] = useState<boolean>(() => isSoloMode() && layout.state.sidebar.collapsed);
   useEffect(() => {
-    return layout.subscribe((s) => setMirrorVisible(s.sidebar.collapsed));
+    return layout.subscribe((s) => setMirrorVisible(isSoloMode() && s.sidebar.collapsed));
   }, [layout]);
 
   const [project, setProject] = useState<string>(() => state.getWorkdir());
