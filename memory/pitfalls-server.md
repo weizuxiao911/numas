@@ -236,3 +236,10 @@
 - **复现**: 任意 PDF 打开 → console 报 worker blob 加载失败; 对比 `curl -I` 看 CSP header.
 - **解决方案**: CSP `script-src` 显式加 `blob:` (`opencode/packages/opencode/src/server/shared/ui.ts` 的 `csp()`); worker-src 同理要列 `blob:`.
 - **排查方法**: 看到 `blob:` 资源被 CSP 拦 (console 的 CSP violation), 检查对应指令有没有显式列 blob: — 不要以为 `*` 包含它.
+
+#### 68. `/api/fs/write` 的 content 是 base64 而非明文 → 写入文件乱码
+
+- **问题描述**: webview 调 `POST /api/fs/write` 写 `.anno` JSON, body 传明文 `content`, 服务端 204 成功但磁盘文件是乱码二进制 (明文被按 base64 解码), 重新读取解析失败 → 标注「保存了但重载丢失」.
+- **根因**: 该 API 契约是 `{ path, content: <base64> }` (见 `sumi/src/service/filesystem/filesystem.service.ts` 的 `bytesToBase64(content)`), 不是明文. 传明文时服务端 `Buffer.from(content, 'base64')` 把可见字符解成垃圾字节, 无任何报错.
+- **解决方案**: 客户端写文本文件必须 **UTF-8 → base64** 后传: `TextEncoder` 编码 → 分块 `String.fromCharCode` 拼接 (避免超长参数溢出) → `btoa`. 读侧 `/api/fs/read` 返回裸字节 (无 base64), 直接 `res.json()`/arrayBuffer 均可.
+- **排查方法**: 「API 204 成功但文件内容乱码」→ 对照同仓库既有调用方 (sumi filesystem.service) 确认 body 编码契约, 别只看 HTTP 状态码.

@@ -304,6 +304,7 @@ AI **仍需 `question`**:
 - **44** 切换项目后 chatbot agents/skills 仍是旧的 (需 POST /instance/reload)
 - **48** 子域端口代理 --domain-proxy (全局中间件拿不到服务 + __APP_CONFIG__ 丢字段)
 - **61** CSP 里 `*` 不匹配 `blob:` 特殊 scheme → pdf.js worker 加载失败
+- **68** `/api/fs/write` content 是 base64 而非明文 → 写入文件乱码 (204 成功无报错)
 
 **sumi 前端 / codeblitz / 布局 / chat** → `memory/pitfalls-frontend.md`
 - **19** 冷启动 left slot 折叠 / defaultPanels 失效 (fixLayout 清 currentId)
