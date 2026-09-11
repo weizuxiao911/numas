@@ -92,6 +92,32 @@ RUN apt-get update \
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
+# Python 全局依赖预装 (实验一~六依赖汇总, 用户拍板"轻量依赖 + 中科大镜像").
+#   pip.conf 写 /etc/pip.conf (全局): venv / 用户级 pip 都会读, 容器内所有 pip install
+#   默认走中科大镜像 (调研结论: 中科大最稳最快; 阿里云大包易超时 / 清华慢 / 官方失败).
+#   --break-system-packages: ubuntu 24.04 系统 python3 是 externally-managed, 不加会被
+#   PEP 668 拒绝; 装到 /usr/local/lib/python3.12/dist-packages (系统 python 可见).
+#   --no-cache-dir: 不留 wheel 缓存, 保持镜像精简.
+#   跳过 paddleocr (会拉 paddlepaddle, 镜像 +1~2GB), 需要时容器内自行安装.
+RUN printf '[global]\nindex-url = https://pypi.mirrors.ustc.edu.cn/simple\ntrusted-host = pypi.mirrors.ustc.edu.cn\ntimeout = 120\n' > /etc/pip.conf \
+  && python3 -m pip install --break-system-packages --no-cache-dir \
+       flask==3.1.3 \
+       flask-sock==0.7.0 \
+       dashscope==1.27.4 \
+       python-docx==1.2.0 \
+       cryptography==50.0.1 \
+       pillow==12.3.0 \
+       requests==2.34.2 \
+       beautifulsoup4==4.15.0 \
+       pandas==2.2.3 \
+       openpyxl==3.1.5 \
+       pyecharts==2.0.7 \
+       python-dotenv==1.2.3 \
+       qrcode==8.2 \
+       APScheduler \
+       alibabacloud_dysmsapi20170525 \
+  && python3 -c "import flask, dashscope, pandas, cryptography, pyecharts, qrcode; print('python deps ok')"
+
 # oh-my-zsh + nvm + node 22 — 运行 uid=root 但家目录统一 $HOME=/home (见上 ENV HOME).
 #   所有交互工具链都装在 /home 下, 不使用 /root:
 #     oh-my-zsh → /home/.oh-my-zsh,  nvm+node 22 → /home/.nvm,  zsh 配置 → /home/.zshrc.
