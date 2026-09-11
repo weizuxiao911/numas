@@ -345,7 +345,7 @@ export const ModelPicker: React.FC<Props> = ({
                         <span className="chat__modal-item-name">{it.title}</span>
                         {it.free && <span className="chat__modal-tag">免费</span>}
                         {active && (
-                          <svg className="chat__modal-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          <svg className="chat__modal-check" width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         )}
                       </div>
                     );

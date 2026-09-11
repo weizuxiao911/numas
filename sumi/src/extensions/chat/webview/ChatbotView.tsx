@@ -2308,7 +2308,7 @@ export const ChatbotView: React.FC = () => {
                             onKeyDown={handleAgentKeyDown}
                           />
                         </div>
-                        <div className="chat__modal-body" ref={agentBodyRef}>
+                        <div className="chat__modal-body chat__modal-body--agents" ref={agentBodyRef}>
                           {filteredAgents.length === 0 && (
                             <div className="chat__modal-empty">无匹配 agent</div>
                           )}
@@ -2333,7 +2333,7 @@ export const ChatbotView: React.FC = () => {
                                 </span>
                                 {isActive && <span className="chat__modal-tag">当前</span>}
                                 {isActive && (
-                                  <svg className="chat__modal-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ai-accent, #6366f1)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                  <svg className="chat__modal-check" width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                                 )}
                               </div>
                             );

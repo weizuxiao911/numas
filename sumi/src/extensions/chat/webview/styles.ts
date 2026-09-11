@@ -797,6 +797,9 @@ export const styles = `
 .chat__modal-body--apikey {
   padding: 8px 22px 22px;
 }
+/* Agent 角色选择: 条目之间留 4px 空隙 (两行条目 49px, 贴太紧) */
+.chat__modal-body--agents .chat__modal-item { margin-bottom: 4px; }
+.chat__modal-body--agents .chat__modal-item:last-child { margin-bottom: 0; }
 
 .chat__modal-error {
   margin: 8px 6px;
@@ -830,6 +833,8 @@ export const styles = `
 /* 分组下的模型项: 左缩进对齐分组标题的服务商文字开头 (标题 padding 14 + icon 14 + gap 6 - 项 padding 12 = 22).
    注意 width 必须改 auto: item 基础 width:100% + margin-left 会撑出横向滚动条 */
 .chat__modal-group .chat__modal-item { margin-left: 22px; width: auto; }
+/* 选中态背景: 以模型选择为准 (--ai-active); hover 用 --ai-hover (与会话历史一致).
+   agent 角色选择 / 模型选择共用此条目样式 */
 .chat__modal-item.is-active {
   background: var(--ai-active);
   color: var(--ai-fg);
@@ -896,7 +901,8 @@ export const styles = `
   background: var(--ai-success-bg);
   color: var(--ai-success);
 }
-.chat__modal-check { flex-shrink: 0; }
+/* 选中对勾: 颜色统一在类上 (模型选择/Agent 选择共用, 以模型选择为准 #3b82f6) */
+.chat__modal-check { flex-shrink: 0; stroke: #3b82f6; }
 .chat__modal-empty {
   padding: 28px 16px; text-align: center;
   color: var(--ai-fg-muted); font-size: 13px;
