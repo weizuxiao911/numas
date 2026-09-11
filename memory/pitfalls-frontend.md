@@ -235,3 +235,18 @@
   ```
   **关键**: img/video 标签无法带 `x-opencode-directory` header → 必须走 `?directory=` query (V2 workspace selector); V2 fs read 返回文件真实 mime (`image/png`) 可直接渲染.
 - **验证**: providers 含 `file`; `new Image()` 设解析后的 URL → `onload` + `naturalWidth>0`; 或 curl `?directory=` 返回 200 + `image/png`.
+
+#### 60. 中文目录下编辑区持久化失效: cwd 原始路径 vs encodeURI 后的 file:// URI 比较
+
+- **现象**: 中文/空格目录工作区, 刷新后编辑区打开的文件不恢复 (tab 全空); 英文路径工作区正常.
+- **根因**: `editor-restore` 兜底过滤 workspace 归属时 `uriStr.startsWith('file://' + cwd)` — 存储里的 uri 是 `encodeURI` 形态 (`file:///.../%E5%AE%9E%E9%AA%8C...`), cwd 是原始中文路径 → 全部误判「跨 workspace」跳过 → 不恢复.
+- **复现**: 工作区含中文目录, 打开任意文件 → 刷新 → tab 丢失; console 出现 `[editor-restore] 跳过跨 workspace 文件`.
+- **解决方案**: 比较前 `decodeURIComponent(uriStr)` (catch 保留原样) 再 startsWith; 所有「存 encodeURI / 比原始路径」的地方都要解码.
+- **排查方法**: localStorage `scoped:{cwd}:/workbench` 有 uris 但 tab 空 = 兜底被跳过; 先查 console 的跳过日志再查比较逻辑.
+
+#### 62. codeblitz webview 是双层 iframe + 内层应用会重建清 DOM: 外挂层必须挂 iframe body
+
+- **现象**: 给 PDF/docx vsix webview 加外挂蒙层: 挂 `viewer` 内被清掉; 挂顶层 document 又违反「不影响全局 UI」.
+- **根因**: codeblitz webview = 外层壳 iframe → 内层应用 iframe 两层 (递归查找才行); 内层应用重建时 `viewer.innerHTML = ''` 会清空 viewer 的所有子节点 (含外挂 layer).
+- **解决方案**: 外挂层挂**内层 iframe 的 body** (`position: fixed` 覆盖 iframe 视口, pointer-events:none + 子元素 auto); 坐标用 iframe 视口坐标 (页面 div getBoundingClientRect); 滚动/尺寸变化 rAF 节流重绘. 顶层 document 零元素.
+- **排查方法**: 外挂元素「挂上就消失」→ 查目标容器是否被框架重建 (innerHTML/appendChild 重建); 用 `iframe.contentDocument.body` 而非 viewer.

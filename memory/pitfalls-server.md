@@ -228,3 +228,11 @@
 - **坑 2 (前端配置丢失)**: 注入到 `index.html` 的 `__APP_CONFIG__.domainProxy` 被 `sumi/src/config/app.ts:buildAppConfig()` **重建丢弃** (只列已知字段) → 前端读不到. 修法: `AppConfig` 加 `domainProxy?: string` + `buildAppConfig` 显式透传.
 - **改动文件**: `opencode/packages/opencode/src/ports/ports-domain-proxy.ts` (Host 解析 + auth + isKnown + HTTP/WS 反代), `ports-route.ts` (factory + addGlobalMiddleware), `cli/network.ts` (--domain-proxy), `server/server.ts` + `routes/instance/httpapi/server.ts` (参数透传), `server/shared/ui.ts` (注入 __APP_CONFIG__), `sumi/src/config/app.ts` + `service/ports/ports.service.ts:proxyUrl` + `extensions/browser/browser.service.ts:normalizeUrl/deproxyUrl` (子域形态互转).
 - **验证方法**: ① `curl -H "Host: 8123.localhost" http://127.0.0.1:24099/` → 命中代理 (200 + 目标内容); 未知端口 → 404 `not known`; 普通 Host → 仍走 UI; ② `curl http://127.0.0.1:24099/ | grep __APP_CONFIG__` 看注入; ③ 前端 DI 探针: React fiber (`document.querySelector('codeblitz-root')['__reactFiber$…']` 向上找 `memoizedProps.app.injector`) → `inj.get(PortsServiceImpl token).proxyUrl(8123)` 应返 `http://8123.localhost/`.
+
+#### 61. CSP 里 `*` 不匹配 `blob:`/`data:` 特殊 scheme → pdf.js fake worker 加载失败
+
+- **现象**: PDF 阅读器报 `无法加载: Setting up fake worker failed: Failed to fetch dynamically imported module: blob:...`; PDF 渲染不出来.
+- **根因**: opencode 服务端 CSP header `script-src * 'unsafe-inline' ...` — CSP 规范里 `*` **不匹配** `blob:`/`data:`/`filesystem:` 特殊 scheme, 必须显式列出. pdf.js 的 fake worker 回退路径在主线程 `import(blob:)` → 被拦.
+- **复现**: 任意 PDF 打开 → console 报 worker blob 加载失败; 对比 `curl -I` 看 CSP header.
+- **解决方案**: CSP `script-src` 显式加 `blob:` (`opencode/packages/opencode/src/server/shared/ui.ts` 的 `csp()`); worker-src 同理要列 `blob:`.
+- **排查方法**: 看到 `blob:` 资源被 CSP 拦 (console 的 CSP violation), 检查对应指令有没有显式列 blob: — 不要以为 `*` 包含它.

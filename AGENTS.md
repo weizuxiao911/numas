@@ -303,6 +303,7 @@ AI **仍需 `question`**:
 - **41** UI rebuild 后浏览器永远拿到旧页面 (gzip 缓存 key 字节数误命中)
 - **44** 切换项目后 chatbot agents/skills 仍是旧的 (需 POST /instance/reload)
 - **48** 子域端口代理 --domain-proxy (全局中间件拿不到服务 + __APP_CONFIG__ 丢字段)
+- **61** CSP 里 `*` 不匹配 `blob:` 特殊 scheme → pdf.js worker 加载失败
 
 **sumi 前端 / codeblitz / 布局 / chat** → `memory/pitfalls-frontend.md`
 - **19** 冷启动 left slot 折叠 / defaultPanels 失效 (fixLayout 清 currentId)
@@ -327,6 +328,8 @@ AI **仍需 `question`**:
 - **55** hover 按钮 display 切换抖动 + 玻璃弹层透明度过低
 - **56** width:100% 元素加 margin-left 撑出横向滚动条
 - **57** 图片/视频无法预览: StaticResourceService 缺 file provider
+- **60** 中文目录下编辑区持久化失效 (cwd vs encodeURI URI 比较)
+- **62** codeblitz webview 双层 iframe + 内层重建清 DOM: 外挂层挂 iframe body
 
 **vsix / 扩展 / 浏览器 / pdf / registry** → `memory/pitfalls-extension.md`
 - **10** 内置浏览器默认 <embed> 渲染 PDF 不可靠 (依赖 Chrome PDF 插件)
@@ -335,6 +338,7 @@ AI **仍需 `question`**:
 - **49** 大 PDF (30MB+) webview 自己 fetch 裸字节
 - **52** vsix 多市场合并 (内置 /extensions + 外部 gateway): 契约差异 + 来源路由
 - **53** vsix webview 资源不能手拼 registryBase, 必须用 asWebviewUri
+- **63** 网关市场下 vsix webview 子资源被 CSP 拦 (cspSource 带 path 不匹配)
 
 **git / 协作 / 工作流 / 杂项** → `memory/pitfalls-workflow.md`
 - **4** AI 操作造成的 stray 文件污染项目根

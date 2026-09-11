@@ -64,3 +64,11 @@
   `asWebviewUri` 走 codeblitz 静态资源解析 (sumi `resolveStaticResource`), 自动适配两种市场路径 (内置无 authority → `<base>/<id>/...`; 网关带 authority → `<host>/<path>/file/...`), 不依赖 `__APP_CONFIG__` (ext host 拿不到).
 - **排查方法**: ① 网络面板看 webview bundle/pdfjs 请求 URL 与 status: 手拼的 URL 与 metadata.uri 形态不一致 = 此坑; ② 对照第三方拓展 (show-docx 等) 的 `asWebviewUri` 用法; ③ 若 webview bundle 正常但 pdf.js 报 "Invalid Root reference" 且 pdfinfo 也报语法错 = 文件本身损坏, 非拓展 bug.
 - **附带**: `extensions/scripts/copy-vsix-to-home.js` (打包后 cp 到 `~/.numas/extensions`) 已删除, 打包只产出 `registry/vsix/*.vsix`; 运行时扩展来源走 `--extensions-dir` / `--registry` 配置.
+
+#### 63. 网关市场下 vsix webview 子资源被 CSP 拦: cspSource 带 path 不匹配
+
+- **现象**: docx 阅读器在网关市场下裸 HTML 全露 (hidden 面板全显示、工具栏透明); 本地内置市场正常.
+- **根因**: 网关的 `webview.cspSource` 是带 path 的源 (`https://gateway.cloudlab.top/api/v2/agent-registry/plugins`), 浏览器按路径匹配失败 → `<link>` 样式表/codicon 字体被拦. 本地 `/extensions` 形态恰好能匹配.
+- **复现**: 网关模式下打开 docx → console 报 stylesheet violates CSP; 页面无样式.
+- **解决方案**: 扩展 shell 的 CSP 把资源实际 origin 显式加进 style-src/font-src/img-src (`new URL(styleUri).origin`) — host source 不限路径.
+- **排查方法**: 「本地好、网关坏」+ 无样式/资源 404 的观感 → 先看 console 的 CSP violation 与 cspSource 的实际取值.
