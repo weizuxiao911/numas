@@ -67,8 +67,6 @@ export class LayoutServiceImpl implements ILayoutService {
   private expandedSidebarW = SIDEBAR_DEFAULT_W;
   /** aside 宽度是否被手动拖过 (拖过则 resize 不再按 60% 重置) */
   private asideWidthManual = false;
-  /** 首次启动且无持久化布局 (选项目后自动展开 aside 用; consumeFreshLayout 消费一次) */
-  private freshLayout = false;
   private listeners = new Set<(s: LayoutState) => void>();
 
   constructor() {
@@ -78,8 +76,6 @@ export class LayoutServiceImpl implements ILayoutService {
   /** 从 localStorage 恢复状态 (字段校验 + 范围收敛; 损坏数据静默回默认) */
   private restore(): void {
     const p = loadPersisted();
-    // 无持久化布局 (首次启动) → 记 fresh 标记: 选项目后自动展开 aside / 折叠 sidebar
-    this.freshLayout = !p || Object.keys(p).length === 0;
     const sb = p.sidebar || {};
     const as = p.aside || {};
     const sbW = Number.isFinite(sb.width) ? clampSidebarW(sb.width) : SIDEBAR_DEFAULT_W;
@@ -155,13 +151,6 @@ export class LayoutServiceImpl implements ILayoutService {
     } else {
       this.collapseSidebar();
     }
-  }
-
-  /** 消费"首次启动无持久化布局"标记 (一次性) */
-  consumeFreshLayout(): boolean {
-    const v = this.freshLayout;
-    this.freshLayout = false;
-    return v;
   }
 
   setSidebarWidth(n: number): void {

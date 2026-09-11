@@ -60,8 +60,6 @@ export interface ILayoutService {
   collapseSidebar(): void;
   expandSidebar(): void;
   toggleSidebar(): void;
-  /** 首次启动 (无持久化布局) 标记: 返回 true 并清除 (一次性); 用于"选项目后自动展开 aside" */
-  consumeFreshLayout(): boolean;
   setSidebarWidth(n: number): void;
 
   // aside
