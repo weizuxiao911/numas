@@ -901,3 +901,11 @@ AI **仍需 `question`**:
   - 持久化前 `sidebar.collapsed` 每次刷新重置 false, 所以该 bug 被掩盖; 加持久化 (AGENTS 布局状态全量持久化) 后暴露.
 - **解决方案**: 镜像逻辑加模式判断 `getAppMode() === 'solo'` — IDE 下不渲染 SOLO 的镜像元素 (mode-switch/expand 对 IDE 左栏无意义, IDE 左栏显隐走 IMainLayoutService).
 - **排查方法**: 「某按钮/元素重复」先查同一 slot 被几个布局同时渲染 (IDE 顶栏渲染 SidebarAction + MainAction 两个槽) + 该元素是否被跨模式共享的状态驱动; 持久化改动上线后, 复查所有消费该状态的组件是否按模式 guard.
+
+#### 55. 两个 UI 细节坑: hover 显现按钮用 display 切换导致行抖动; 玻璃弹层透明度过低显"被遮罩"
+
+- **现象 A (hover 抖动)**: 会话列表项 hover 时行高/行宽变化, 列表整体抖动; 根因是删除按钮 `display: none` → hover 时 `display: inline-flex` 重新占位 (24px 宽 + 高过文字行) → 名称列宽/行高跳变.
+  - **解法**: 按钮常驻占位, 用 `visibility: hidden` → hover/`:focus-visible` 时 `visibility: visible`; 布局尺寸全程不变.
+- **现象 B (弹层"被遮罩"/发灰)**: 自绘玻璃 modal 用了 74% 透明底 + `backdrop-filter: blur`, 底下 45% 黑遮罩透出 → 卡片显灰暗 (像素采样 ~225 灰), 观感像被遮罩盖住.
+  - **解法**: 对齐参照组件的**实际计算值**而非设计稿直觉 — chat 模型选择 modal 实测 `background: color(srgb 1 1 1 / 0.96)` (近不透明), 改 96% 后像素 ~250 亮白.
+- **排查方法**: ① "hover 抖动"先量 hover 前后目标行/相邻行的 `getBoundingClientRect` (h/w/name 宽度), 定位是哪个子元素出现导致; ② "弹层颜色不对"别猜, 用 `getComputedStyle(el).backgroundColor` 对比参照元素 + 截图区域像素采样; 注意 portal 出去的节点不继承源容器的 CSS 变量 (`--ai-*` 定义在 `.chat`), 跨容器复用样式要自带变量/兜底值.
