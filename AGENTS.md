@@ -916,3 +916,26 @@ AI **仍需 `question`**:
 - **根因**: `width: 100%` 是相对 containing block 的宽度, 再加 margin 后总占宽 = 100% + 22px → 溢出父容器.
 - **解法**: 缩进场景把该项改 `width: auto` (block 元素 auto 宽自动填满剩余空间, 含 margin 计算) — 或 `width: calc(100% - 22px)`; 不要 `width:100%` + margin 混用.
 - **排查方法**: 元素莫名横向滚动 → 量 `scrollWidth - clientWidth` 定位溢出容器, 检查子项 `width:100%` + margin/padding(非 border-box) 组合.
+
+#### 57. 图片/视频无法预览: StaticResourceService 缺 `file` provider, `file://` URI 原样返回被浏览器拦截
+
+- **现象**: explorer 打开图片 (ImagePreview) 空白/不显示; 图片文件本身正常 (fs API 能读).
+- **根因**: `StaticResourceService.resolveStaticResource(uri)` 在 **没有对应 scheme provider 时原样返回 uri** (`if (!this.providers.has(uri.scheme)) return uri`). codeblitz 的 `file` provider 在 `EditorSpecialModule` 里 (`EditorStaticResourceContribution`), 该模块**不在默认 modules 列表** (`@codeblitzjs/ide-core/lib/core/modules.js`), 我们也没注册 → 实际 providers 只有 `monaco` + `kt-ext` → `<img src="file:///...">` 被浏览器拦.
+  - 排查指纹: 浏览器控制台注入取 injector → `StaticResourceService.providers.keys()` = `['monaco','kt-ext']` (无 file).
+- **解决方案 (不注册整个 EditorSpecialModule — 会带 breadcrumb/preference/doc-provider override 副作用)**:
+  只补 `file` provider (加在 `RegistryStaticResourceContribution.registerStaticResolver`):
+  ```ts
+  service.registerStaticResourceProvider({
+    scheme: 'file',
+    resolveStaticResource: (uri) => {
+      const fsPath = uri.codeUri?.path || uri.path?.toString() || '';
+      const ws = effectiveCwd();                    // URL ?directory= logical
+      const rel = ws ? absToRel(fsPath, ws) : null; // infra/path
+      if (!rel) return uri;                          // 工作区外原样
+      return URI.parse(`${appBaseUrl().replace(/\/+$/, '')}/api/fs/read/${encodeURIComponent(rel)}?directory=${encodeURIComponent(ws)}`);
+    },
+    roots: [appBaseUrl()],
+  });
+  ```
+  **关键**: img/video 标签无法带 `x-opencode-directory` header → 必须走 `?directory=` query (V2 workspace selector); V2 fs read 返回文件真实 mime (`image/png`) 可直接渲染.
+- **验证**: providers 含 `file`; `new Image()` 设解析后的 URL → `onload` + `naturalWidth>0`; 或 curl `?directory=` 返回 200 + `image/png`.
