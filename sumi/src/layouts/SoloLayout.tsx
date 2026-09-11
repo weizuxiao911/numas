@@ -56,8 +56,12 @@ export function SoloLayout(): React.ReactElement {
         Array.from(terminals.clients.values()).forEach((c) => c.dispose());
       } catch { /* ignore */ }
       setWorkdir(next);
+      // 首次启动 (无持久化布局) 选择项目后: 自动展开 aside (openAside 内部会折叠 sidebar)
+      if (next && layout.consumeFreshLayout()) {
+        layout.openAside();
+      }
     });
-  }, [terminals]);
+  }, [terminals, layout]);
 
   // aside 打开时: 视口变化同步到 60% (resize 由 service 处理)
   useEffect(() => {
