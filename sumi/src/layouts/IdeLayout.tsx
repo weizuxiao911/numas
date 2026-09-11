@@ -130,6 +130,30 @@ const styles = `
   transition: flex-basis 260ms cubic-bezier(0.22, 1, 0.36, 1), width 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .app-ide__right.is-collapsed { flex-basis: 0; width: 0; border-left: none; }
+/* 拖拽中关闭过渡, 避免宽度跳动跟随滞后 */
+.app-ide__right.is-dragging { transition: none; }
+/* 右栏 resizer: 6px 命中区 + 1px 主线, 对齐 SplitPanel resizer (--resizer-w) */
+.app-ide__right-resizer {
+  flex: 0 0 var(--resizer-w, 6px);
+  width: var(--resizer-w, 6px);
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+}
+.app-ide__right-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 50%;
+  width: 1px;
+  background: var(--editor-border);
+  transform: translateX(-0.5px);
+}
+.app-ide__right-resizer:hover::before,
+.app-ide__right-resizer.is-dragging::before {
+  background: var(--button-background, #6366f1);
+  width: 2px;
+}
 /* SlotRenderer 的 wrapper 默认 block, 会让内部 chatbot 的 flex 高度失效 (内容撑高顶出 composer);
    这里把它变成受约束的 flex 列容器. 注意排除 topbar 内的 <style> 标签 (否则会被当 flex 项占高) */
 .app-ide__right > *:not(.app-ide__chat-topbar):not(style) {
@@ -325,8 +349,48 @@ const IdeBody: React.FC<{ children?: React.ReactNode; flex?: number }> = ({ chil
   <div className="app-ide__body">{children}</div>
 );
 
+const IDE_RIGHT_W_KEY = 'NUMAS_IDE_RIGHT_W';
+const loadRightW = (): number => {
+  const n = Number(localStorage.getItem(IDE_RIGHT_W_KEY));
+  return Number.isFinite(n) && n > 0 ? Math.min(900, Math.max(300, n)) : 450;
+};
+
 export function IdeLayout(): React.ReactElement {
   const [rightVisible, setRightVisible] = React.useState(true);
+  const [rightW, setRightW] = React.useState<number>(loadRightW);
+  const [dragging, setDragging] = React.useState(false);
+  const dragRef = React.useRef<{ startX: number; startW: number } | null>(null);
+
+  const onRightResizerDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startW: rightW };
+    setDragging(true);
+    const onMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const dx = dragRef.current.startX - ev.clientX;
+      const next = dragRef.current.startW + dx;
+      // 左移变宽 (跟 SOLO aside 一致); 钳制范围 + 给主区留最小宽度
+      const min = 300;
+      const max = Math.min(900, Math.max(min, window.innerWidth - 360));
+      setRightW(Math.min(max, Math.max(min, next)));
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      setDragging(false);
+      setRightW((w) => {
+        localStorage.setItem(IDE_RIGHT_W_KEY, String(w));
+        return w;
+      });
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   return (
     <div className="app-ide">
@@ -359,7 +423,18 @@ export function IdeLayout(): React.ReactElement {
               <SlotRenderer flex={1} slot={SlotLocation.bottom} isTabbar />
             </SplitPanel>
           </SplitPanel>
-          <div className={`app-ide__right${rightVisible ? '' : ' is-collapsed'}`}>
+          {rightVisible && (
+            <div
+              className={`app-ide__right-resizer${dragging ? ' is-dragging' : ''}`}
+              onMouseDown={onRightResizerDown}
+              role="separator"
+              aria-orientation="vertical"
+            />
+          )}
+          <div
+            className={`app-ide__right${rightVisible ? '' : ' is-collapsed'}${dragging ? ' is-dragging' : ''}`}
+            style={rightVisible ? { flexBasis: rightW, width: rightW } : undefined}
+          >
             <IdeRightTopbar />
             <SlotRenderer slot={SOLO_SLOTS.MainContainer} />
           </div>
