@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Docx Webview Harness</title>
+  <link rel="stylesheet" href="/dist/webview/main.css">
+  <style>
+    :root {
+      --vscode-editor-background: #14161a;
+      --vscode-editor-foreground: #e8e8e8;
+      --vscode-descriptionForeground: #a5a5a5;
+      --vscode-panel-border: #34363b;
+      --vscode-titleBar-activeBackground: #202020;
+      --vscode-titleBar-activeForeground: #f0f0f0;
+      --vscode-button-background: #0e639c;
+      --vscode-button-foreground: #ffffff;
+      --vscode-button-hoverBackground: #1177bb;
+      --vscode-button-secondaryBackground: #303030;
+      --vscode-button-secondaryForeground: #e5e5e5;
+      --vscode-toolbar-hoverBackground: #3c3c3c;
+      --vscode-focusBorder: #007fd4;
+      --vscode-scrollbarSlider-background: #79797966;
+      --vscode-scrollbarSlider-hoverBackground: #646464b3;
+      --vscode-widget-shadow: #00000066;
+      --vscode-errorForeground: #f48771;
+      --vscode-progressBar-background: #0e70c0;
+      --vscode-font-family: "Segoe UI", system-ui, sans-serif;
+      --vscode-font-size: 13px;
+      --vscode-editor-font-family: "Cascadia Code", Consolas, monospace;
+      --vscode-textLink-foreground: #4daafc;
+      --vscode-textLink-activeForeground: #79c0ff;
+      --vscode-editorWidget-background: #252526;
+      --vscode-charts-blue: #3794ff;
+    }
+  </style>
+  <script>
+    // Mirrors how VS Code keeps webview state across a hidden tab being shown
+    // again: the state outlives the page, the page's variables do not. Cleared
+    // unless a test opts in, so every other test starts from defaults.
+    const STATE_KEY = 'showdocx.harness.state';
+    if (!new URLSearchParams(window.location.search).has('keepState')) {
+      sessionStorage.removeItem(STATE_KEY);
+    }
+    const testState = {
+      messages: [],
+      printCount: 0
+    };
+    window.__docxTest = testState;
+    window.print = () => {
+      testState.printCount += 1;
+    };
+    window.acquireVsCodeApi = () => ({
+      getState: () => {
+        const raw = sessionStorage.getItem(STATE_KEY);
+        return raw ? JSON.parse(raw) : undefined;
+      },
+      setState: (state) => {
+        sessionStorage.setItem(STATE_KEY, JSON.stringify(state));
+      },
+      postMessage: async (message) => {
+        testState.messages.push(message);
+        if (message.type !== 'ready') {
+          return;
+        }
+        const params = new URLSearchParams(window.location.search);
+        const fixture = params.get('fixture') || 'simple.docx';
+        const response = await fetch(`/test/fixtures/${fixture}`);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const settings = {
+          defaultMode: params.get('mode') === 'text' ? 'text' : 'visual',
+          defaultZoom: 100,
+          defaultPageTheme: params.get('theme') || 'paper',
+          maxFileSizeMb: 100,
+          autoReload: true
+        };
+        // Stands in for the record the host keeps per document.
+        const saved = params.get('saved');
+        const meta = {
+          transferId: 1,
+          fileName: fixture,
+          fileSize: bytes.byteLength,
+          reload: false,
+          settings,
+          savedState: saved ? JSON.parse(saved) : undefined
+        };
+
+        if (params.get('transfer') === 'broken') {
+          // Announce a chunked transfer, send only the first chunk, then end it.
+          const chunkSize = 1024;
+          const totalChunks = Math.ceil(bytes.byteLength / chunkSize);
+          dispatch({ type: 'documentStart', ...meta, totalChunks });
+          dispatch({
+            type: 'documentChunk',
+            transferId: 1,
+            index: 0,
+            data: encodeBase64(bytes.subarray(0, chunkSize))
+          });
+          dispatch({ type: 'documentEnd', transferId: 1 });
+          return;
+        }
+
+        if (params.get('transfer') === 'chunks') {
+          const chunkSize = 1024;
+          const totalChunks = Math.ceil(bytes.byteLength / chunkSize);
+          dispatch({
+            type: 'documentStart',
+            ...meta,
+            totalChunks
+          });
+          for (let index = 0; index < totalChunks; index += 1) {
+            dispatch({
+              type: 'documentChunk',
+              transferId: 1,
+              index,
+              data: encodeBase64(bytes.subarray(index * chunkSize, (index + 1) * chunkSize))
+            });
+          }
+          dispatch({ type: 'documentEnd', transferId: 1 });
+          return;
+        }
+
+        // Stands in for what the host reads out of the package. The parsing
+        // itself is covered by unit tests against the real fixtures.
+        const properties = {
+          title: 'Docx sample document',
+          creator: 'Docx',
+          lastModifiedBy: 'A Reviewer',
+          created: '2026-01-02T03:04:05Z',
+          revision: '7'
+        };
+        const structure = {
+          headingStyles: [
+            { styleId: 'Title', name: 'Title', level: 1 },
+            { styleId: 'Heading1', name: 'Heading 1', level: 1 },
+            { styleId: 'Heading2', name: 'Heading 2', level: 2 },
+            { styleId: 'Heading3', name: 'Heading 3', level: 3 }
+          ],
+          comments: [],
+          commentOrder: [],
+          revisions: []
+        };
+        if (fixture === 'with-comments.docx') {
+          structure.comments = [{
+            id: '0',
+            author: 'Alice Reviewer',
+            date: '2026-01-01T00:00:00.000Z',
+            text: 'Please clarify this sentence.'
+          }];
+          structure.commentOrder = ['0'];
+          structure.revisions = [
+            { type: 'insertion', author: 'Alice Reviewer', text: 'an inserted phrase' },
+            { type: 'deletion', author: 'Alice Reviewer', text: 'a deleted phrase' }
+          ];
+        }
+        setTimeout(() => dispatch({ type: 'documentDetails', properties, structure }), 0);
+
+        const payload = { type: 'document', ...meta, data: encodeBase64(bytes) };
+        // Lets a test replay the message the host sends when the file changes
+        // on disk, which is the path that must not disturb the reader.
+        testState.reload = () => dispatch({ ...payload, reload: true });
+        dispatch(payload);
+      }
+    });
+
+    function dispatch(data) {
+      window.dispatchEvent(new MessageEvent('message', { data }));
+    }
+
+    function encodeBase64(bytes) {
+      let binary = '';
+      const stride = 0x8000;
+      for (let offset = 0; offset < bytes.length; offset += stride) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + stride));
+      }
+      return btoa(binary);
+    }
+  </script>
+</head>
+<body>
+  <div id="app" class="showdocx-app">
+    <header class="showdocx-toolbar" role="toolbar" aria-label="Document viewer controls">
+      <div class="toolbar-file">
+        <span class="codicon codicon-file-word" aria-hidden="true"></span>
+        <span id="file-name" class="file-name">DOCX document</span>
+        <span id="file-size" class="file-size"></span>
+      </div>
+      <div class="toolbar-group mode-switcher" aria-label="Rendering mode">
+        <button id="mode-visual" class="toolbar-button mode-button" type="button" aria-pressed="true">
+          <span class="codicon codicon-preview"></span><span>Visual</span>
+        </button>
+        <button id="mode-text" class="toolbar-button mode-button" type="button" aria-pressed="false">
+          <span class="codicon codicon-list-tree"></span><span>Text</span>
+        </button>
+      </div>
+      <div class="toolbar-group view-toggles" aria-label="View panels">
+        <button id="outline-toggle" class="toolbar-button icon-button" type="button" title="Document outline" aria-label="Toggle document outline" aria-pressed="false">
+          <span class="codicon codicon-list-flat"></span>
+        </button>
+        <button id="comments-toggle" class="toolbar-button icon-button" type="button" title="Comments and changes" aria-label="Toggle comments and changes" aria-pressed="false">
+          <span class="codicon codicon-comment-discussion"></span><span id="comment-count" class="badge hidden"></span>
+        </button>
+        <button id="properties-toggle" class="toolbar-button icon-button" type="button" title="Document properties" aria-label="Toggle document properties" aria-pressed="false">
+          <span class="codicon codicon-info"></span>
+        </button>
+        <button id="search-toggle" class="toolbar-button icon-button" type="button" title="Find in document (Ctrl+F)" aria-label="Find in document">
+          <span class="codicon codicon-search"></span>
+        </button>
+      </div>
+      <div class="toolbar-spacer"></div>
+      <button id="warnings-button" class="toolbar-button icon-button hidden" type="button" title="Rendering warnings" aria-label="Show rendering warnings">
+        <span class="codicon codicon-warning"></span><span id="warning-count"></span>
+      </button>
+      <div class="toolbar-group export-controls" aria-label="Export options">
+        <button id="export-button" class="toolbar-button" type="button" title="Export semantic HTML">
+          <span class="codicon codicon-export"></span><span>HTML</span>
+        </button>
+        <button id="export-md-button" class="toolbar-button" type="button" title="Export Markdown">
+          <span class="codicon codicon-markdown"></span><span>MD</span>
+        </button>
+        <button id="export-pdf-button" class="toolbar-button" type="button" title="Save printable HTML and open your browser's print dialog">
+          <span class="codicon codicon-file-pdf"></span><span>PDF</span>
+        </button>
+        <button id="copy-md-button" class="toolbar-button icon-button" type="button" title="Copy the document to the clipboard as Markdown" aria-label="Copy as Markdown">
+          <span class="codicon codicon-copy"></span>
+        </button>
+        <button id="copy-text-button" class="toolbar-button icon-button" type="button" title="Copy the document to the clipboard as plain text" aria-label="Copy as plain text">
+          <span class="codicon codicon-symbol-text"></span>
+        </button>
+      </div>
+      <button id="print-button" class="toolbar-button" type="button" title="Save printable HTML and open your browser's print dialog">
+        <span class="codicon codicon-printer"></span><span>Print</span>
+      </button>
+      <button id="page-theme-button" class="toolbar-button icon-button" type="button" title="Page theme" aria-label="Page theme">
+        <span class="codicon codicon-color-mode"></span>
+      </button>
+      <button id="page-indicator" class="toolbar-button page-indicator hidden" type="button" title="Go to a page" aria-label="Go to a page">1 / 1</button>
+      <button id="fit-button" class="toolbar-button icon-button" type="button" title="Fit the page to the panel" aria-label="Fit the page to the panel">
+        <span class="codicon codicon-screen-full"></span>
+      </button>
+      <div class="toolbar-group zoom-controls" aria-label="Zoom controls">
+        <button id="zoom-out" class="toolbar-button icon-button" type="button" title="Zoom out" aria-label="Zoom out">
+          <span class="codicon codicon-zoom-out"></span>
+        </button>
+        <button id="zoom-reset" class="zoom-value" type="button" title="Reset zoom">100%</button>
+        <button id="zoom-in" class="toolbar-button icon-button" type="button" title="Zoom in" aria-label="Zoom in">
+          <span class="codicon codicon-zoom-in"></span>
+        </button>
+      </div>
+    </header>
+    <aside id="warnings-panel" class="warnings-panel hidden" aria-live="polite"></aside>
+    <div id="search-bar" class="showdocx-search-bar hidden" role="search" aria-label="Find in document">
+      <span class="codicon codicon-search search-icon" aria-hidden="true"></span>
+      <input id="search-input" type="text" placeholder="Find in document..." aria-label="Find in document" />
+      <span id="search-count" class="search-count">0/0</span>
+      <button id="search-prev" class="toolbar-button icon-button" type="button" title="Previous match (Shift+Enter)" aria-label="Previous match">
+        <span class="codicon codicon-arrow-up"></span>
+      </button>
+      <button id="search-next" class="toolbar-button icon-button" type="button" title="Next match (Enter)" aria-label="Next match">
+        <span class="codicon codicon-arrow-down"></span>
+      </button>
+      <button id="search-close" class="toolbar-button icon-button" type="button" title="Close search (Escape)" aria-label="Close search">
+        <span class="codicon codicon-close"></span>
+      </button>
+    </div>
+    <div class="showdocx-main-area">
+      <aside id="outline-sidebar" class="showdocx-sidebar showdocx-outline hidden" aria-label="Document outline">
+        <div class="sidebar-header">
+          <span class="sidebar-title"><span class="codicon codicon-list-flat"></span> Outline</span>
+          <button id="outline-close" class="toolbar-button icon-button" type="button" title="Close outline" aria-label="Close outline">
+            <span class="codicon codicon-close"></span>
+          </button>
+        </div>
+        <nav id="outline-list" class="sidebar-content outline-list"></nav>
+      </aside>
+      <aside id="comments-sidebar" class="showdocx-sidebar showdocx-comments hidden" aria-label="Comments and changes">
+        <div class="sidebar-header">
+          <span class="sidebar-title"><span class="codicon codicon-comment-discussion"></span> Comments</span>
+          <button id="comments-close" class="toolbar-button icon-button" type="button" title="Close comments" aria-label="Close comments">
+            <span class="codicon codicon-close"></span>
+          </button>
+        </div>
+        <div id="comments-list" class="sidebar-content comments-list"></div>
+      </aside>
+      <aside id="properties-sidebar" class="showdocx-sidebar showdocx-properties hidden" aria-label="Document properties">
+        <div class="sidebar-header">
+          <span class="sidebar-title"><span class="codicon codicon-info"></span> Properties</span>
+          <button id="properties-close" class="toolbar-button icon-button" type="button" title="Close properties" aria-label="Close properties">
+            <span class="codicon codicon-close"></span>
+          </button>
+        </div>
+        <div id="properties-list" class="sidebar-content properties-list"></div>
+      </aside>
+      <main id="viewport" class="showdocx-viewport">
+        <div id="loading" class="showdocx-loading">
+          <div class="spinner" aria-hidden="true"></div>
+          <div id="loading-label">Waiting for document...</div>
+          <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+        </div>
+        <section id="error-state" class="showdocx-error hidden" role="alert">
+          <span class="codicon codicon-error error-icon" aria-hidden="true"></span>
+          <h1>Unable to preview this document</h1>
+          <p id="error-message"></p>
+          <button id="retry-button" class="primary-button" type="button">Try again</button>
+        </section>
+        <div id="zoom-frame" class="zoom-frame hidden">
+          <div id="zoom-surface" class="zoom-surface">
+            <div id="visual-container" class="render-container visual-container"></div>
+            <article id="text-container" class="render-container showdocx-text hidden"></article>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <div id="context-menu" class="showdocx-context-menu hidden" role="menu"></div>
+  <script src="/dist/webview/main.js"></script>
+</body>
+</html>
