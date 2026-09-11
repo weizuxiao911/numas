@@ -122,7 +122,7 @@ const styles = `
 .app-ide [class*="box-panel"] > [class*="wrapper"] { min-height: 0; }
 .app-ide__body { display: flex; flex-direction: row; height: 100%; flex: 1 1 auto; min-height: 0; min-width: 0; }
 .app-ide__right {
-  flex: 0 0 450px; width: 450px; min-width: 0; min-height: 0;
+  flex: 0 0 498px; width: 498px; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
   border-left: 1px solid var(--editor-border);
   background: var(--editor-background);
@@ -352,7 +352,7 @@ const IdeBody: React.FC<{ children?: React.ReactNode; flex?: number }> = ({ chil
 const IDE_RIGHT_W_KEY = 'NUMAS_IDE_RIGHT_W';
 const loadRightW = (): number => {
   const n = Number(localStorage.getItem(IDE_RIGHT_W_KEY));
-  return Number.isFinite(n) && n > 0 ? Math.min(900, Math.max(300, n)) : 450;
+  return Number.isFinite(n) && n > 0 ? Math.min(900, Math.max(300, n)) : 498;
 };
 
 export function IdeLayout(): React.ReactElement {

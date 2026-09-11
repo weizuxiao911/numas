@@ -143,7 +143,7 @@ export const App: React.FC = () => {
     // 拖拽下限在 IdeLayout.tsx 的 SlotRenderer minResize.
     panelSizes: {
       [SlotLocation.left]: 278,   // explorer
-      [SlotLocation.right]: 450,  // AI 对话 (自绘右栏, 见 IdeLayout .app-ide__right)
+      [SlotLocation.right]: 498,  // AI 对话 (自绘右栏, 见 IdeLayout .app-ide__right)
     },
     componentCDNType: 'jsdelivr',
     // 精简 explorer 容器: 移除官方 Outline/OpenedEditor 模块 (只留文件树 section)
