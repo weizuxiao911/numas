@@ -3,13 +3,17 @@ import * as vscode from 'vscode'
 export const PDF_VIEW_TYPE = 'pdfViewer'
 
 /**
- * PDF 阅读器 (vsix)
+ * PDF 阅读器 + 圈选标注 (vsix, 单拓展内实现)
  *
  * 架构 (大文件友好):
- *   extension host (本文件): custom editor 壳; 只算 webview 端要用的 fetch URL + headers (几 KB),
- *     不读文件字节、不传大 buffer (30MB+ postMessage 结构化克隆会卡死主线程).
- *   webview (dist/webview.js, React): 自己 fetch opencode /api/fs/read 拿原始字节 (裸二进制,
- *     无 base64) → 直接交给 pdf.js (transfer 进 worker, 不额外拷贝).
+ *   extension host (本文件): custom editor 壳; 算 webview 端要用的 fetch URL + headers (几 KB),
+ *     不读文件字节、不传大 buffer. 另负责标注链路: anno 文件 I/O (workspace.fs) /
+ *     AI 生成 (chatbot.send + 产物轮询) / 运行代码 (vscode 终端 API).
+ *   webview (dist/webview.js, React): 自己 fetch opencode /api/fs/read 拿原始字节 (裸二进制),
+ *     自己提取圈选文本 (pdf.js textContent), 标注蒙层/手势/弹层全部在 webview 内.
+ *
+ * 标注存储: `.{文件名sha256前8}.anno` 隐藏 JSON (与源 PDF 同层级);
+ *          产物 `.{hash}.anno.{id}.html/.py` 散文件 (终端/编辑器需真实磁盘路径).
  *
  * 关键问题 + 解决:
  *   1. opensumi webview listening 有空窗期 → shell HTML 多档延迟重发
@@ -41,13 +45,19 @@ export function activate(context: vscode.ExtensionContext) {
         .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'pdfjs'))
         .toString()
         .replace(/\/+$/, '')
-      const shell = buildShell(name, target, webviewJsUri, pdfjsBase)
+      const distBase = webviewPanel.webview
+        .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'dist'))
+        .toString()
+        .replace(/\/+$/, '')
+      const shell = buildShell(name, document.uri.fsPath, target, webviewJsUri, pdfjsBase, distBase)
 
       // opensumi webview 监听空窗期: 一次 set html 会丢 → 多档重发
       const sendShell = () => { try { webviewPanel.webview.html = shell } catch { /* ignore */ } }
       sendShell()
       const timers = [120, 400, 1000].map((ms) => setTimeout(sendShell, ms))
       webviewPanel.onDidDispose(() => timers.forEach((t) => clearTimeout(t)))
+
+      setupAnnoChannel(webviewPanel, document)
     },
   }
 
@@ -65,6 +75,41 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   )
 }
+
+/* ═══════════════════════ 标注: 命令桥 (anno I/O 全在 webview 侧同源 fetch) ═══════════════════════ */
+
+/**
+ * 宿主只做 webview 做不到的三件事 (浏览器环境无 node API):
+ *   - ai.send:  chatbot.send 全局命令 (自动发送 AI 消息)
+ *   - openFile: vscode.open 打开产物 HTML (走注册的 opener)
+ *   - runCommand: vscode 终端 API 执行产物代码
+ */
+function setupAnnoChannel(webviewPanel: vscode.WebviewPanel, _document: vscode.TextDocument) {
+  webviewPanel.webview.onDidReceiveMessage(async (msg: any) => {
+    try {
+      switch (msg?.type) {
+        case 'ai.send':
+          await vscode.commands.executeCommand('chatbot.send', String(msg.prompt || ''))
+          break
+        case 'openFile':
+          if (msg.path) void vscode.commands.executeCommand('vscode.open', vscode.Uri.file(String(msg.path)))
+          break
+        case 'runCommand': {
+          const cmd = String(msg.command || '').trim()
+          if (!cmd) return
+          const term = vscode.window.createTerminal('Numas')
+          term.show()
+          term.sendText(`${cmd}\n`)
+          break
+        }
+      }
+    } catch (e) {
+      console.error('[pdf] anno bridge error', e)
+    }
+  })
+}
+
+/* ═══════════════════════ webview shell ═══════════════════════ */
 
 type FetchTarget = { rel?: string; headerDir?: string; error?: string }
 
@@ -98,8 +143,8 @@ function esc(s: string): string {
 /** shell HTML: 只挂 root + 配置 (webview bundle URL + pdfjs 基址 + fetch 地址/headers).
  *  webviewJsUri / pdfjsBase 由 host 侧 asWebviewUri 解析成绝对 URL (自动适配市场来源:
  *  内置 /extensions/<id>/... 或网关 <base>/<id>/file/...), shell 不再手拼 registryBase. */
-function buildShell(name: string, target: FetchTarget, webviewJsUri: string, pdfjsBase: string): string {
-  const cfg = JSON.stringify({ name, fetch: target, pdfjsBase })
+function buildShell(name: string, hostPath: string, target: FetchTarget, webviewJsUri: string, pdfjsBase: string, distBase: string): string {
+  const cfg = JSON.stringify({ name, hostPath, fetch: target, pdfjsBase, distBase })
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>

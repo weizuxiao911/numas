@@ -28,7 +28,6 @@ import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 import { SideTopbarModule, SessionsModule, ActionModule, AsideTopbarModule } from '../extensions/solo';
 import { ChatbotModule } from '../extensions/chat';
 import { ContextModule } from '../extensions/context';
-import { AnnotateModule } from '../extensions/annotate';
 import { FilesModule } from '../extensions/file';
 import { MarkdownModule } from '../extensions/markdown';
 import { BrowserModule } from '../extensions/browser';
@@ -59,7 +58,6 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     ChatbotModule,         // 中列 main.container (对话主区)
     AsideTopbarModule,     // 右列 aside.action (查看/终端 胶囊)
     ContextModule,         // 编辑器/终端选区 + 文件树「添加到对话」(契约: chatbot.addContext 命令)
-    AnnotateModule,        // PDF 圈选标注 + AI 动画/代码生成
     FilesModule,           // 文件树: 上传/下载/压缩 zip (右键 + 标题栏上传按钮)
     MarkdownModule,        // .md 预览 (marked+shiki+katex+mermaid; 右键/标题栏/命令)
     BrowserModule,         // 内置浏览器 (aside.browser 视图 + numas-browser:// 编辑器 tab)
