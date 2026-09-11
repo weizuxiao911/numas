@@ -909,3 +909,10 @@ AI **仍需 `question`**:
 - **现象 B (弹层"被遮罩"/发灰)**: 自绘玻璃 modal 用了 74% 透明底 + `backdrop-filter: blur`, 底下 45% 黑遮罩透出 → 卡片显灰暗 (像素采样 ~225 灰), 观感像被遮罩盖住.
   - **解法**: 对齐参照组件的**实际计算值**而非设计稿直觉 — chat 模型选择 modal 实测 `background: color(srgb 1 1 1 / 0.96)` (近不透明), 改 96% 后像素 ~250 亮白.
 - **排查方法**: ① "hover 抖动"先量 hover 前后目标行/相邻行的 `getBoundingClientRect` (h/w/name 宽度), 定位是哪个子元素出现导致; ② "弹层颜色不对"别猜, 用 `getComputedStyle(el).backgroundColor` 对比参照元素 + 截图区域像素采样; 注意 portal 出去的节点不继承源容器的 CSS 变量 (`--ai-*` 定义在 `.chat`), 跨容器复用样式要自带变量/兜底值.
+
+#### 56. `width: 100%` 元素加 `margin-left` 撑出横向滚动条: 改 `width: auto`
+
+- **现象**: 给分组下的列表项 (基础样式 `width: 100%`) 加 `margin-left: 22px` 做缩进对齐, modal body 立即出现横向滚动条.
+- **根因**: `width: 100%` 是相对 containing block 的宽度, 再加 margin 后总占宽 = 100% + 22px → 溢出父容器.
+- **解法**: 缩进场景把该项改 `width: auto` (block 元素 auto 宽自动填满剩余空间, 含 margin 计算) — 或 `width: calc(100% - 22px)`; 不要 `width:100%` + margin 混用.
+- **排查方法**: 元素莫名横向滚动 → 量 `scrollWidth - clientWidth` 定位溢出容器, 检查子项 `width:100%` + margin/padding(非 border-box) 组合.
