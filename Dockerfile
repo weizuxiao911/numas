@@ -106,7 +106,8 @@ ENV LANG=C.UTF-8 \
 #   --break-system-packages: ubuntu 24.04 系统 python3 是 externally-managed, 不加会被
 #   PEP 668 拒绝; 装到 /usr/local/lib/python3.12/dist-packages (系统 python 可见).
 #   --no-cache-dir: 不留 wheel 缓存, 保持镜像精简.
-#   跳过 paddleocr (会拉 paddlepaddle, 镜像 +1~2GB), 需要时容器内自行安装.
+#   内置范围: 多实验共用的核心依赖; 跳过单实验"扩展"项 (alibabacloud_dysmsapi20170525 /
+#   APScheduler / qrcode, 用户拍板去掉) 与 paddleocr (paddlepaddle +1~2GB), 需要时自装.
 RUN printf '[global]\nindex-url = https://pypi.mirrors.ustc.edu.cn/simple\ntrusted-host = pypi.mirrors.ustc.edu.cn\ntimeout = 120\n' > /etc/pip.conf \
   && python3 -m pip install --break-system-packages --no-cache-dir \
        flask==3.1.3 \
@@ -121,10 +122,7 @@ RUN printf '[global]\nindex-url = https://pypi.mirrors.ustc.edu.cn/simple\ntrust
        openpyxl==3.1.5 \
        pyecharts==2.0.7 \
        python-dotenv==1.2.3 \
-       qrcode==8.2 \
-       APScheduler \
-       alibabacloud_dysmsapi20170525 \
-  && python3 -c "import flask, dashscope, pandas, cryptography, pyecharts, qrcode; print('python deps ok')"
+  && python3 -c "import flask, dashscope, pandas, cryptography, pyecharts; print('python deps ok')"
 
 # oh-my-zsh + nvm + node 22 — 运行 uid=root 但家目录统一 $HOME=/home (见上 ENV HOME).
 #   所有交互工具链都装在 /home 下, 不使用 /root:
