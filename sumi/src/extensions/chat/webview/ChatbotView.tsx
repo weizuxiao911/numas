@@ -29,6 +29,9 @@ import {
 } from '@/extensions/chat/commands/api';
 import { modelPrefs } from '@/extensions/chat/commands/modelPrefs';
 import { getWorkspace, subscribeWorkspace } from '@/infra/url';
+
+/** 当前会话持久化 key (session 级恢复: 有值启动加载该会话, 无值保持空态) */
+const CHAT_SESSION_KEY = 'NUMAS_CHAT_SESSION';
 import { onEvent } from '@/service/event/eventBus';
 import { PartRenderer } from './parts/PartRenderer';
 import { ProviderDefs, ProviderIcon } from './parts/ProviderIcon';
@@ -135,9 +138,13 @@ export const ChatbotView: React.FC = () => {
   const [sessionID, setSessionIDRaw] = useState<string>('');
   const sessionIDRef = useRef(sessionID);
   sessionIDRef.current = sessionID;
-  // 包装 setSessionID: 派发 window CustomEvent 让 sidebar 同步高亮
+  // 包装 setSessionID: 持久化当前会话 (session 级恢复用) + 派发 window CustomEvent 让 sidebar 同步高亮
   const setSessionID = useCallback((sid: string) => {
     setSessionIDRaw(sid);
+    try {
+      if (sid) localStorage.setItem(CHAT_SESSION_KEY, sid);
+      else localStorage.removeItem(CHAT_SESSION_KEY);
+    } catch { /* 存储不可用忽略 */ }
     window.dispatchEvent(new CustomEvent('chatbot:session-changed', { detail: { sessionID: sid } }));
   }, []);
   const [rows, setRows] = useState<Row[]>([]);
@@ -581,30 +588,26 @@ export const ChatbotView: React.FC = () => {
     setSessionStats(rows.length ? sumMessagesStats(rows) : null);
   }, [rows]);
 
-  // 启动恢复: 默认加载当前 workdir 下的最新会话 (按 time.updated 倒序, 取首条非空草稿)
-  // 规则:
-  //   1. 无会话 → 不创建, 主区保持空 (用户点 "新建" 才建)
-  //   2. 有最新 → 加载它; 若为空草稿就接着找次新非空草稿; 都空就不加载
-  // 不自动创建任何会话, 避免空草稿污染历史.
+  // 启动恢复 (session 级): 有持久化的 sessionID 才加载该会话; 没有则不加载, 保持空态 (打字机问候).
+  // 会话已被删除 → 清掉持久化, 保持空态. (历史行为: 默认恢复最新非空会话 — 已按需求移除)
   const restoredRef = useRef(false);
   useEffect(() => {
     if (!ready || !client || restoredRef.current) return;
     restoredRef.current = true;
+    let sid = '';
+    try { sid = localStorage.getItem(CHAT_SESSION_KEY) || ''; } catch { /* 存储不可用 */ }
+    if (!sid) return;
     (async () => {
       try {
-        const list = await aiListSessions();
-        if (!Array.isArray(list) || list.length === 0) return;
-        const sorted = [...list].sort((a, b) => (b?.time?.updated || 0) - (a?.time?.updated || 0));
-        for (const s of sorted) {
-          const m = await aiListMessages(s.id).catch(() => null);
-          if (Array.isArray(m) && m.length > 0) {
-            sessionIDRef.current = s.id;
-            setSessionID(s.id);
-            return;
-          }
+        const m = await aiListMessages(sid);
+        if (Array.isArray(m)) {
+          sessionIDRef.current = sid;
+          setSessionID(sid);
         }
-        // 全是空草稿 → 不加载任何 (不自动创建)
-      } catch { /* 静默 */ }
+      } catch {
+        // 会话不存在/已删除 → 清持久化, 保持空态
+        try { localStorage.removeItem(CHAT_SESSION_KEY); } catch { /* ignore */ }
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, client]);
@@ -2476,18 +2479,24 @@ export const ChatbotView: React.FC = () => {
             </div>
           </div>
           )}
-          {sessionStats && (
-            <div className="chat__session-stats" title={`输入 ${sessionStats.input.toLocaleString()} / 输出 ${sessionStats.output.toLocaleString()} / 推理 ${sessionStats.reasoning.toLocaleString()} / 缓存读 ${sessionStats.cacheRead.toLocaleString()} tokens`}>
-              <span className="chat__session-stats-item">消耗</span>
-              {sessionStats.durationMs > 0 && (
-                <span className="chat__session-stats-item">{formatDurationHMS(sessionStats.durationMs)}</span>
-              )}
-              {sessionStats.input + sessionStats.output + sessionStats.reasoning > 0 && (
-                <span className="chat__session-stats-item">{formatTokens({ input: sessionStats.input, output: sessionStats.output, reasoning: sessionStats.reasoning })}</span>
-              )}
-              {formatCost(sessionStats.cost) && <span className="chat__session-stats-item">{formatCost(sessionStats.cost)}</span>}
-            </div>
-          )}
+          {/* 消耗行固定占位: 无论有无数据都渲染 (min-height 占位), 避免出现/消失时输入框位移 */}
+          <div
+            className="chat__session-stats"
+            title={sessionStats ? `输入 ${sessionStats.input.toLocaleString()} / 输出 ${sessionStats.output.toLocaleString()} / 推理 ${sessionStats.reasoning.toLocaleString()} / 缓存读 ${sessionStats.cacheRead.toLocaleString()} tokens` : undefined}
+          >
+            {sessionStats && (
+              <>
+                <span className="chat__session-stats-item">消耗</span>
+                {sessionStats.durationMs > 0 && (
+                  <span className="chat__session-stats-item">{formatDurationHMS(sessionStats.durationMs)}</span>
+                )}
+                {sessionStats.input + sessionStats.output + sessionStats.reasoning > 0 && (
+                  <span className="chat__session-stats-item">{formatTokens({ input: sessionStats.input, output: sessionStats.output, reasoning: sessionStats.reasoning })}</span>
+                )}
+                {formatCost(sessionStats.cost) && <span className="chat__session-stats-item">{formatCost(sessionStats.cost)}</span>}
+              </>
+            )}
+          </div>
         </div>
       )}
 

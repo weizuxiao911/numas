@@ -13,10 +13,8 @@ import { styles } from './styles';
 const EMPTY_HINT = '输入地址开始浏览；部分站点禁止内嵌 (X-Frame-Options)，可点右上角用系统浏览器打开';
 
 function normalizeUrl(raw: string): string {
-  const s = (raw || '').trim();
-  if (!s) return '';
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return s;
-  return `http://${s}`;
+  // 不做协议补全 (输入即所得): 需要完整 URL (http:// / https:// ...), 避免 "http" → "http://http" 这类自挖坑
+  return (raw || '').trim();
 }
 
 export const BrowserView: React.FC<{ resource?: any }> = ({ resource }) => {
