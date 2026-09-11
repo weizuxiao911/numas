@@ -206,13 +206,19 @@ const PdfViewer: React.FC = () => {
 
   const writeAnnoRemote = useCallback(async (list: Annotation[]): Promise<void> => {
     try {
+      const text = `${JSON.stringify({ version: 1, file: CFG.name || '', annotations: list }, null, 2)}\n`;
+      // 服务端 /api/fs/write 约定 content 为 base64 (与 sumi filesystem.service 一致)
+      const bytes = new TextEncoder().encode(text);
+      let bin = '';
+      const CHUNK = 0x8000;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+      }
+      const b64 = btoa(bin);
       await fetch('/api/fs/write', {
         method: 'POST',
         headers: { ...fsHeaders(), 'content-type': 'application/json' },
-        body: JSON.stringify({
-          path: await annoRel(),
-          content: `${JSON.stringify({ version: 1, file: CFG.name || '', annotations: list }, null, 2)}\n`,
-        }),
+        body: JSON.stringify({ path: await annoRel(), content: b64 }),
       });
     } catch { /* ignore */ }
   }, [annoRel, fsHeaders]);
