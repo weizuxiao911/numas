@@ -57,10 +57,12 @@ ENV HOME=/home
 #   apt 源: 内建阿里云镜像 (mirrors.aliyun.com/ubuntu, arm64 走 ubuntu-ports),
 #   服务器/国内网络构建不直连官方源. ubuntu 24.04 用 deb822 格式
 #   (/etc/apt/sources.list.d/ubuntu.sources 的 URIs: 行).
+#   ⚠ 必须用 http:// 不用 https://: 基础镜像未预装 ca-certificates, https 源证书校验
+#   直接失败 → 包列表空 → "Unable to locate package". http 与官方默认源行为一致.
 RUN sed -i \
-      -e 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.aliyun.com/ubuntu/|g' \
-      -e 's|http://security.ubuntu.com/ubuntu/|https://mirrors.aliyun.com/ubuntu/|g' \
-      -e 's|http://ports.ubuntu.com/ubuntu-ports/|https://mirrors.aliyun.com/ubuntu-ports/|g' \
+      -e 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' \
+      -e 's|http://security.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' \
+      -e 's|http://ports.ubuntu.com/ubuntu-ports/|http://mirrors.aliyun.com/ubuntu-ports/|g' \
       /etc/apt/sources.list.d/ubuntu.sources \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
