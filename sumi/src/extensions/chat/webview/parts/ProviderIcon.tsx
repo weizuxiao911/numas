@@ -311,6 +311,18 @@ const SVG_DEFS = `<svg xmlns="http://www.w3.org/2000/svg" style="display:none" a
         stroke-linejoin="round"
       ></path>
     </symbol>
+<symbol viewBox="0 0 24 24"  id="oc-pi-qwen">
+      <path
+        d="M23.919 14.545 20.817 9.17l1.47-2.544a.56.56 0 0 0 0-.566l-1.633-2.83a.57.57 0 0 0-.49-.283h-6.207L12.487.402a.57.57 0 0 0-.49-.284H8.732a.56.56 0 0 0-.49.284L5.139 5.775h-2.94a.56.56 0 0 0-.49.284L.077 8.887a.56.56 0 0 0 0 .567L3.18 14.83l-1.47 2.545a.56.56 0 0 0 0 .566l1.634 2.83a.57.57 0 0 0 .49.283h6.205l1.47 2.545a.57.57 0 0 0 .49.284h3.266a.57.57 0 0 0 .49-.284l3.104-5.375h2.94a.57.57 0 0 0 .49-.283l1.634-2.828a.55.55 0 0 0-.004-.568M8.733.686l1.634 2.828-1.634 2.828H21.8L20.164 9.17H7.425L5.63 6.06Zm1.306 19.801-6.205-.002 1.634-2.83h3.265L2.201 6.344h3.267q3.182 5.517 6.367 11.032zm10.124-5.66L18.53 12l-6.532 11.315-1.634-2.83c2.129-3.673 4.25-7.351 6.373-11.028h3.592l3.102 5.374z"
+        fill="currentColor"
+      ></path>
+    </symbol>
+<symbol viewBox="0 0 24 24"  id="oc-pi-volcengine">
+      <path
+        d="M2.5 20.5L8.5 5.5C8.8 4.8 9.7 4.8 10 5.5L12 9.5L14 5.5C14.3 4.8 15.2 4.8 15.5 5.5L21.5 20.5C21.8 21.2 21.3 22 20.5 22H3.5C2.7 22 2.2 21.2 2.5 20.5ZM12 11.5L9.8 17H14.2L12 11.5Z"
+        fill="currentColor"
+      ></path>
+    </symbol>
 </defs></svg>`;
 
 const KNOWN: string[] = [
@@ -346,7 +358,21 @@ const KNOWN: string[] = [
   "submodel",
   "zai-coding-plan",
   "minimax-coding-plan",
+  "qwen",
+  "volcengine",
 ];
+
+/** 变体 id → 基础服务商 id (同一 logo): 如火山方舟各套餐/阿里各套餐共用基础 logo */
+const ALIAS: Record<string, string> = {
+  'volcengine-coding-plan': 'volcengine',
+  'volcengine-agent-plan': 'volcengine',
+  'volcengine-coding-plan-2': 'volcengine',
+  'volcengine-coding-plan-3': 'volcengine',
+  'alibaba-coding-plan': 'alibaba',
+  'alibaba-coding-plan-cn': 'alibaba-cn',
+  'alibaba-token-plan': 'alibaba',
+  'alibaba-token-plan-cn': 'alibaba-cn',
+};
 
 export function ProviderDefs() {
   if (typeof document !== 'undefined' && !document.getElementById('oc-pi-defs')) {
@@ -359,11 +385,12 @@ export function ProviderDefs() {
 }
 
 export const ProviderIcon: React.FC<{ id?: string; name?: string; size?: number; className?: string }> = ({ id, name, size = 14, className }) => {
-  // 已知服务商 → sprite 真实 logo
-  if (id && KNOWN.includes(id)) {
+  // 已知服务商 (或变体 → 基础 logo) → sprite 真实 logo
+  const resolved = id ? (KNOWN.includes(id) ? id : ALIAS[id]) : undefined;
+  if (resolved) {
     return (
       <svg className={className} width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" style={{ flexShrink: 0, display: 'inline-block', verticalAlign: '-0.2em' }}>
-        <use href={`#oc-pi-${id}`} />
+        <use href={`#oc-pi-${resolved}`} />
       </svg>
     );
   }

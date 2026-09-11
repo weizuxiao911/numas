@@ -822,7 +822,6 @@ export const styles = `
 }
 .chat__modal-search:focus-within {
   border-color: var(--ai-accent);
-  background: var(--ai-accent-soft);
 }
 .chat__modal-search input {
   flex: 1; background: transparent; border: none; outline: none;
@@ -876,10 +875,9 @@ export const styles = `
   background: var(--ai-active);
   color: var(--ai-fg);
 }
+/* 键盘高亮: 仅背景轻染 (与 hover 同色, 不用 outline 边框 — 全站 modal 统一) */
 .chat__modal-item.is-highlighted {
   background: var(--ai-hover);
-  outline: 1px solid var(--ai-accent);
-  outline-offset: -1px;
 }
 .chat__modal-item.is-highlighted.is-active {
   background: var(--ai-active);
@@ -974,10 +972,9 @@ export const styles = `
   cursor: pointer; text-align: left;
 }
 .chat__modal-catrow:hover { background: var(--ai-hover); }
+/* 键盘高亮: 仅背景轻染 (不用 outline 边框 — 全站 modal 统一) */
 .chat__modal-catrow.is-highlighted {
   background: var(--ai-hover);
-  outline: 1px solid var(--ai-accent);
-  outline-offset: -1px;
 }
 .chat__modal-catrow.is-connected { opacity: 0.65; }
 .chat__modal-catrow.is-highlighted.is-connected { opacity: 1; }
@@ -1004,16 +1001,15 @@ export const styles = `
   width: 100%;
   padding: 11px 14px;
   background: var(--ai-input-bg);
-  border: 1px solid var(--ai-accent);
+  border: 1px solid var(--ai-border);
   border-radius: 10px;
   color: var(--ai-fg);
-  font-family: inherit; font-size: 14px;
+  font-family: inherit; font-size: 13px;
   outline: none;
   box-sizing: border-box;
 }
 .chat__modal-apikey-input:focus {
   border-color: var(--ai-accent);
-  background: var(--ai-accent-soft);
 }
 .chat__modal-apikey-actions {
   display: flex; justify-content: flex-start;

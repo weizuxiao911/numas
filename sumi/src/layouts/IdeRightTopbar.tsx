@@ -118,7 +118,6 @@ const styles = `
 }
 .app-ide__hist-search:focus-within {
   border-color: var(--button-background, #6366f1);
-  background: color-mix(in srgb, var(--button-background, #6366f1) 9%, var(--editorWidget-background, #fff));
 }
 .app-ide__hist-search input {
   flex: 1; min-width: 0;
