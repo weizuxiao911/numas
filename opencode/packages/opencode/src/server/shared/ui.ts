@@ -83,11 +83,17 @@ function embeddedUIResponse(
     const html = new TextDecoder().decode(body)
     headers.set("content-security-policy", cspForHtml(html))
     // 注入运行时配置: sumi 前端读 window.__APP_CONFIG__
-    //   - registryBaseUrl: 扩展市场地址 (--registry)
+    //   - registryBaseUrl: 兼容字段 (--registry 或内置 /extensions)
+    //   - registryBaseUrls: 全部 vsix 市场地址数组 — 内置 /extensions 恒有, --registry 外部若配则追加 (去重)
     //   - domainProxy: 子域端口代理域名 (--domain-proxy); proxyUrl 据此拼 http://<port>.<domain>/
     if (registry || domainProxy) {
+      const registryBaseUrls = ["/extensions"]
+      if (registry && registry !== "/extensions" && !registryBaseUrls.includes(registry)) {
+        registryBaseUrls.push(registry)
+      }
       const config = {
         ...(registry ? { registryBaseUrl: registry } : {}),
+        registryBaseUrls,
         ...(domainProxy ? { domainProxy } : {}),
       }
       const script = `<script>window.__APP_CONFIG__ = Object.assign({}, window.__APP_CONFIG__, ${JSON.stringify(config)});</script>`
