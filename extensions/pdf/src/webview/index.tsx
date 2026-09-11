@@ -425,11 +425,13 @@ const PdfViewer: React.FC = () => {
     })();
   }, [readAnnoRemote]);
 
-  /** 运行代码: 宿主 vscode 终端执行 */
+  /** 运行代码: 打开代码文件 + 终端执行 */
   const onRunCode = useCallback((id: string) => {
     void (async () => {
       const a = (await readAnnoRemote()).find((x) => x.id === id);
-      if (a?.code?.command) vscode?.postMessage({ type: 'runCommand', command: a.code.command });
+      if (!a?.code) return;
+      if (a.code.file) vscode?.postMessage({ type: 'openFile', path: a.code.file });
+      if (a.code.command) vscode?.postMessage({ type: 'runCommand', command: a.code.command });
     })();
   }, [readAnnoRemote]);
 

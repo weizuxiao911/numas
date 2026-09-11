@@ -97,9 +97,8 @@ function setupAnnoChannel(webviewPanel: vscode.WebviewPanel, _document: vscode.T
         case 'runCommand': {
           const cmd = String(msg.command || '').trim()
           if (!cmd) return
-          const term = vscode.window.createTerminal('Numas')
-          term.show()
-          term.sendText(`${cmd}\n`)
+          // 走 sumi 全局命令 (codeblitz 下 vscode.window.createTerminal 命令送达不可靠)
+          await vscode.commands.executeCommand('numas.terminal.run', cmd)
           break
         }
       }

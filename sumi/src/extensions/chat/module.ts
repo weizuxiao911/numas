@@ -14,13 +14,15 @@
  *     不 import 本拓展内部实现. execute 时经 getChatPanelApi() 取当前注册的
  *     ChatbotView 能力 (mount 前为 null → no-op).
  */
-import { Injectable } from '@opensumi/di';
+import { Injectable, Autowired } from '@opensumi/di';
 import { Domain, CommandContribution, CommandRegistry } from '@opensumi/ide-core-common';
 import { BrowserModule } from '@opensumi/ide-core-browser';
 import {
   ComponentContribution,
   ComponentRegistry,
 } from '@opensumi/ide-core-browser/lib/layout';
+
+import { ITerminalController } from '@opensumi/ide-terminal-next/lib/common';
 
 import { ChatbotMain } from './ChatbotMain';
 import { getChatPanelApi } from './commands/chatApi';
@@ -46,6 +48,8 @@ export const CHATBOT_COMMANDS = {
   addContext: { id: 'chatbot.addContext', label: '添加对话上下文' },
   /** 直接发送一条指令 (跨拓展契约: 自动发送, 不等用户点发送) */
   send: { id: 'chatbot.send', label: '发送指令' },
+  /** 在终端执行命令 (跨拓展契约: vsix 等扩展执行产物代码用; 无终端则新建) */
+  runInTerminal: { id: 'numas.terminal.run', label: '终端执行命令' },
 } as const;
 
 @Injectable()
@@ -71,7 +75,25 @@ export class ChatbotContribution implements ComponentContribution {
 @Injectable()
 @Domain(CommandContribution)
 export class ChatbotCommandContribution implements CommandContribution {
+  @Autowired(ITerminalController)
+  private readonly terminals: ITerminalController;
+
   registerCommands(commands: CommandRegistry): void {
+    commands.registerCommand(CHATBOT_COMMANDS.runInTerminal, {
+      execute: async (cmd: string) => {
+        const c = String(cmd || '').trim();
+        if (!c) return false;
+        try {
+          let client = this.terminals.activeClient;
+          if (!client) client = await this.terminals.createTerminal({});
+          if (!client) return false;
+          await client.sendText(`${c}\n`);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    });
     commands.registerCommand(CHATBOT_COMMANDS.newSession, {
       execute: () => getChatPanelApi()?.newSession(),
     });
