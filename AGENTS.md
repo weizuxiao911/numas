@@ -855,3 +855,22 @@ AI **仍需 `question`**:
 - **根因**: 项目装的 marked 是 **7.0.5**, `renderer.link` 签名是 `link(href: string, title, text: string): string` (旧式); 实现按 v9+ 的 token 解构 `link({ href, title, text })` 写 → 第一个参数是字符串, 解构全 undefined. (`marked.d.ts` 里 renderer 段 vs tokenizer 段容易看混.)
 - **解决方案**: 按 marked 7 签名写: `link(href, title, text) { return `<a href="${href}"${title?` title="${title}"`:''} target="_blank" rel="noopener noreferrer">${text}</a>`; }`. 升级 marked 到 v9+ 时才改回 token 解构.
 - **排查方法**: 渲染出的 `<a>` 有 target/rel 但 href/text 是 undefined = 自定义 renderer 的参数签名不匹配; 对照 `node_modules/marked/lib/marked.d.ts` 的 renderer 签名, 不要照抄网上 v9+ 示例.
+
+#### 52. vsix 多市场合并 (内置 /extensions + 外部 gateway): 契约差异 + 来源路由 keying
+
+- **现象**: `--registry` 指向 gateway (`.../api/v2/agent-registry/plugins`) 时 vsix 阅读器 (pdf/docx/html 等) 全部加载不到, PDF 显示成二进制; 且内置 pdf 的静态资源请求被错误指到网关 (`.../plugins/numas.pdf-0.1.0/dist/extension.js` → net::ERR_FAILED).
+- **根因 (两个)**:
+  1. **metadata 端点契约不同**: 内置 `/extensions` 是 `GET /extensions/metadata.json`; gateway 是 `GET <base>/plugins/metadata` (带 `/plugins` 的 base 则是 `<base>/metadata`). 前端只拉 `/metadata.json` → gateway 404 → 元数据为空.
+  2. **来源路由 keying 错**: `sourceByExtId` 按 `extension.name` (如 `pdf`) 记录, 但静态资源 uri 首段是**带版本 id** (`kt-ext:///numas.pdf-0.1.0` → `numas.pdf-0.1.0`) → 查不到来源 → 落到 `registryBaseUrl` (此时=网关) → 404.
+- **gateway vsix 契约 (2026-09 实测)**:
+  - metadata: `<base>/plugins/metadata` → JSON 数组, 形状同内置 (extension/packageJSON/uri/...), uri 带 authority: `kt-ext://<host>/api/v2/agent-registry/plugins/<publisher>.<name>-<version>/file`
+  - 文件: `<base>/plugins/<id>/file/<relPath>` (如 `/file/dist/extension.js` → 200 application/javascript)
+  - **无** `/metadata.json` / `/manifest.json` / `/vsix/<name>` (这些是内置市场契约)
+  - authority 形态 uri 由 `resolveStaticResource` 的 authority 分支处理 (保 host + scheme), 不需要来源 map
+- **解决方案**:
+  - metadata 拉取按序尝试 3 端点: `<base>/metadata.json` → `<base>/metadata` → `<base>/plugins/metadata`; 空数组 = 端点存在但无扩展 (不再试下一个)
+  - `sourceByExtId` 双 key 记录: `extension.name` + uri 首段 id (`kt-ext:///<id>` 形态, 正则 `^kt-ext:\/\/\/([^/]+)`; 带 authority 的返回空走 authority 分支)
+  - 失败源指数退避重试 (1s/3s/7s × 3) + 后台补拉 (5 轮 × 10s, metadata 0→N 时 reload 一次)
+  - 服务端 `ui.ts` 注入 `registryBaseUrls` 数组 (内置 `/extensions` 恒有 + `--registry` 外部追加去重), 前端多源合并按 name 去重 (内置优先)
+- **排查方法**: ① 区分「metadata 拉不到」vs「metadata 有但文件 404」: 看 network 里 `metadata.json` 404 还是 `<id>/file/...` 404; ② 网关端点探测顺序: `curl <base>/plugins/metadata` (无 /plugins 的 base) 或 `<base>/metadata` (带 /plugins 的 base); ③ 来源路由 bug 的指纹: 内置扩展的 extension.js 请求指向外部网关 = sourceByExtId 查不到 → 查 uri 首段 id 与 map key 是否一致 (name ≠ versioned id).
+- **注**: `dev.js` 默认不再传 `--extensions-dir` (需 `NUMAS_EXTENSIONS_DIR` 显式指定); Docker 镜像默认 registry = `https://gateway.cloudlab.top/api/v2/agent-registry/plugins`.
