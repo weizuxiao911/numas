@@ -339,6 +339,9 @@ AI **仍需 `question`**:
 - **52** vsix 多市场合并 (内置 /extensions + 外部 gateway): 契约差异 + 来源路由
 - **53** vsix webview 资源不能手拼 registryBase, 必须用 asWebviewUri
 - **63** 网关市场下 vsix webview 子资源被 CSP 拦 (cspSource 带 path 不匹配)
+- **64** React createPortal 进命令式 DOM 容器 → 蒙层不渲染 (静默)
+- **65** 弹层用释放点固定坐标 → 滚动后不跟随目标元素
+- **66** 滚动内容上的覆盖层用视口坐标 → 滚动漂移
 
 **git / 协作 / 工作流 / 杂项** → `memory/pitfalls-workflow.md`
 - **4** AI 操作造成的 stray 文件污染项目根
@@ -348,3 +351,4 @@ AI **仍需 `question`**:
 - **8** CLI chromium --no-sandbox 启动需要 bundle ESM 路径
 - **9** 端口反代 URL 拼接漏 replace(/\/+$/, '')
 - **23** 改动收尾用普通文本"询问 git"代替 question 工具 → 等于没问
+- **67** 本地联调测试入口搞错: 在 24096 测旧 UI, 改动不生效

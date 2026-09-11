@@ -250,3 +250,21 @@
 - **根因**: codeblitz webview = 外层壳 iframe → 内层应用 iframe 两层 (递归查找才行); 内层应用重建时 `viewer.innerHTML = ''` 会清空 viewer 的所有子节点 (含外挂 layer).
 - **解决方案**: 外挂层挂**内层 iframe 的 body** (`position: fixed` 覆盖 iframe 视口, pointer-events:none + 子元素 auto); 坐标用 iframe 视口坐标 (页面 div getBoundingClientRect); 滚动/尺寸变化 rAF 节流重绘. 顶层 document 零元素.
 - **排查方法**: 外挂元素「挂上就消失」→ 查目标容器是否被框架重建 (innerHTML/appendChild 重建); 用 `iframe.contentDocument.body` 而非 viewer.
+
+#### 64. React createPortal 进命令式 DOM 容器 → 蒙层不渲染 (静默)
+
+- **问题描述**: 标注蒙层用 `createPortal(marks, pageEl)` 挂进命令式创建/重建的页面 div (非 React 管理节点), DOM 里查不到 `.pdf-anno-mark`, 无任何报错, 表现「拖动完成标注但蒙层不显示」.
+- **复现路径**: 页面骨架由 `document.createElement` 手工插入 + 定时 `innerHTML=''` 重建; React 组件里对同一容器 createPortal.
+- **解决方案**: 命令式 DOM 容器一律**命令式同步内容** — `useEffect` 里 `querySelectorAll('.xxx').remove()` 清旧 + `createElement/appendChild` 挂新 (含子按钮 `addEventListener`), deps 带 `renderTick` (容器重建后重挂). 不用 portal 混管. (React 只负责 popover/工具栏等自身 DOM.)
+- **排查方法**: 状态更新了、popover 弹了、但目标 DOM 查无元素 → 检查是否 portal 进了 React 不拥有的容器.
+
+#### 65. 弹层用释放点固定坐标 → 滚动后不跟随目标元素
+
+- **问题描述**: popover 位置存 `{x: e.clientX, y: e.clientY}` (固定视口坐标), 页面滚动/缩放后弹层留在原地, 不跟标注区域.
+- **解决方案**: 弹层状态只存业务 id (`annoId`), 位置**每次从目标元素 `getBoundingClientRect()` 实时推导**: `useLayoutEffect` (打开时) + `scrollHost` scroll / window resize 监听里命令式改 `el.style.left/top` (零 React 重渲染, 零延迟). 锚点关系实测恒定 (dx=0, dy=6).
+- **适用**: 任何「弹层锚定滚动内容元素」场景 (标注/批注/悬浮卡).
+
+#### 66. 滚动内容上的覆盖层用视口坐标 → 滚动漂移
+
+- **问题描述**: 标注蒙层放滚动容器外层用视口坐标定位, 滚动时 rAF 节流重绘追不上, 视觉上蒙层「漂移」.
+- **解决方案**: 覆盖层直接作为**滚动内容元素的子元素** (页 div 内), 坐标用**页内百分比** (`left: x*100%` 等) — 与内容同一坐标系, 滚动/缩放天然跟随, 零坐标换算零漂移. 交互命中判定仍用 `getBoundingClientRect` (视觉坐标) + 归一化, 与存储格式一致.
