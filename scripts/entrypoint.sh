@@ -9,7 +9,7 @@
 #   HOST          / NUMAS_HOST          → --hostname (默认 0.0.0.0)
 #   PORT          / NUMAS_PORT          → --port     (默认 4096)
 #   CORS          / NUMAS_CORS          → --cors     (默认 '*')
-#   REGISTRY      / NUMAS_REGISTRY      → --registry (默认 /extensions = fork 内置扩展市场)
+#   REGISTRY      / NUMAS_REGISTRY      → --registry (默认 https://gateway.cloudlab.top/api/v2/agent-registry/plugins)
 #   WEB_UI        / NUMAS_WEB_UI        → --web-ui   (默认 /home/.numas/ui, 镜像内拷贝的 sumi 产物)
 #   WORKDIR       / NUMAS_WORKDIR       → cd         (默认 /home/community, 决定 instance dir)
 #   SUBCMD        / NUMAS_SUBCMD        → 子命令     (默认 web; 可换 serve/acp/...)
@@ -19,7 +19,7 @@
 #   docker run --rm -p 4096:4096 numas:latest
 #   docker run --rm -p 4096:4096 -v $(pwd):/home/community numas:latest
 #   docker run --rm -p 9000:9000 -e PORT=9000 numas:latest
-#   docker run --rm -p 4096:4096 -e REGISTRY=http://host:7790 numas:latest
+#   docker run --rm -p 4096:4096 -e REGISTRY=/extensions numas:latest   (覆盖回内置市场)
 #   docker run --rm -p 4096:4096 -e WEB_UI=/ui numas:latest
 #   docker run --rm -p 4096:4096 -e SUBCMD=serve numas:latest
 
@@ -46,7 +46,7 @@ PORT=$(v NUMAS_PORT PORT 4096)
 CORS=$(v NUMAS_CORS CORS '*')
 # 扩展市场默认同源内置控制器 /extensions (opencode fork 扫 --extensions-dir);
 # 外部自建市场可 -e NUMAS_REGISTRY=https://host:port 覆盖
-REGISTRY=$(v NUMAS_REGISTRY REGISTRY /extensions)
+REGISTRY=$(v NUMAS_REGISTRY REGISTRY https://gateway.cloudlab.top/api/v2/agent-registry/plugins)
 # 默认指向镜像内拷贝的 sumi 静态产物 (替换 UI = 本地重 build sumi + 重构建镜像)
 WEB_UI=$(v NUMAS_WEB_UI WEB_UI /home/.numas/ui)
 # 默认工作目录 = /home/community (workdir 即容器内 workspace 根; NUMAS_WORKDIR 可覆盖)
