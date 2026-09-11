@@ -104,13 +104,14 @@ ENV LANG=C.UTF-8 \
 
 # Python 全局依赖预装 (实验一~六依赖汇总, 用户拍板"轻量依赖 + 中科大镜像").
 #   pip.conf 写 /etc/pip.conf (全局): venv / 用户级 pip 都会读, 容器内所有 pip install
-#   默认走中科大镜像 (调研结论: 中科大最稳最快; 阿里云大包易超时 / 清华慢 / 官方失败).
+#   默认走阿里云镜像 (实测: USTC/清华对 pyecharts wheel 返 403, 阿里云 200;
+#   阿里云索引快小包稳定, 大包偶发超时 — 本清单无超大包).
 #   --break-system-packages: ubuntu 24.04 系统 python3 是 externally-managed, 不加会被
 #   PEP 668 拒绝; 装到 /usr/local/lib/python3.12/dist-packages (系统 python 可见).
 #   --no-cache-dir: 不留 wheel 缓存, 保持镜像精简.
 #   内置范围: 多实验共用的核心依赖; 跳过单实验"扩展"项 (alibabacloud_dysmsapi20170525 /
 #   APScheduler / qrcode, 用户拍板去掉) 与 paddleocr (paddlepaddle +1~2GB), 需要时自装.
-RUN printf '[global]\nindex-url = https://pypi.mirrors.ustc.edu.cn/simple\ntrusted-host = pypi.mirrors.ustc.edu.cn\ntimeout = 120\n' > /etc/pip.conf \
+RUN printf '[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple\ntrusted-host = mirrors.aliyun.com\ntimeout = 120\n' > /etc/pip.conf \
   && python3 -m pip install --break-system-packages --no-cache-dir \
        flask==3.1.3 \
        flask-sock==0.7.0 \
