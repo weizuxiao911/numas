@@ -12,6 +12,8 @@ import { EXT_SCHEME } from '@codeblitzjs/ide-sumi-core/lib/common/constant';
 
 import type { ExtensionMetadata, IExtensionService } from './extension.interface';
 import { ExtensionToken } from './extension.interface';
+import { appBaseUrl, effectiveCwd } from '../../infra/url';
+import { absToRel } from '../../infra/path';
 
 function registryBaseUrl(): string {
   let base = ((window as any).__APP_CONFIG__?.registryBaseUrl || '').trim();
@@ -183,6 +185,26 @@ export class RegistryStaticResourceContribution implements StaticResourceContrib
         return URI.parse(`${source}${uri.path.toString()}`);
       },
       roots: registryBaseUrls(),
+    });
+
+    // file:// 静态资源 (图片/视频预览等 raw 文件): codeblitz 默认无 file provider → 原样返回
+    // file:// 浏览器打不开 (img/video 标签无法带 x-opencode-directory header) → 映射到同源
+    // opencode fs API: /api/fs/read/<rel>?directory=<ws> (V2 workspace selector, 返回文件 mime).
+    service.registerStaticResourceProvider({
+      scheme: 'file',
+      resolveStaticResource: (uri) => {
+        try {
+          const fsPath = (uri as any).codeUri?.path || uri.path?.toString() || '';
+          const ws = effectiveCwd();
+          const rel = ws ? absToRel(fsPath, ws) : null;
+          if (!rel) return uri; // 工作区外: 原样返回 (无同源 API 可直连)
+          const origin = appBaseUrl().replace(/\/+$/, '');
+          return URI.parse(`${origin}/api/fs/read/${encodeURIComponent(rel)}?directory=${encodeURIComponent(ws)}`);
+        } catch {
+          return uri;
+        }
+      },
+      roots: [appBaseUrl()],
     });
   }
 }
