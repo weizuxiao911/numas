@@ -2,9 +2,6 @@ import * as vscode from 'vscode'
 
 export const PDF_VIEW_TYPE = 'pdfViewer'
 
-/** vsix 包 id (registry 静态分发路径: <registryBase>/<id>/<file>) */
-const VSIX_ID = 'numas.pdf-0.1.0'
-
 /**
  * PDF 阅读器 (vsix)
  *
@@ -17,16 +14,34 @@ const VSIX_ID = 'numas.pdf-0.1.0'
  * 关键问题 + 解决:
  *   1. opensumi webview listening 有空窗期 → shell HTML 多档延迟重发
  *   2. webview 是 srcdoc 同源 iframe → fetch 同源 API (dev 走 webpack proxy, 生产同源), 无 CORS 问题
- *   3. pdf.js 静态资源随 vsix 打包 (pdfjs/), 从 registry 加载, 不依赖 CDN
+ *   3. pdf.js 静态资源随 vsix 打包 (pdfjs/), 经 asWebviewUri 从市场加载 (内置/网关两种路径形态自适应), 不依赖 CDN
  */
 export function activate(context: vscode.ExtensionContext) {
   const provider: vscode.CustomTextEditorProvider = {
     async resolveCustomTextEditor(document, webviewPanel, _token) {
-      webviewPanel.webview.options = { enableScripts: true, retainContextWhenHidden: true }
+      // 标准 vscode webview 资源解析: asWebviewUri 走 codeblitz 静态资源服务,
+      // 自动适配市场来源 (内置 /extensions/<id>/... 或网关 <base>/<id>/file/...);
+      // 不能手拼 registryBase + 路径 — 网关与内置路径形态不同, 手拼在网关下必 404.
+      const localRoots = [
+        vscode.Uri.joinPath(context.extensionUri, 'dist'),
+        vscode.Uri.joinPath(context.extensionUri, 'pdfjs'),
+      ]
+      webviewPanel.webview.options = {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: localRoots,
+      }
 
       const name = (document.uri?.fsPath || '').split(/[\\/]/).pop() || 'document.pdf'
       const target = resolveFetchTarget(document)
-      const shell = buildShell(name, target)
+      const webviewJsUri = webviewPanel.webview
+        .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview.js'))
+        .toString()
+      const pdfjsBase = webviewPanel.webview
+        .asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'pdfjs'))
+        .toString()
+        .replace(/\/+$/, '')
+      const shell = buildShell(name, target, webviewJsUri, pdfjsBase)
 
       // opensumi webview 监听空窗期: 一次 set html 会丢 → 多档重发
       const sendShell = () => { try { webviewPanel.webview.html = shell } catch { /* ignore */ } }
@@ -80,11 +95,11 @@ function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
 }
 
-/** shell HTML: 只挂 root + 配置 (registry 基址 + fetch 地址/headers) + webview bundle.
- *  registry 基址在 webview 侧解析 (ext host 拿不到 __APP_CONFIG__):
- *    window.parent.__APP_CONFIG__.registryBaseUrl → 相对 '/extensions' 兜底 (同源, 生产/开发都成立). */
-function buildShell(name: string, target: FetchTarget): string {
-  const cfg = JSON.stringify({ name, fetch: target })
+/** shell HTML: 只挂 root + 配置 (webview bundle URL + pdfjs 基址 + fetch 地址/headers).
+ *  webviewJsUri / pdfjsBase 由 host 侧 asWebviewUri 解析成绝对 URL (自动适配市场来源:
+ *  内置 /extensions/<id>/... 或网关 <base>/<id>/file/...), shell 不再手拼 registryBase. */
+function buildShell(name: string, target: FetchTarget, webviewJsUri: string, pdfjsBase: string): string {
+  const cfg = JSON.stringify({ name, fetch: target, pdfjsBase })
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -96,15 +111,9 @@ function buildShell(name: string, target: FetchTarget): string {
 <div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#aaa;font-family:system-ui,sans-serif;font-size:13px;background:#525659">加载中…</div></div>
 <script>
 (function(){
-  var base = '/extensions';
-  try {
-    var c = window.parent && window.parent.__APP_CONFIG__;
-    if (c && c.registryBaseUrl) base = c.registryBaseUrl;
-  } catch (e) { /* 跨域/沙箱 → 同源相对路径兜底 */ }
-  base = String(base).replace(/\\/+$/, '');
-  window.__PDF_CFG__ = Object.assign({ registryBase: base }, ${cfg});
+  window.__PDF_CFG__ = Object.assign({}, ${cfg});
   var s = document.createElement('script');
-  s.src = base + '/${VSIX_ID}/dist/webview.js';
+  s.src = ${JSON.stringify(webviewJsUri)};
   s.onerror = function () {
     var el = document.getElementById('root');
     if (el) el.innerHTML = '<div style="padding:20px;color:#faa;font-family:ui-monospace,monospace;font-size:12px">webview bundle 加载失败: ' + s.src + '</div>';

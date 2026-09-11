@@ -19,9 +19,14 @@ import { createRoot } from 'react-dom/client';
 const CFG = ((window as any).__PDF_CFG__ || {}) as {
   registryBase?: string;
   name?: string;
+  pdfjsBase?: string;
   fetch?: { rel?: string; headerDir?: string; error?: string };
 };
-const PDFJS_BASE = `${String(CFG.registryBase || '').replace(/\/+$/, '')}/numas.pdf-0.1.0/pdfjs`;
+// pdfjs 基址由 extension host 用 asWebviewUri 解析 (自适应内置/网关市场路径);
+// 兜底: 老 shell 无 pdfjsBase 时按 registryBase 拼 (内置市场形态).
+const PDFJS_BASE = String(
+  CFG.pdfjsBase || `${String(CFG.registryBase || '').replace(/\/+$/, '')}/numas.pdf-0.1.0/pdfjs`,
+).replace(/\/+$/, '');
 
 /* ===== pdf.js 加载 (module script → window.pdfjsLib; worker 走 blob 规避跨域) ===== */
 function loadScript(src: string): Promise<void> {
