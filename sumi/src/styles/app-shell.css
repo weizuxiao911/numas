@@ -249,3 +249,8 @@
 [class*="scrollbar_thumb"] {
   display: none !important;
 }
+
+/* ===== SOLO aside: 隐藏官方 left tabbar (活动栏图标条, 与胶囊/菜单重复); IDE 模式保留 ===== */
+.app-solo #opensumi-left-tabbar {
+  display: none !important;
+}
