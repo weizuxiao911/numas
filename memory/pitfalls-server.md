@@ -243,3 +243,10 @@
 - **根因**: 该 API 契约是 `{ path, content: <base64> }` (见 `sumi/src/service/filesystem/filesystem.service.ts` 的 `bytesToBase64(content)`), 不是明文. 传明文时服务端 `Buffer.from(content, 'base64')` 把可见字符解成垃圾字节, 无任何报错.
 - **解决方案**: 客户端写文本文件必须 **UTF-8 → base64** 后传: `TextEncoder` 编码 → 分块 `String.fromCharCode` 拼接 (避免超长参数溢出) → `btoa`. 读侧 `/api/fs/read` 返回裸字节 (无 base64), 直接 `res.json()`/arrayBuffer 均可.
 - **排查方法**: 「API 204 成功但文件内容乱码」→ 对照同仓库既有调用方 (sumi filesystem.service) 确认 body 编码契约, 别只看 HTTP 状态码.
+
+#### 70. 终端 sendText 用 `\n` 结尾 → 命令不执行 (pty 提交键是 `\r`)
+
+- **问题描述**: 通过 ITerminalController / vscode 终端往 pty 发送命令时 `sendText(\`${cmd}\n\`)`, 终端显示命令但**不执行** (光标停在行尾不回车), 误判"终端不执行代码".
+- **根因**: 终端提交/回车键是 **`\r`** (CR), 不是 `\n` (LF); xterm/pty 把 `\n` 当换行显示, 不触发提交.
+- **解决方案**: `sendText(\`${cmd}\r\`)` (或 `\r\n`). 判断依据: 终端能显示命令文本说明写入通道正常, 不执行就是提交键不对.
+- **排查方法**: 「终端显示命令但不执行」→ 先查结尾字符是 `\r` 还是 `\n`; 同时区分「命令没送达」(查 executeCommand/桥接日志) 与「送达没提交」(查结尾符).
