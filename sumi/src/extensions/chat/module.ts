@@ -87,7 +87,8 @@ export class ChatbotCommandContribution implements CommandContribution {
           let client = this.terminals.activeClient;
           if (!client) client = await this.terminals.createTerminal({});
           if (!client) return false;
-          await client.sendText(`${c}\n`);
+          // 终端提交键是 \r (回车); 用 \n 多数 pty 不会执行
+          await client.sendText(`${c}\r`);
           return true;
         } catch {
           return false;
