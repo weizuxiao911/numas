@@ -16,7 +16,8 @@
  */
 import { Injectable, Autowired } from '@opensumi/di';
 import { Domain, CommandContribution, CommandRegistry } from '@opensumi/ide-core-common';
-import { BrowserModule } from '@opensumi/ide-core-browser';
+import { BrowserModule, SlotLocation } from '@opensumi/ide-core-browser';
+import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 import {
   ComponentContribution,
   ComponentRegistry,
@@ -78,6 +79,9 @@ export class ChatbotCommandContribution implements CommandContribution {
   @Autowired(ITerminalController)
   private readonly terminals: ITerminalController;
 
+  @Autowired(IMainLayoutService)
+  private readonly mainLayout: IMainLayoutService;
+
   registerCommands(commands: CommandRegistry): void {
     commands.registerCommand(CHATBOT_COMMANDS.runInTerminal, {
       execute: async (cmd: string) => {
@@ -85,8 +89,15 @@ export class ChatbotCommandContribution implements CommandContribution {
         if (!c) return false;
         try {
           let client = this.terminals.activeClient;
-          if (!client) client = await this.terminals.createTerminal({});
+          if (!client) {
+            client = await this.terminals.createTerminal({});
+            // 新建终端 pty 异步就绪 (createTerminal resolve 后 ~50ms+ 才 create2),
+            // 立即 sendText 会丢 → 等就绪再发
+            await new Promise((r) => setTimeout(r, 800));
+          }
           if (!client) return false;
+          // 展开终端面板 (IDE: bottom slot; SOLO 下 no-op 由 aside 终端视图承载)
+          try { this.mainLayout.toggleSlot(SlotLocation.bottom, true); } catch { /* ignore */ }
           // 终端提交键是 \r (回车); 用 \n 多数 pty 不会执行
           await client.sendText(`${c}\r`);
           return true;
