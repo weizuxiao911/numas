@@ -165,8 +165,6 @@
   display: inline-block !important;
 }
 .app-solo__aside-container { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
-/* 终端常驻挂载容器 (非终端模式 display:none, 避免卸载重挂载导致 xterm 无法重挂载) */
-.app-solo__aside-terminal { flex: 1 1 auto; min-width: 0; min-height: 0; flex-direction: column; }
 /* 终端模式: 隐藏底部模块 tab 条 (仅终端一个模块, 冗余; 保留终端面板自身 zsh 标题栏) */
 .app-solo__aside-container .bottom-slot .next_bottom_bar { display: none; }
 /* 查看模式: 隐藏编辑器 tab 栏右侧 actions 区 (design 主题下 .kt-icon::before 被全局 display:none,

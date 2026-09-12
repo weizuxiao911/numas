@@ -3,6 +3,7 @@
  * 主题色: 全部走 codeblitz/opensumi token, 不硬编码
  */
 export const styles = `
+
 .app-aside-topbar {
   --ai-fg: var(--editor-foreground, #333);
   --ai-fg-muted: var(--descriptionForeground, #8f8f8f);
@@ -29,18 +30,18 @@ export const styles = `
 }
 .app-aside-topbar__menu:hover { color: var(--ai-fg); background: color-mix(in srgb, var(--ai-fg) 7%, transparent); }
 .app-aside-topbar__right { min-width: 0; }
-/* 胶囊: 3 等分, 底部滑块 (pill) 用 transform 过渡 */
+/* 胶囊: 2 等分 (文件系统 | 浏览器), 底部滑块 (pill) 用 transform 过渡 */
 .app-aside-topbar__capsule {
   position: relative;
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  width: 100%; max-width: 260px;
+  display: grid; grid-template-columns: repeat(2, 1fr);
+  width: 100%; max-width: 190px;
   padding: 3px;
   background: color-mix(in srgb, var(--ai-fg) 7%, transparent);
   border-radius: 999px;
 }
 .app-aside-topbar__pill {
   position: absolute; top: 3px; bottom: 3px; left: 3px;
-  width: calc((100% - 6px) / 3);
+  width: calc((100% - 6px) / 2);
   background: var(--ai-bg-elev);
   border-radius: 999px;
   box-shadow:
@@ -51,7 +52,6 @@ export const styles = `
   pointer-events: none;
 }
 .app-aside-topbar__capsule[data-index="1"] .app-aside-topbar__pill { transform: translateX(100%); }
-.app-aside-topbar__capsule[data-index="2"] .app-aside-topbar__pill { transform: translateX(200%); }
 .app-aside-topbar__btn {
   position: relative; z-index: 1;
   height: 26px; padding: 0;

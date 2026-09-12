@@ -20,6 +20,7 @@
  */
 import React, { useRef, useEffect } from 'react';
 import { SlotLocation, SlotRenderer } from '@opensumi/ide-core-browser';
+import { SplitPanel } from '@opensumi/ide-core-browser/lib/components';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { ITerminalController } from '@opensumi/ide-terminal-next/lib/common';
 
@@ -202,34 +203,25 @@ export function SoloLayout(): React.ReactElement {
             <SlotRenderer slot={SOLO_SLOTS.AsideAction} />
           </div>
           <div className="app-solo__aside-middle">
-            {/* 查看: 官方 explorer(left 槽) + 编辑器 workbench(main 槽); 终端/浏览器: 仅容器区.
-                explorer 可由 asidetopbar 菜单按钮折叠 (折叠=不渲染, 编辑器占满);
-                左栏宽度可拖拽 (resizer 在 sidebar 右缘, localStorage 持久化) */}
-            {asideView === 'view' && !asideExplorerCollapsed && (
-              <>
-                <div
-                  className="app-solo__aside-sidebar"
-                  style={{ flexBasis: asideSidebarW, width: asideSidebarW }}
-                >
-                  <SlotRenderer slot={SlotLocation.left} />
-                </div>
-                <div
-                  className="app-solo__aside-resizer app-solo__aside-resizer--inner"
-                  onMouseDown={onAsideInnerResizerDown}
-                  role="separator"
-                  aria-orientation="vertical"
-                />
-              </>
+            {asideView === 'view' ? (
+              /* 文件系统: 照搬 IDE 渲染结构 (SplitPanel: left | [main / bottom]), 终端用同款 isTabbar */
+              <SplitPanel id="solo-fs-horizontal" flex={1}>
+                {!asideExplorerCollapsed && (
+                  <SlotRenderer
+                    slot={SlotLocation.left}
+                    isTabbar
+                    minResize={204}
+                    savedSize={asideSidebarW}
+                  />
+                )}
+                <SplitPanel id="solo-fs-vertical" minResize={300} flexGrow={1} direction="top-to-bottom">
+                  <SlotRenderer flex={2} flexGrow={1} minResize={200} slot={SlotLocation.main} />
+                  <SlotRenderer flex={1} slot={SlotLocation.bottom} isTabbar />
+                </SplitPanel>
+              </SplitPanel>
+            ) : (
+              <SlotRenderer key="aside-browser" slot={SOLO_SLOTS.AsideBrowser} />
             )}
-            <div className="app-solo__aside-container">
-              {asideView === 'view' && <SlotRenderer key="aside-editor" slot={SlotLocation.main} />}
-              {asideView === 'browser' && <SlotRenderer key="aside-browser" slot={SOLO_SLOTS.AsideBrowser} />}
-              {/* 终端常驻挂载 (非终端模式仅 display:none): TerminalClient._renderOnDemand 对已打开的 xterm
-                  直接 return, 卸载重挂载不会重新 append 到新容器 → 终端空白/无法连接. 常驻后模式切换只切显隐 */}
-              <div className="app-solo__aside-terminal" style={{ display: asideView === 'terminal' ? 'flex' : 'none' }}>
-                <SlotRenderer slot={SlotLocation.bottom} />
-              </div>
-            </div>
           </div>
           <div className="app-solo__aside-footer">
             <SlotRenderer slot={SOLO_SLOTS.AsideFooter} />

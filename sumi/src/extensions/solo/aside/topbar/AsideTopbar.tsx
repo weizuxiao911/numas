@@ -18,8 +18,7 @@ import { LayoutToken, type ILayoutService, type AsideView } from '../../../../se
 import { styles } from './styles';
 
 const ITEMS: Array<{ id: AsideView; label: string }> = [
-  { id: 'view', label: '查看' },
-  { id: 'terminal', label: '终端' },
+  { id: 'view', label: '文件系统' },
   { id: 'browser', label: '浏览器' },
 ];
 
@@ -48,10 +47,10 @@ export const AsideTopbar: React.FC = () => {
     try { t?.activeClient?.focus?.(); } catch { /* ignore */ }
   };
 
-  // 终端模式: SOLO 下 bottom slot 已由 SoloLayout 在 aside 内渲染 (无 IDE 的 bottom tabbar),
-  // 这里只需确保存在终端实例; 有实例时聚焦当前终端.
+  // 终端已并入「查看」视图底部 (SoloLayout 内常驻渲染 bottom slot).
+  // 这里确保存在终端实例 + 保活 (全关自动重建), 保证随时有终端可用.
   useEffect(() => {
-    if (view !== 'terminal') return;
+    if (view === 'browser') return;
     ensureTerminal();
     // 保活: 终端全部关闭 → 自动重建 (确保随时有终端可用)
     const timer = setInterval(() => {
@@ -64,10 +63,10 @@ export const AsideTopbar: React.FC = () => {
 
   const index = Math.max(0, ITEMS.findIndex((it) => it.id === view));
   const onPick = (id: AsideView) => {
-    // 激活哪个拓展, aside 中间 slot 就加载哪个 (view→editor / terminal→bottom / browser→aside.browser)
+    // 激活哪个拓展, aside 中间 slot 就加载哪个 (view→editor+终端 / browser→aside.browser)
     layout.setAsideView(id);
-    // 已在该 tab 再点一次: 终端可能已被全部关闭 → 重建
-    if (id === 'terminal') ensureTerminal();
+    // 终端常驻查看视图底部; 进入查看时确保实例 (可能已被全部关闭)
+    if (id === 'view') ensureTerminal();
   };
 
   return (
