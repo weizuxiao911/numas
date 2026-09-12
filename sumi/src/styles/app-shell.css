@@ -231,3 +231,21 @@
 }
 .app-boot__text { opacity: 0.8; letter-spacing: 0.02em; }
 @keyframes app-boot-spin { to { transform: rotate(360deg); } }
+
+/* ===== 全局隐藏滚动条 (保留滚动能力) ===== */
+* {
+  scrollbar-width: none;            /* Firefox */
+  -ms-overflow-style: none;         /* 旧 Edge/IE */
+}
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none;
+}
+/* codeblitz 自定义滚动条组件同样隐藏 */
+.kt-scrollbar__track,
+.kt-scrollbar__thumb,
+[class*="scrollbar_track"],
+[class*="scrollbar_thumb"] {
+  display: none !important;
+}
