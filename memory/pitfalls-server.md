@@ -250,3 +250,10 @@
 - **根因**: 终端提交/回车键是 **`\r`** (CR), 不是 `\n` (LF); xterm/pty 把 `\n` 当换行显示, 不触发提交.
 - **解决方案**: `sendText(\`${cmd}\r\`)` (或 `\r\n`). 判断依据: 终端能显示命令文本说明写入通道正常, 不执行就是提交键不对.
 - **排查方法**: 「终端显示命令但不执行」→ 先查结尾字符是 `\r` 还是 `\n`; 同时区分「命令没送达」(查 executeCommand/桥接日志) 与「送达没提交」(查结尾符).
+
+#### 71. createTerminal 后立即 sendText → 命令丢失 (pty 异步就绪竞态)
+
+- **问题描述**: 「运行代码」新建终端后立即 `client.sendText(cmd)`, 终端打开只有 shell 提示符 (如 `➜ 目录`), 命令文字都没出现; 日志显示 `sent` 早于 `create2 ok` (pty 创建) 约 50ms+.
+- **根因**: `ITerminalController.createTerminal()` resolve 只代表前端 TerminalClient 建立, 底层 pty 是异步创建的; 在 pty 就绪前 `sendText` 写入的数据被丢弃 (无报错).
+- **解决方案**: 新建终端后 `await new Promise(r => setTimeout(r, 800))` 等 pty 就绪再 `sendText`; 已有终端 (activeClient) 直接发. 更严谨可监听终端 ready 事件.
+- **排查方法**: 「终端打开但命令没出现」→ 对比 `sent` 与 `create2 ok` 时间戳顺序; 命令丢失优先怀疑时序, 不是通道问题 (与 #70 提交键区分: #70 是显示不执行, 本坑是根本不显示).

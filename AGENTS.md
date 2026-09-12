@@ -306,6 +306,7 @@ AI **仍需 `question`**:
 - **61** CSP 里 `*` 不匹配 `blob:` 特殊 scheme → pdf.js worker 加载失败
 - **68** `/api/fs/write` content 是 base64 而非明文 → 写入文件乱码 (204 成功无报错)
 - **70** 终端 sendText 用 `\n` 结尾 → 命令不执行 (pty 提交键是 `\r`)
+- **71** createTerminal 后立即 sendText → 命令丢失 (pty 异步就绪竞态)
 
 **sumi 前端 / codeblitz / 布局 / chat** → `memory/pitfalls-frontend.md`
 - **19** 冷启动 left slot 折叠 / defaultPanels 失效 (fixLayout 清 currentId)
