@@ -13,8 +13,6 @@ import React, { useEffect, useState } from 'react';
 
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
-import { SlotLocation } from '@opensumi/ide-core-browser';
-import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 import { ITerminalController } from '@opensumi/ide-terminal-next/lib/common';
 import { LayoutToken, type ILayoutService, type AsideView } from '../../../../service/layout';
 import { styles } from './styles';
@@ -28,7 +26,6 @@ const ITEMS: Array<{ id: AsideView; label: string }> = [
 export const AsideTopbar: React.FC = () => {
   const layout = useInjectable<ILayoutService>(LayoutToken);
   const commandService = useInjectable<CommandService>(CommandService);
-  const mainLayout = useInjectable<IMainLayoutService>(IMainLayoutService);
   const terminals = useInjectable<ITerminalController>(ITerminalController);
   const [view, setView] = useState<AsideView>(() => layout.state.aside.view);
   const [explorerCollapsed, setExplorerCollapsed] = useState<boolean>(() => layout.state.aside.explorerCollapsed);
@@ -38,30 +35,33 @@ export const AsideTopbar: React.FC = () => {
     setExplorerCollapsed(s.aside.explorerCollapsed);
   }), [layout]);
 
-  // 终端模式: bottom slot 挂载后激活终端容器; 无终端实例则自动新建一个 (首次)
+  /** 确保终端实例存在 (无则新建; 有则聚焦) — 终端全关后重开也走这里 */
+  const ensureTerminal = () => {
+    const t = terminals as any;
+    const size = t?.clients?.size ?? 0;
+    if (size === 0) {
+      try {
+        void (t?.createTerminal ? t.createTerminal({}) : commandService.executeCommand('terminal.add'));
+      } catch { /* ignore */ }
+      return;
+    }
+    try { t?.activeClient?.focus?.(); } catch { /* ignore */ }
+  };
+
+  // 终端模式: SOLO 下 bottom slot 已由 SoloLayout 在 aside 内渲染 (无 IDE 的 bottom tabbar),
+  // 这里只需确保存在终端实例; 有实例时聚焦当前终端.
   useEffect(() => {
     if (view !== 'terminal') return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    let tries = 0;
-    const tick = () => {
-      try { mainLayout.toggleSlot(SlotLocation.bottom, true); } catch { /* ignore */ }
-      const active = mainLayout.getTabbarHandler('terminal')?.isActivated?.() ?? false;
-      if (active) {
-        if (((terminals as any)?.clients?.size ?? 0) === 0) {
-          void commandService.executeCommand('terminal.add').catch(() => { /* ignore */ });
-        }
-        return;
-      }
-      if (++tries < 8) timer = setTimeout(tick, 200);
-    };
-    timer = setTimeout(tick, 100);
-    return () => { if (timer) clearTimeout(timer); };
-  }, [view, mainLayout, terminals, commandService]);
+    ensureTerminal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, terminals, commandService]);
 
   const index = Math.max(0, ITEMS.findIndex((it) => it.id === view));
   const onPick = (id: AsideView) => {
     // 激活哪个拓展, aside 中间 slot 就加载哪个 (view→editor / terminal→bottom / browser→aside.browser)
     layout.setAsideView(id);
+    // 已在该 tab 再点一次: 终端可能已被全部关闭 → 重建
+    if (id === 'terminal') ensureTerminal();
   };
 
   return (
