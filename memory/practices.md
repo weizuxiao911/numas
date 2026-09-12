@@ -57,3 +57,10 @@
   **当前状态 (2026-09)**: 用户要求把该功能整体注释掉 — 组件/CSS/JSX 使用/`createPortal` import 均以注释保留, 恢复时逐处取消注释即可.
 
 ### 4.2 避坑指南
+
+## 5. SOLO 模式终端承载与保活
+
+- **承载**: SOLO 自定义布局无 IDE 的 bottom tabbar, 终端由 `SoloLayout` 的 aside 内 `<SlotRenderer slot={SlotLocation.bottom} />` 渲染 (与 IDE 同一 terminal-next 模块, 能力一致: 多 tab/新建/关闭).
+- **挂载**: 不要依赖 `mainLayout.getTabbarHandler('terminal')` 轮询激活 (SOLO 下不存在, 会 8 次重试后放弃, 终端永不创建); 直接 `terminals.createTerminal({})`.
+- **保活**: 终端 tab 全部关闭后必须自动重建 — 在终端视图激活时挂 1.5s 轮询 `clients.size === 0 → ensureTerminal()`; 点胶囊/切 tab 时也调 ensureTerminal (无则建/有则聚焦).
+- **运行代码**: 新建终端后等 pty 就绪 (~800ms) 再 sendText, 提交键用 `\r` (见 pitfalls-server #70/#71).
