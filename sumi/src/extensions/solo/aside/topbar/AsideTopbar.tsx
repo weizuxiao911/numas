@@ -53,6 +53,12 @@ export const AsideTopbar: React.FC = () => {
   useEffect(() => {
     if (view !== 'terminal') return;
     ensureTerminal();
+    // 保活: 终端全部关闭 → 自动重建 (确保随时有终端可用)
+    const timer = setInterval(() => {
+      const t = terminals as any;
+      if ((t?.clients?.size ?? 0) === 0) ensureTerminal();
+    }, 1500);
+    return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, terminals, commandService]);
 
