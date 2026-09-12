@@ -223,28 +223,9 @@ const PdfViewer: React.FC = () => {
     } catch { /* ignore */ }
   }, [annoRel, fsHeaders]);
 
-  const productExistsRemote = useCallback(async (id: string, ext: string): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/fs/read/${encodeURIComponent(`${relDir()}.${await hash8(CFG.name || 'document.pdf')}.anno.${id}.${ext}`)}`, { headers: fsHeaders() });
-      return res.ok;
-    } catch {
-      return false;
-    }
-  }, [fsHeaders]);
-
-  // 初始加载 anno
+  // 初始加载 anno (AI 生成完成后会直接回填此文件, 刷新即见结果)
   useEffect(() => {
-    void readAnnoRemote().then((list) => {
-      setAnnotations(list);
-      // 恢复 generating 状态的产物监听 (页面刷新/重开后轮询不丢, 否则状态永久卡 generating)
-      for (const a of list) {
-        if (a.animation?.status === 'generating') watchProductRef.current?.(a.id, 'animation');
-        if (a.code?.status === 'generating') {
-          const ext = (a.code.file || '').split('.').pop() || detectLang(a.text).ext;
-          watchProductRef.current?.(a.id, 'code', ext);
-        }
-      }
-    });
+    void readAnnoRemote().then((list) => setAnnotations(list));
   }, [readAnnoRemote]);
 
   /** 提取页内 rect 区域的文本 (pdf.js textContent, 归一化坐标重叠过滤) */
@@ -320,7 +301,7 @@ const PdfViewer: React.FC = () => {
   }, []);
 
   /** AI 生成 prompt (标注信息 + 能力指令 + 产物确定性路径) */
-  const buildPrompt = useCallback((kind: 'animation' | 'code', a: Annotation, productAbsPath: string): string => {
+  const buildPrompt = useCallback((kind: 'animation' | 'code', a: Annotation, productAbsPath: string, annoAbsPath: string): string => {
     const rect = [a.rect.x, a.rect.y, a.rect.w, a.rect.h].map((n) => n.toFixed(4)).join(', ');
     const head = [
       'PDF 圈选标注:',
@@ -348,7 +329,15 @@ const PdfViewer: React.FC = () => {
           '4. 文件首行必须是运行命令注释, 格式 `<语言注释符> run: <完整运行命令>` (例: `# run: python3 /abs/xxx.py`; `// run: javac /abs/Main.java && java -cp /abs Main`)',
           '5. 只输出代码文件内容, 不要解释',
         ].join('\n');
-    return [head, '', task, '', `产物要求: 直接写入文件 ${productAbsPath} (不要创建其它文件, 不要输出解释文字)`].join('\n');
+    return [
+      head,
+      '',
+      task,
+      '',
+      '产物要求:',
+      `1. 直接写入文件 ${productAbsPath} (不要创建其它文件, 不要输出解释文字)`,
+      `2. 生成完成后, 更新标注文件 ${annoAbsPath}: 找到 id 为 "${a.id}" 的标注对象, 将 ${kind === 'animation' ? 'animation' : 'code'} 字段设置为: {"status":"ready","file":"${productAbsPath}"${kind === 'code' ? `,"command":"<运行命令>"` : ''}}`,
+    ].join('\n');
   }, []);
 
   /** 产物首行约定 `run: <cmd>` 提取运行命令 (语言无关); 缺失时按扩展名兜底 */
@@ -365,41 +354,7 @@ const PdfViewer: React.FC = () => {
     return ext === 'py' ? `python3 "${abs}"` : undefined;
   }, [fsHeaders]);
 
-  /** 轮询产物出现 → ready; 超时 → failed (生成入口 + 刷新恢复共用) */
-  const watchProduct = useCallback((id: string, action: 'animation' | 'code', extArg?: string) => {
-    void (async () => {
-      const ext = extArg || (action === 'animation' ? 'html' : 'py');
-      const abs = await productAbs(id, ext);
-      const deadline = Date.now() + 5 * 60 * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 2000));
-        if (await productExistsRemote(id, ext)) {
-          const l2 = await readAnnoRemote();
-          const a2 = l2.find((x) => x.id === id);
-          if (!a2) return;
-          const done: AnnoCapability = { status: 'ready', file: abs };
-          if (action === 'code') done.command = await extractRunCommand(id, ext, abs);
-          if (action === 'animation') a2.animation = done;
-          else a2.code = done;
-          setAnnotations([...l2]);
-          await writeAnnoRemote(l2);
-          return;
-        }
-      }
-      const l3 = await readAnnoRemote();
-      const a3 = l3.find((x) => x.id === id);
-      if (!a3) return;
-      const failed: AnnoCapability = { status: 'failed', error: '生成超时 (5 分钟)' };
-      if (action === 'animation') a3.animation = failed;
-      else a3.code = failed;
-      setAnnotations([...l3]);
-      await writeAnnoRemote(l3);
-    })();
-  }, [readAnnoRemote, writeAnnoRemote, productAbs, productExistsRemote]);
-  const watchProductRef = useRef<typeof watchProduct | null>(null);
-  watchProductRef.current = watchProduct;
-
-  /** 生成动画/代码: 置 generating → chatbot.send → 轮询产物 → ready */
+  /** 生成动画/代码: 发 prompt 给 AI (含产物路径 + anno 回填指令); PDF 侧不维护状态 */
   const onGenerate = useCallback((id: string, action: 'animation' | 'code') => {
     void (async () => {
       const list = await readAnnoRemote();
@@ -407,15 +362,10 @@ const PdfViewer: React.FC = () => {
       if (!a) return;
       const ext = action === 'animation' ? 'html' : detectLang(a.text).ext;
       const abs = await productAbs(id, ext);
-      const cap: AnnoCapability = { status: 'generating' };
-      if (action === 'animation') a.animation = cap;
-      else a.code = cap;
-      setAnnotations([...list]);
-      await writeAnnoRemote(list);
-      vscode?.postMessage({ type: 'ai.send', prompt: buildPrompt(action, a, abs) });
-      watchProduct(id, action, ext);
+      const annoAbs = `${hostDir()}/${await annoRel().then((r) => r.split('/').pop())}`;
+      vscode?.postMessage({ type: 'ai.send', prompt: buildPrompt(action, a, abs, annoAbs) });
     })();
-  }, [readAnnoRemote, writeAnnoRemote, productAbs, buildPrompt, watchProduct]);
+  }, [readAnnoRemote, productAbs, annoRel, buildPrompt]);
 
   /** 动画演示: 宿主 vscode.open 打开产物 HTML */
   const onPlayAnimation = useCallback((id: string) => {
