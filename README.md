@@ -71,7 +71,8 @@ npx -y github:weizuxiao911/numas [flags]
 | Flag / Env | 默认 | 说明 |
 |---|---|---|
 | `--port <n>` / `NUMAS_PORT` | 24096 | opencode web 端口 |
-| `--registry <url>` / `NUMAS_REGISTRY` | http://127.0.0.1:7790 | vsix registry 地址 |
+| `--registry <url>` / `NUMAS_REGISTRY` | https://gateway-test.cloudlab.top/api/v2/agent-registry/plugins | 外部 vsix 市场地址 (与内置 /extensions 双源合并, 同拓展取版本号最大者) |
+| `--extensions-dir <dir>` / `NUMAS_EXTENSIONS_DIR` | registry/vsix | 内置市场 vsix 扫描目录 (`none` 禁用内置市场, 只走外部 --registry) |
 | `--fast` / `NUMAS_FAST=1` | off | 跳过 sumi build / cp dist / opencode build, 只杀 port + 启 opencode (复用场景 5-10s → 1-2s). 改了前端代码必须去掉 |
 | `--force-build` | off | 强制重 build (sumi + opencode), 忽略 hash 缓存 |
 
