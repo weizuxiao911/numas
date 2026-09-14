@@ -1,4 +1,4 @@
-# vscode + opencode 组合镜像
+# vscode + opencode 组合镜像 (基于 codercom/code-server)
 #
 # 提供:
 #   - code-server (浏览器 VSCode) 主交互界面 — 唯一对外端口 8080
@@ -14,40 +14,32 @@
 # 端口: 只 EXPOSE 8080 (code-server); opencode 不跑常驻 serve, 由 VSCode 扩展
 # 在用户点击时拉起 TUI 终端.
 
-ARG BUILD_VERSION=0.0.0
-ARG BUILD_SHA=unknown
-
-FROM ubuntu:24.04
-
-ARG BUILD_VERSION
-ARG BUILD_SHA
+FROM codercom/code-server:latest
 
 LABEL org.opencontainers.image.title="vscode-opencode" \
       org.opencontainers.image.description="Browser VSCode (code-server) + opencode AI agent" \
-      org.opencontainers.image.version="${BUILD_VERSION}" \
-      org.opencontainers.image.revision="${BUILD_SHA}" \
       org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# HOME=/home 与工作区 /home/community 同根, code-server 扩展/配置目录都在 /home 下.
+# 基础镜像默认 USER coder (uid=1000), 切到 root 才能 apt/nvm 全局安装
+USER root
+
+# HOME=/home (root 的运行时 home, 工具链 / 配置 / 扩展都装 /home 下)
+# 与 workdir /home/community 同根, codeblitz 虚拟家目录前缀也自洽.
 ENV HOME=/home
 
-# 运行时依赖: 容器内跑 code-server + opencode + 工作区开发常用工具.
-#   apt 源: 阿里云镜像 (deb822 格式); 必须 http:// (基础镜像未预装 ca-certificates).
-RUN sed -i \
-      -e 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' \
-      -e 's|http://security.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' \
-      -e 's|http://ports.ubuntu.com/ubuntu-ports/|http://mirrors.aliyun.com/ubuntu-ports/|g' \
-      /etc/apt/sources.list.d/ubuntu.sources \
-  && apt-get update \
+# 运行时依赖: code-server 镜像 (Debian 13 trixie) 只带基础包, 补装常用工具.
+#   apt 源走 Debian 默认 (deb.debian.org), 国内服务器可再自行加速.
+#   python 极简: python3 + pip + venv (用户拍板).
+RUN apt-get update \
   && apt-get install -y --no-install-recommends \
        ca-certificates tini \
        bash zsh \
        vim nano htop tmux less file \
        curl wget jq lsof netcat-openbsd \
        git \
-       python3 python3-pip python3-venv python3-dev \
+       python3 python3-pip python3-venv \
        build-essential pkg-config \
        sqlite3 libsqlite3-0 \
        locales \
@@ -63,11 +55,8 @@ RUN sed -i \
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# oh-my-zsh + nvm + node 22 + npm i -g opencode-ai
-#   所有交互工具链装 /home 下: oh-my-zsh → /home/.oh-my-zsh, nvm → /home/.nvm,
-#   zsh 配置 → /home/.zshrc. nvm 仅 zsh 交互自动加载 (官方设计); 非交互需 source nvm.sh.
-#   opencode-ai 走 npm 全局安装 (装到 $NVM_DIR/versions/node/v22.x.x/lib/node_modules,
-#   bin 链接到对应 node bin, 与 node 同生命周期).
+# oh-my-zsh + nvm + node 22 + npm i -g opencode-ai (装到 /home 下, root 用)
+#   nvm 仅 zsh 交互自动加载 (官方设计); 非交互需 source nvm.sh.
 ENV NVM_DIR=/home/.nvm
 RUN mkdir -p /home \
   && git clone --depth=1 https://gitee.com/mirrors/ohmyzsh.git /home/.oh-my-zsh \
@@ -80,35 +69,26 @@ RUN mkdir -p /home \
   && /bin/zsh -c '. "$NVM_DIR/nvm.sh" && npm config set registry https://registry.npmmirror.com && npm i -g opencode-ai && opencode --version' \
   && /bin/zsh -ic 'node --version && npm --version && which opencode'
 
-# code-server 安装 (官方 install.sh, 装到 /usr/lib/code-server + /usr/bin/code-server)
-#   走 GitHub release 下载, 国内网可能慢 — 但 apt 装不了, 官方渠道唯一
-#   安装完冒烟 --version; 数据目录 /home/.local/share/code-server (HOME=/home 自洽)
-RUN curl -fsSL https://code-server.dev/install.sh | sh \
-  && code-server --version
-
 # 内置 opencode VSCode 扩展 (sst-dev.opencode): 容器启动后 code-server 自动加载,
 # 用户 Cmd+Esc / editor title 按钮即在容器内起 `opencode --port <rand>` TUI 终端
 # (终端 tab 交互, 随机端口绑回环, 不暴露).
-# --extensions-dir 指定到 /home/.local/share/code-server/extensions (HOME=/home 的默认
-# 扩展目录), 装完即可用; 无需用户手动 install.
+# --extensions-dir 指定 /home/.local/share/code-server/extensions (HOME=/home 下
+# code-server 默认扩展目录), 装完即可用.
 COPY scripts/sst-dev.opencode-0.0.13.vsix /tmp/sst-dev.opencode-0.0.13.vsix
-RUN code-server --install-extension /tmp/sst-dev.opencode-0.0.13.vsix \
+RUN mkdir -p /home/.local/share/code-server/extensions \
+  && code-server --install-extension /tmp/sst-dev.opencode-0.0.13.vsix \
       --extensions-dir /home/.local/share/code-server/extensions \
   && rm /tmp/sst-dev.opencode-0.0.13.vsix \
   && ls /home/.local/share/code-server/extensions/
 
-# root 仅为运行 uid, 家目录 /home (chsh + ENV HOME=/home 已对齐)
-USER root
-
 # 容器内工作区根 = /home/community (workdir + 默认工作区根, code-server 启动默认 cwd)
-# code-server 配置/扩展目录 (与 HOME=/home 对齐):
+# code-server 配置目录 (与 HOME=/home 对齐):
 #   /home/.config/code-server/       code-server 配置 (config.yaml)
 #   /home/.local/share/code-server/  code-server 数据 (扩展 / User / logs)
 WORKDIR /home/community
 RUN mkdir -p /home/.config/code-server /home/.local/share/code-server
 
-# code-server 默认配置: 监听 0.0.0.0:8080, 无认证 (内网/本地场景; 公网需自行加 auth 或反代)
-# 用户可 -v 挂载自定义 config.yaml 覆盖
+# code-server 默认配置: 监听 0.0.0.0:8080, 无认证 (内网/本地场景; 公网需自行加 auth)
 RUN printf 'bind-addr: 0.0.0.0:8080\nauth: none\ncert: false\ndisable-telemetry: true\n' \
       > /home/.config/code-server/config.yaml
 
@@ -116,12 +96,11 @@ COPY scripts/entrypoint-code-server.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # 端口默认值 (entrypoint 可见; 用户 -e 覆盖)
-#   CODE_SERVER_PORT: code-server 监听端口 (默认 8080, EXPOSE 的对外口)
-#   WORKDIR:          工作区 cwd         (默认 /home/community)
 ENV CODE_SERVER_PORT=8080
 
 EXPOSE 8080
 
 # ENTRYPOINT 拉起 tini → entrypoint.sh → code-server 单进程
+# 基础镜像带 tini (code-server 官方 entrypoint 就用它), 这里直接用
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD []
