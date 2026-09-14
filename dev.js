@@ -6,10 +6,12 @@
  *   0. 依赖安装 (sumi: npm install,  opencode: bun install;  首次/依赖变才装)
  *   1. sumi build (hash 增量) → mirror cp → opencode/packages/app/dist
  *   2. opencode build (hash 增量 + NUMAS_WEB_DIST=sumi/dist)
- *   3. 启 opencode serve @ <port> --cors * --registry <url> --extensions-dir registry/vsix
+ *   3. 启 opencode serve @ <port> --cors * --registry <url> [--extensions-dir <dir>]
+ *      (默认不传 --extensions-dir; NUMAS_EXTENSIONS_DIR 显式设置才追加)
  *
  * CLI: --port / --registry / --fast (跳过 build/cp) / --force-build / --sumi / --opencode / --cwd <path>
  *      --sumi / --opencode 各自强制 rebuild 那个 (不走 hash 增量), 不加走 hash 增量.
+ *      env: NUMAS_EXTENSIONS_DIR (可选, 内置市场扫描的 vsix 目录)
  *      --force-build = 两者都强制 + 重装依赖.
  *      --cwd 透传 web UI ?directory= 默认 workspace (encodeURI), 用于启动后浏览器自动
  *      跳到指定目录 (替代用户手改 URL).
@@ -61,7 +63,9 @@ const PORT = parseFlagInt('--port', parseInt(process.env.NUMAS_PORT || '24096', 
 // 扩展市场: 默认内置 /extensions 控制器 (fork 扫 --extensions-dir vsix), 无独立 registry 服务;
 // 外部自建市场可 --registry https://host:port 覆盖
 const REGISTRY = parseFlag('--registry', process.env.NUMAS_REGISTRY || '/extensions');
-const EXTENSIONS_DIR = path.join(ROOT, 'registry', 'vsix');
+// 扩展目录: 默认不传 --extensions-dir (启动脚本不写死路径); 需要内置市场扫 vsix 时用
+// NUMAS_EXTENSIONS_DIR=<dir> 显式指定 (如 registry/vsix)
+const EXTENSIONS_DIR = process.env.NUMAS_EXTENSIONS_DIR || '';
 const FORCE_BUILD = process.argv.includes('--force-build');
 const FORCE_SUMI = process.argv.includes('--sumi');
 const FORCE_OPENCODE = process.argv.includes('--opencode');
@@ -334,7 +338,7 @@ if (!fs.existsSync(finalBin)) {
 }
 
 // ============================================================================
-// 3. 启 opencode serve @ <port> --cors * --registry <url> --extensions-dir
+// 3. 启 opencode serve @ <port> --cors * --registry <url> [--extensions-dir]
 // ============================================================================
 function killPort(port) {
   try {
@@ -375,9 +379,10 @@ const serveArgs = [
   '--port', String(PORT),
   '--cors', '*',
   '--registry', REGISTRY,
-  '--extensions-dir', EXTENSIONS_DIR,
   '--web-ui', sumiDist,
 ];
+// 默认不传 --extensions-dir (启动脚本不写死); NUMAS_EXTENSIONS_DIR 显式设置时才追加
+if (EXTENSIONS_DIR) serveArgs.push('--extensions-dir', EXTENSIONS_DIR);
 
 const opencodeProc = spawn(finalBin, serveArgs, {
   stdio: 'inherit',

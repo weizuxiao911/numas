@@ -37,6 +37,8 @@ interface PendingMount {
   syncPosition?: () => void;
   hideDisposable?: { dispose: () => void };
   docRef?: any;  // IEditorDocumentModelService 创建的 doc ref, 卸载时 dispose
+  /** $resolveCustomTextEditor RPC 的落地 promise (卸载要等它, 见 __paperUnmount) */
+  resolvePromise?: Promise<unknown>;
 }
 
 interface InstanceState {
@@ -145,6 +147,10 @@ export function installCustomEditorPatch(): void {
       // 检测激活 tab 走 DOM (workbenchEditorService.currentResource.uri 对 customEditor
       // 返回 undefined, 不可用)
        const sync = () => {
+         // 编辑区容器整体卸载 (查看→终端/浏览器) 时 #workbench-editor 不在 DOM:
+         // tab 消失 ≠ tab 关闭, 不能 __paperUnmount (会销毁 webview, 切回后无法恢复),
+         // 直接跳过; 容器重挂载后由 MutationObserver 再触发恢复.
+         if (!document.getElementById('workbench-editor')) return;
          const activeTab = document.querySelector(
            '.kt_editor_tab___LLmhN.kt_editor_tab_current___A2OZc',
          ) as HTMLElement | null;
@@ -164,13 +170,22 @@ export function installCustomEditorPatch(): void {
              const tabStillExists = !!document.querySelector(
                `[data-uri="${escapedUri}"]`,
              );
-             if (tabStillExists) {
-               // 切走了, 隐藏 (切回时复用)
-               (this as any).__paperHide(key);
-             } else {
-               // tab 关闭了, 彻底卸载 (避免孤儿 webview 残留)
-               (this as any).__paperUnmount(key);
-             }
+            if (tabStillExists) {
+              // 切走了, 隐藏 (切回时复用)
+              (this as any).__paperHide(key);
+              } else {
+                // tab 消失: 先立即隐藏对应 editor dom (视觉与 tab 同步消失),
+                // 隐藏可逆 (__paperTryMount 会 re-show), 中间态误隐藏也无害.
+                (this as any).__paperHide(key);
+                // 再延迟复查是否真关闭: 仍在消失 + 容器在 才真卸载
+                // (避免中间态误杀 webview 导致切回空白)
+                setTimeout(() => {
+                  const stillGone = !document.querySelector(`[data-uri="${escapedUri}"]`);
+                  if (stillGone && document.getElementById('workbench-editor')) {
+                    (this as any).__paperUnmount(key);
+                  }
+                }, 800);
+              }
            }
          }
        };
@@ -199,14 +214,22 @@ export function installCustomEditorPatch(): void {
   // 挂载单个
   (MainThreadCustomEditor.prototype as any).__paperTryMount = async function (this: any, key: string) {
     const state = getState(this);
-    const info = state.pendingMounts.get(key);
+    // mountedMap 也查: 编辑区容器卸载时 sync 被 guard 跳过 (未走 __paperHide),
+    // info 仍留在 mountedMap, 切回后需要靠 reshow 分支重新挂到新容器
+    const info = state.pendingMounts.get(key) || state.mountedMap.get(key);
     if (!info) return;
     if (info.cancellationToken?.isCancellationRequested) {
       state.pendingMounts.delete(key);
       return;
     }
     if (info.mounted) {
-      // 已挂载过, 切回时只需恢复显示
+      // 已挂载过, 切回时只需恢复显示; 编辑区容器卸载过 → stable container 已脱离文档, 重新挂到新容器
+      const wb = document.getElementById('workbench-editor');
+      if (info.stableContainer && wb && !wb.contains(info.stableContainer)) {
+        wb.appendChild(info.stableContainer);
+        // iframe 随容器脱离文档会丢浏览上下文: 重新 append 触发 webview-ready → doUpdateContent 回填内容
+        try { info.webview.appendTo(info.stableContainer); } catch { /* */ }
+      }
       if (info.stableContainer) {
         info.stableContainer.style.display = 'block';
       }
@@ -215,7 +238,7 @@ export function installCustomEditorPatch(): void {
       // 重新挂载 ResizeObserver
       const target = findPaperTabContainer(info.uri.toString());
       if (target && info.resizeObserver) {
-        try { info.resizeObserver.observe(target.editorBody); } catch { /* */ }
+        try { info.resizeObserver.disconnect(); info.resizeObserver.observe(target.editorBody); } catch { /* */ }
       }
       if (target && info.onWindowResize) {
         window.addEventListener('resize', info.onWindowResize);
@@ -254,11 +277,13 @@ export function installCustomEditorPatch(): void {
       workbenchEditor.appendChild(stableContainer);
     }
 
-    // 同步位置
+    // 同步位置 (实时查 DOM: 编辑区容器可能卸载→重挂载, 闭包里的旧节点已脱离文档)
     const syncPosition = () => {
-      const rect = target.editorBody.getBoundingClientRect();
-      const workRect = workbenchEditor.getBoundingClientRect();
-      if (!stableContainer) return;
+      const wb = document.getElementById('workbench-editor');
+      const t = findPaperTabContainer(info.uri.toString());
+      if (!stableContainer || !wb || !t) return;
+      const rect = t.editorBody.getBoundingClientRect();
+      const workRect = wb.getBoundingClientRect();
       stableContainer.style.top = rect.top - workRect.top + 'px';
       stableContainer.style.left = rect.left - workRect.left + 'px';
       stableContainer.style.width = rect.width + 'px';
@@ -339,12 +364,20 @@ export function installCustomEditorPatch(): void {
         info.webviewOptions,
         info.extensionInfo,
       );
-      this.proxy.$resolveCustomTextEditor(
-        info.viewType,
-        info.uri.codeUri,
-        info.webview.id,
-        info.cancellationToken,
-      );
+      // 记录 resolve RPC 落地 promise: __paperUnmount 必须等它再销毁 webview,
+      // 否则扩展侧 resolveCustomEditor 会读到已 dispose 的 panel ("Webview is disposed").
+      // 包一层 catch: resolve 失败只告警, 不让清理逻辑卡在 rejected promise 上.
+      info.resolvePromise = Promise.resolve(
+        this.proxy.$resolveCustomTextEditor(
+          info.viewType,
+          info.uri.codeUri,
+          info.webview.id,
+          info.cancellationToken,
+        ),
+      ).catch((err: unknown) => {
+        // eslint-disable-next-line no-console
+        console.warn(TAG, 'resolveCustomTextEditor failed', err);
+      });
       // eslint-disable-next-line no-console
       console.log(TAG, 'webview mounted + resolve fired', { key, webviewId: info.webview.id, hasDocRef: !!docRef });
     } catch (err) {
@@ -397,16 +430,36 @@ export function installCustomEditorPatch(): void {
     if (info.docRef) {
       try { info.docRef.dispose(); } catch { /* */ }
     }
-    if (info.webview) {
-      try { info.webview.remove(); } catch { /* */ }
-      try { info.webview.dispose(); } catch { /* */ }
+    // 立即摘掉 mount 标记: 同 key 重开时 __paperTryMount 会新建 container,
+    // 不复用这个待销毁的旧 container (复用会被延迟销毁连新 webview 一起删).
+    if (info.stableContainer) {
+      try { info.stableContainer.removeAttribute('data-paper-mount-key'); } catch { /* */ }
     }
-    if (info.stableContainer && info.stableContainer.parentNode) {
-      const toRemove = info.stableContainer;
-      setTimeout(() => {
-        if (toRemove.parentNode) toRemove.parentNode.removeChild(toRemove);
-      }, 100);
+
+    const destroy = () => {
+      if (info.webview) {
+        try { info.webview.remove(); } catch { /* */ }
+        try { info.webview.dispose(); } catch { /* */ }
+      }
+      if (info.stableContainer && info.stableContainer.parentNode) {
+        const toRemove = info.stableContainer;
+        setTimeout(() => {
+          if (toRemove.parentNode) toRemove.parentNode.removeChild(toRemove);
+        }, 100);
+      }
+    };
+
+    // 关键 (Webview is disposed 竞态): webview.remove() 会触发 onRemove →
+    // webview.dispose() + $onDidDisposeWebviewPanel (扩展侧 panel 标记 disposed).
+    // 若扩展侧 $resolveCustomTextEditor 还在途, resolveCustomEditor 会读到已 dispose
+    // 的 panel 抛 "Webview is disposed" → viewer 白屏. 必须等 resolve 落地 (或超时) 再销毁.
+    if (info.resolvePromise) {
+      const timeout = new Promise<void>((resolve) => setTimeout(resolve, 8000));
+      Promise.race([info.resolvePromise, timeout]).then(destroy, destroy);
+    } else {
+      destroy();
     }
+
     state.mountedMap.delete(key);
     state.pendingMounts.delete(key);
   };

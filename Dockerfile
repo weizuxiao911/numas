@@ -54,7 +54,17 @@ ENV HOME=/home
 #   zsh = root 默认交互 shell (oh-my-zsh), nvm + node 22 走 ~/.nvm 在 zsh 交互时自动加载.
 #     sumi 前端跑浏览器, opencode binary 自含运行时 — 容器内 node 22 仅供工作区 AI agent / 用户的
 #     脚本/工具链使用, 不用作 opencode 自身运行依赖.
-RUN apt-get update \
+#   apt 源: 内建阿里云镜像 (mirrors.aliyun.com/ubuntu, arm64 走 ubuntu-ports),
+#   服务器/国内网络构建不直连官方源. ubuntu 24.04 用 deb822 格式
+#   (/etc/apt/sources.list.d/ubuntu.sources 的 URIs: 行).
+#   ⚠ 必须用 http:// 不用 https://: 基础镜像未预装 ca-certificates, https 源证书校验
+#   直接失败 → 包列表空 → "Unable to locate package". http 与官方默认源行为一致.
+RUN sed -i \
+      -e 's|http://archive.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' \
+      -e 's|http://security.ubuntu.com/ubuntu/|http://mirrors.aliyun.com/ubuntu/|g' \
+      -e 's|http://ports.ubuntu.com/ubuntu-ports/|http://mirrors.aliyun.com/ubuntu-ports/|g' \
+      /etc/apt/sources.list.d/ubuntu.sources \
+  && apt-get update \
   && apt-get install -y --no-install-recommends \
        ca-certificates tini \
        # shell
@@ -91,6 +101,31 @@ RUN apt-get update \
 # 默认 UTF-8 输出. C.UTF-8 是 POSIX 兼容的 UTF-8, 不依赖额外语言包.
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
+
+# Python 全局依赖预装 (实验一~六依赖汇总, 用户拍板"轻量依赖 + 中科大镜像").
+#   pip.conf 写 /etc/pip.conf (全局): venv / 用户级 pip 都会读, 容器内所有 pip install
+#   默认走阿里云镜像 (实测: USTC/清华对 pyecharts wheel 返 403, 阿里云 200;
+#   阿里云索引快小包稳定, 大包偶发超时 — 本清单无超大包).
+#   --break-system-packages: ubuntu 24.04 系统 python3 是 externally-managed, 不加会被
+#   PEP 668 拒绝; 装到 /usr/local/lib/python3.12/dist-packages (系统 python 可见).
+#   --no-cache-dir: 不留 wheel 缓存, 保持镜像精简.
+#   内置范围: 多实验共用的核心依赖; 跳过单实验"扩展"项 (alibabacloud_dysmsapi20170525 /
+#   APScheduler / qrcode, 用户拍板去掉) 与 paddleocr (paddlepaddle +1~2GB), 需要时自装.
+RUN printf '[global]\nindex-url = https://mirrors.aliyun.com/pypi/simple\ntrusted-host = mirrors.aliyun.com\ntimeout = 120\n' > /etc/pip.conf \
+  && python3 -m pip install --break-system-packages --no-cache-dir \
+       flask==3.1.3 \
+       flask-sock==0.7.0 \
+       dashscope==1.27.4 \
+       python-docx==1.2.0 \
+       cryptography==50.0.1 \
+       pillow==12.3.0 \
+       requests==2.34.2 \
+       beautifulsoup4==4.15.0 \
+       pandas==2.2.3 \
+       openpyxl==3.1.5 \
+       pyecharts==2.0.7 \
+       python-dotenv==1.2.3 \
+  && python3 -c "import flask, dashscope, pandas, cryptography, pyecharts; print('python deps ok')"
 
 # oh-my-zsh + nvm + node 22 — 运行 uid=root 但家目录统一 $HOME=/home (见上 ENV HOME).
 #   所有交互工具链都装在 /home 下, 不使用 /root:
@@ -152,7 +187,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
 # -e PORT=8080 替换默认 4096 — entrypoint 读值规则: 短名优先, 长名兜底, 再默认)
 ENV NUMAS_HOST=0.0.0.0
 ENV NUMAS_PORT=4096
-ENV NUMAS_REGISTRY=
+ENV NUMAS_REGISTRY=https://gateway.cloudlab.top/api/v2/agent-registry/plugins
 
 EXPOSE 4096
 

@@ -1,9 +1,12 @@
 import React from 'react';
 
 /**
- * PermissionModal — 工具权限请求弹层 (AI 调用 bash/webfetch/edit 等工具时询问)
- * 固定在输入框上方, 与 QuestionModal 同风格; 回复: once(允许一次) / always(始终允许) / reject(拒绝)
- * 注: reject 在 Chat 层转为 abort 整个对话 (拒绝 = 停止当前任务)
+ * PermissionModal — 工具权限请求 (官方 DockPrompt kind=permission)
+ * 结构抄官方 session-permission-dock:
+ *   shell: header(标题) + body(工具描述 + pattern 代码行)
+ *   tray:  [拒绝(ghost)] [始终允许(secondary)] [允许一次(primary)]
+ * 颜色走主题变量 (与 oc-qd 相同推导); 尺寸/字号按官方.
+ * 注: 出现时输入发送区被 dockPromptActive 顶替 (官方同款).
  */
 export const PermissionModal: React.FC<{
   permission: any;
@@ -11,38 +14,49 @@ export const PermissionModal: React.FC<{
   onDismiss: () => void;
 }> = ({ permission, onReply, onDismiss }) => {
   if (!permission?.id) return null;
-  const title = permission.title || permission.type || '权限请求';
-  const pattern = Array.isArray(permission.pattern) ? permission.pattern.join('、') : permission.pattern;
-  const btn = (label: string, resp: 'once' | 'always' | 'reject', primary?: boolean) => (
+  // 官方 payload: { id, sessionID, permission: 'bash', patterns: [...], metadata:{command}, always:[...] }
+  const toolName = String(permission.permission || permission.tool || permission.type || '').toUpperCase();
+  const title = toolName ? `权限请求 · ${toolName}` : (permission.title || '权限请求');
+  const patterns: string[] = [
+    ...(Array.isArray(permission.patterns) ? permission.patterns : []),
+    ...(Array.isArray(permission.pattern) ? permission.pattern : permission.pattern ? [permission.pattern] : []),
+  ];
+  if (permission.metadata?.command && !patterns.includes(permission.metadata.command)) {
+    patterns.unshift(permission.metadata.command);
+  }
+  const btn = (label: string, resp: 'once' | 'always' | 'reject', variant: string, disabled = false) => (
     <button
       type="button"
-      className={`chat__qmodal-btn${primary ? ' chat__qmodal-btn--primary' : ''}`}
+      className={`oc-qd__btn ${variant}`}
       onClick={() => onReply(permission.id, resp)}
+      disabled={disabled}
     >
       {label}
     </button>
   );
   return (
-    <div className="chat__qmodal">
-      <div className="chat__qmodal-head">
-        <span className="chat__qmodal-count">权限请求</span>
-        <button
-          type="button"
-          className="chat__qmodal-min"
-          onClick={onDismiss}
-          title="收起"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-        </button>
+    <div className="oc-qd oc-qd--permission">
+      <div className="oc-qd__shell">
+        <div className="oc-qd__header">
+          <span className="oc-qd__title">{title}</span>
+        </div>
+        <div className="oc-qd__body">
+          <div className="oc-qd__hint">允许 AI 执行以下命令/操作:</div>
+          {patterns.length > 0 && (
+            <div className="oc-perm__patterns">
+              {patterns.map((p: string, i: number) => (
+                <code key={i} className="oc-perm__pattern">{p}</code>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="chat__qmodal-body">
-        <div className="chat__qmodal-q">{title}</div>
-        {pattern && <div className="chat__qmodal-hint">{pattern}</div>}
-      </div>
-      <div className="chat__qmodal-foot">
-        {btn('允许一次', 'once', true)}
-        {btn('始终允许', 'always')}
-        {btn('拒绝', 'reject')}
+      <div className="oc-qd__tray">
+        {btn('拒绝', 'reject', 'oc-qd__btn--ghost')}
+        <div className="oc-qd__footer-actions">
+          {btn('始终允许', 'always', 'oc-qd__btn--secondary')}
+          {btn('允许一次', 'once', 'oc-qd__btn--primary')}
+        </div>
       </div>
     </div>
   );

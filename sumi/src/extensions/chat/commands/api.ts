@@ -29,23 +29,6 @@ export function getGlobalOpencodeRuntime() {
   return (window as any).__APP_OPENCODE_RUNTIME__ || {};
 }
 
-/** 当前工作目录 (跟 service/env.effectiveCwd 同一逻辑) — 传给 SDK 的 directory query
- *  SDK 已带 x-opencode-directory header, 显式传 directory 是冗余但更稳, 防止 SDK header
- *  失效 (e.g. APP_CWD 未设, runtime.cwd 还没注入) 时 opencode 走 home 解析 */
-function getAiDirectory(): string {
-  if (typeof localStorage !== 'undefined') {
-    const v = localStorage.getItem('APP_CWD');
-    if (v) return v;
-  }
-  return getGlobalOpencodeRuntime().cwd || '.';
-}
-
-/** x-opencode-directory header (跟 service/env.cwdHeader 同一逻辑) — 备用, 给 fetch 兜底 */
-function getAiCwdHeader(): Record<string, string> {
-  const cwd = getAiDirectory();
-  return cwd && cwd !== '.' ? { 'x-opencode-directory': encodeURI(cwd) } : {};
-}
-
 export function getAiClient() {
   return getGlobalOpencodeClient();
 }
@@ -93,13 +76,12 @@ export async function aiCreateSession(title?: string): Promise<string> {
 
 /** 当前实例工作目录 — client.path.get() → directory (server 启动 cwd) */
 export async function aiGetCwd(): Promise<string> {
-  await waitForAiReady();
-  const client = getAiClient()!;
+  await waitForAiReady();  const client = getAiClient()!;
   const { data } = await (client as any).path.get();
   return typeof data?.directory === 'string' ? data.directory : '';
 }
 
-/** 目录是否位于当前工作目录或其子目录内 (排除父级/兄弟目录) */
+/** 目录是否位于给定根或其子目录内 (排除父级/兄弟目录) */
 export function isWithinCwd(dir: string | undefined, cwd: string): boolean {
   if (!dir || !cwd) return false;
   const d = dir.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -107,18 +89,72 @@ export function isWithinCwd(dir: string | undefined, cwd: string): boolean {
   return d === c || d.startsWith(c + '/');
 }
 
-/** 历史会话列表 — 仅当前工作目录及其子目录 (不向上层获取).
- *  v2.session.list 只返回当前项目会话; 这里再按 directory 前缀过滤,
- *  确保只看到 cwd 及子目录下创建的会话, 排除父级/兄弟目录. */
+/** 历史会话列表 — 走 SDK session.list, 直接用用户选的 workdir 作为 directory 参数.
+ *  SDK V2 list 端点: GET /session?directory=<dir>&roots=true (query 自动拼).
+ *  roots=true: 只列顶层会话 (parent_id IS NULL), 排除 subagent/委派子会话. */
 export async function aiListSessions(): Promise<any[]> {
   await waitForAiReady();
-  const client = getAiClient()!;
-  const cwd = await aiGetCwd().catch(() => '');
-  const { data, error } = await (client as any).session.list();
-  if (error) throw error;
-  const list: any[] = Array.isArray(data) ? data : (Array.isArray((data as any)?.data) ? (data as any).data : []);
-  // cwd 未知时返回空, 避免泄漏上层/其他目录会话
-  return cwd ? list.filter((s) => isWithinCwd(s?.directory, cwd)) : [];
+  const client = getAiClient();
+  if (!client) return [];
+  const workdir = getGlobalOpencodeRuntime().cwd || '';
+  const r = workdir
+    ? await (client as any).session.list({ directory: workdir, roots: true })
+    : await (client as any).session.list({ roots: true });
+  const list: any[] = Array.isArray(r) ? r
+    : (Array.isArray(r?.data) ? r.data
+    : (Array.isArray(r?.data?.data) ? r.data.data : []));
+  return Array.isArray(list) ? list : [];
+}
+
+/** 全部会话 (含 subagent 子会话) — GET /session (不带 roots=true).
+ *  用于会话树遍历: 子代理会话的 pending question/permission 提升到主会话 dock. */
+export async function aiListAllSessions(): Promise<any[]> {
+  await waitForAiReady();
+  const client = getAiClient();
+  if (!client) return [];
+  const workdir = getGlobalOpencodeRuntime().cwd || '';
+  const r = workdir
+    ? await (client as any).session.list({ directory: workdir })
+    : await (client as any).session.list();
+  const list: any[] = Array.isArray(r) ? r
+    : (Array.isArray(r?.data) ? r.data
+    : (Array.isArray(r?.data?.data) ? r.data.data : []));
+  return Array.isArray(list) ? list : [];
+}
+
+/** 单个会话信息 (含 cost / tokens / time) — GET /session/<id>.
+ *  会话累计统计输入框下方展示用; 会话刚建/无数据时可能 404, 调用方要容错. */
+export async function aiGetSessionInfo(sessionID: string): Promise<any | null> {
+  await waitForAiReady();
+  const client = getAiClient();
+  if (!client) return null;
+  try {
+    const r = await (client as any).session.get(sessionID);
+    const info = r?.data ?? r ?? null;
+    return info || null;
+  } catch { return null; }
+}
+
+/** 待回答提问 (跨会话, 含子代理会话) — GET /question.
+ *  事件流丢帧/页面重载后对账用, 返回 QuestionRequest[]: { id, sessionID, questions, tool? } */
+export async function aiListPendingQuestions(): Promise<any[]> {
+  await waitForAiReady();
+  const client = getAiClient();
+  if (!client) return [];
+  const r = await (client as any).question.list();
+  const list: any[] = Array.isArray(r) ? r : (Array.isArray(r?.data) ? r.data : []);
+  return Array.isArray(list) ? list : [];
+}
+
+/** 待处理权限请求 (跨会话, 含子代理会话) — GET /permission.
+ *  返回 PermissionRequest[]: { id, sessionID, permission, patterns, metadata, always, tool? } */
+export async function aiListPendingPermissions(): Promise<any[]> {
+  await waitForAiReady();
+  const client = getAiClient();
+  if (!client) return [];
+  const r = await (client as any).permission.list();
+  const list: any[] = Array.isArray(r) ? r : (Array.isArray(r?.data) ? r.data : []);
+  return Array.isArray(list) ? list : [];
 }
 
 /** 会话消息列表 — v2.session.messages({ sessionID }) */
@@ -200,26 +236,20 @@ export async function aiDeleteAllSessions(): Promise<number> {
   return deleted;
 }
 
-/** 会话内 agent 列表 — 用全局 SDK client (已带 cwd header), 拿全量 (内置 + project 自定义),
- *  返回可作为顶层对话角色的 agent: mode === 'primary' | 'all' (all = 可主可子);
- *  subagent 仅被 @ 调用, 不进 mode 选择器. 内部 agent (compaction/title/summary) 由 UI 层 HIDDEN_AGENTS 屏蔽.
- *
- *  关键: 必须传有效 cwd 作为 directory query (SDK 的 cwdHeader 是默认 cwd, 这里再显式传
- *  防止 window.location.pathname=/ 时 opencode 走 home 解析), 否则拿不到 .opencode/agents/*.md
- *  (之前用 ?directory=/ 走 query 不带 header, 只能拿到 native agent) */
+/** 会话内 agent 列表 — 用全局 SDK client (每请求动态带当前 workdir header), 拿全量
+ *  (内置 + project 自定义), 返回可作为顶层对话角色的 agent:
+ *  mode === 'primary' | 'all' (all = 可主可子); subagent 仅被 @ 调用, 不进 mode 选择器.
+ *  内部 agent (compaction/title/summary) 由 UI 层 HIDDEN_AGENTS 屏蔽.
+ *  目录只走 x-opencode-directory header, 不再传 directory query. */
 export async function aiListAgents(): Promise<any[]> {
   await waitForAiReady();
   const client = getAiClient();
   if (!client) {
-    // 兜底: SDK 未就绪, 走 opencodeFetch (拿 SDK baseUrl + cwdHeader)
+    // 兜底: SDK 未就绪, 走 opencodeFetch (同样按当前 workdir 注入 header)
     const list = await opencodeFetch<any[]>('/agent', { headers: { Accept: 'application/json' } });
     return filterVisibleAgents(list);
   }
-  const cwd = (typeof localStorage !== 'undefined' ? localStorage.getItem('APP_CWD') : '')
-    || (getGlobalOpencodeRuntime().cwd || '');
-  const r = await (client as any).app.agents({
-    query: cwd ? { directory: cwd } : undefined,
-  });
+  const r = await (client as any).app.agents();
   const list = (r as any)?.data ?? r;
   return filterVisibleAgents(Array.isArray(list) ? list : []);
 }
@@ -247,10 +277,8 @@ export interface SkillInfo {
 
 export async function aiListSkills(): Promise<SkillInfo[]> {
   await waitForAiReady();
-  // SDK v2 没包装 /skill 端点 (它是 v1 端点), fetch 兜底; 带 cwd header
-  const dir = getAiDirectory();
-  const url = `/skill?directory=${encodeURIComponent(dir)}`;
-  const list: any[] = await opencodeFetch<any[]>(url, { headers: { Accept: 'application/json' } });
+  // SDK v2 没包装 /skill 端点 (V1), fetch 兜底; 目录由 opencodeFetch 按当前 workdir 注入 header.
+  const list: any[] = await opencodeFetch<any[]>('/skill', { headers: { Accept: 'application/json' } });
   if (!Array.isArray(list)) return [];
   return list
     .filter((s) => s && s.name)
@@ -273,12 +301,11 @@ export async function aiListCommands(): Promise<CommandInfo[]> {
   await waitForAiReady();
   const client = getAiClient();
   if (!client) {
-    // 兜底: SDK 未就绪, 走 opencodeFetch
-    const dir = getAiDirectory();
-    const list = await opencodeFetch<any[]>(`/command?directory=${encodeURIComponent(dir)}`, { headers: { Accept: 'application/json' } });
+    // 兜底: SDK 未就绪, 走 opencodeFetch (按当前 workdir 注入 header)
+    const list = await opencodeFetch<any[]>('/command', { headers: { Accept: 'application/json' } });
     return mapCommands(list);
   }
-  const r = await (client as any).command.list({ query: { directory: getAiDirectory() } });
+  const r = await (client as any).command.list();
   const list = (r as any)?.data ?? r;
   return mapCommands(Array.isArray(list) ? list : []);
 }
@@ -355,6 +382,15 @@ export async function aiClearMessages(sessionID: string): Promise<number> {
   return deleted;
 }
 
+/** 撤销 (revert): 删除该消息及其后所有消息, 会话回到该消息之前 (官方「撤销此消息」语义) */
+export async function aiRevertMessage(sessionID: string, messageID: string): Promise<void> {
+  await waitForAiReady();
+  const client = getAiClient()!;
+  const { error } = await (client as any).v2.session.deleteMessage?.({ sessionID, messageID })
+    ?? await (client as any).session.deleteMessage({ sessionID, messageID });
+  if (error) throw error;
+}
+
 /** 回答 A2UI question — client.question.reply({ requestID, answers }) (v1 路径) */
 export async function aiReplyQuestion(
   sessionID: string,
@@ -383,10 +419,9 @@ export async function aiReplyPermission(
 ): Promise<void> {
   await waitForAiReady();
   const client = getAiClient()!;
-  const { error } = await (client as any).postSessionIdPermissionsPermissionId({
-    path: { id: sessionID, permissionID },
-    body: { response },
-  });
+  // client.permission.respond → POST /session/{sessionID}/permissions/{permissionID} body {response}
+  // (postSessionIdPermissionsPermissionId 为该命名空间不可用名, 勿用)
+  const { error } = await (client as any).permission.respond({ sessionID, permissionID, response });
   if (error) throw error;
 }
 
@@ -446,15 +481,14 @@ async function fetchProvidersPayload(): Promise<{ all: any[]; connected: string[
   if (client) {
     // provider.list (v1) 返回 {all, connected, default}, 跟后端 /provider 一致
     // 注意: client.config.providers 是 v2 新 API, shape 不同 ({providers, default}), 不兼容
-    const r = await (client as any).provider.list({ query: { directory: getAiDirectory() } });
+    const r = await (client as any).provider.list();
     const json = (r as any)?.data ?? r;
     return {
       all: Array.isArray(json?.all) ? json.all : [],
       connected: Array.isArray(json?.connected) ? json.connected : [],
     };
   }
-  const dir = getAiDirectory();
-  const json = await opencodeFetch<any>(`/provider?directory=${encodeURIComponent(dir)}`, { headers: { Accept: 'application/json' } });
+  const json = await opencodeFetch<any>('/provider', { headers: { Accept: 'application/json' } });
   return {
     all: Array.isArray(json?.all) ? json.all : [],
     connected: Array.isArray(json?.connected) ? json.connected : [],
@@ -544,9 +578,8 @@ export interface OpencodeConfig {
 export async function aiGetConfig(): Promise<OpencodeConfig> {
   const client = getAiClient();
   if (client) {
-    const r = await (client as any).config.get({ query: { directory: getAiDirectory() } });
+    const r = await (client as any).config.get();
     return ((r as any)?.data ?? r) as OpencodeConfig;
   }
-  const dir = getAiDirectory();
-  return opencodeFetch<OpencodeConfig>(`/config?directory=${encodeURIComponent(dir)}`, { headers: { Accept: 'application/json' } });
+  return opencodeFetch<OpencodeConfig>('/config', { headers: { Accept: 'application/json' } });
 }

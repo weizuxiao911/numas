@@ -8,6 +8,9 @@
  *   GET/POST/PUT/DELETE/PATCH  /proxy/:port/<rest>  → HTTP 反代到 127.0.0.1:<port>
  *   (Upgrade) /proxy/:port/<rest>                  → WS 反代 (vite HMR 等)
  *
+ * 子域代理 (--domain-proxy <domain>, 见 ports-domain-proxy.ts):
+ *   Host: <port>.<domain> → 127.0.0.1:<port> (全局中间件, 路由匹配前拦截).
+ *
  * 安全: /proxy 只允许转发到"已知端口" (Ports.Service.isKnown: 已发现或白名单),
  * 避免把 opencode 当开放代理 (SSRF). 目标固定 127.0.0.1.
  *
@@ -16,6 +19,8 @@
  */
 
 import { Service as PortsService, type Ports } from "./ports"
+import { domainProxyPort, proxyDomainRequest } from "./ports-domain-proxy"
+import { ServerAuth } from "@/server/auth"
 import { Effect, Layer } from "effect"
 import { HttpClient, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import * as Socket from "effect/unstable/socket/Socket"
@@ -51,110 +56,127 @@ function proxyOnce(
   })
 }
 
-export const portsRoute = HttpRouter.use((router) =>
-  Effect.gen(function* () {
-    const ports = yield* PortsService
-    const client = yield* HttpClient.HttpClient
-    const proxy = (request: HttpServerRequest.HttpServerRequest) => proxyOnce(ports, client, request)
+export const portsRoute = (domainProxy?: string) =>
+  HttpRouter.use((router) =>
+    Effect.gen(function* () {
+      const ports = yield* PortsService
+      const client = yield* HttpClient.HttpClient
+      const websocket = yield* Socket.WebSocketConstructor
+      const proxy = (request: HttpServerRequest.HttpServerRequest) => proxyOnce(ports, client, request)
 
-    yield* router.add("GET", "/ports", (request) =>
-      Effect.gen(function* () {
-        // 工作区目录来自 x-opencode-directory header (铁律 8; raw router 不经 WorkspaceRoutingMiddleware).
-        // 传入后只返回监听进程 cwd 在该工作区下的端口 (+ 白名单); 缺失则返回用户项目服务全集.
-        let workspace: string | undefined
-        const rawHeader = (request.headers as Record<string, string | undefined>)["x-opencode-directory"]
-        if (rawHeader) {
-          try { workspace = decodeURIComponent(rawHeader) } catch { workspace = rawHeader }
-        }
-        const list = yield* ports.scan(workspace)
-        return HttpServerResponse.jsonUnsafe(list)
-      }),
-    )
-    yield* router.add("POST", "/ports", (request) =>
-      Effect.gen(function* () {
-        let body = ""
-        try {
-          body = yield* request.text
-        } catch {
-          return HttpServerResponse.jsonUnsafe({ error: "read body failed" }, { status: 400 })
-        }
-        let port = 0
-        try {
-          port = Number(JSON.parse(body).port)
-        } catch {
-          return HttpServerResponse.jsonUnsafe({ error: "invalid body" }, { status: 400 })
-        }
-        yield* ports.whitelist(port)
-        return HttpServerResponse.jsonUnsafe({ ok: true })
-      }),
-    )
-    yield* router.add("DELETE", "/ports/*", (request) =>
-      Effect.gen(function* () {
-        const url = new URL(request.url, "http://localhost")
-        const m = url.pathname.match(/^\/ports\/(\d+)$/)
-        if (!m) return HttpServerResponse.jsonUnsafe({ error: "bad path" }, { status: 400 })
-        yield* ports.remove(Number(m[1]))
-        return HttpServerResponse.jsonUnsafe({ ok: true })
-      }),
-    )
-    // POST /ports/:port/kill : 关闭 (杀) 监听该端口的进程 (面板"关闭进程"按钮)
-    yield* router.add("POST", "/ports/:port/kill", (request) =>
-      Effect.gen(function* () {
-        const url = new URL(request.url, "http://localhost")
-        const m = url.pathname.match(/^\/ports\/(\d+)\/kill$/)
-        if (!m) return HttpServerResponse.jsonUnsafe({ error: "bad path" }, { status: 400 })
-        yield* ports.kill(Number(m[1]))
-        return HttpServerResponse.jsonUnsafe({ ok: true })
-      }),
-    )
-    // /ports/pids {pid} : 注册 numas 主动 spawn 的根 PID (PTY create / Agent spawn 后调用)
-    yield* router.add("POST", "/ports/pids", (request) =>
-      Effect.gen(function* () {
-        let body = ""
-        try {
-          body = yield* request.text
-        } catch {
-          return HttpServerResponse.jsonUnsafe({ error: "read body failed" }, { status: 400 })
-        }
-        let pid = 0
-        try {
-          pid = Number(JSON.parse(body).pid)
-        } catch {
-          return HttpServerResponse.jsonUnsafe({ error: "invalid body" }, { status: 400 })
-        }
-        if (!Number.isInteger(pid) || pid <= 0) {
-          return HttpServerResponse.jsonUnsafe({ error: "bad pid" }, { status: 400 })
-        }
-        yield* ports.registerPid(pid)
-        // Agent spawn 请求带 workspace header 时顺带注册识别锚点 (容器 workspace 常挂 home 外)
-        const ws = (request.headers as Record<string, string>)["x-opencode-directory"]
-        if (ws) {
-          let root = ws
+      // 子域端口代理 (--domain-proxy): Host <port>.<domain> → 127.0.0.1:<port>.
+      // 注册为全局中间件 (在路由匹配前拦截), 否则子域请求会命中 opencode 同名路由
+      // (/api/*, /session/* 等) 而不是被代理的目标服务.
+      if (domainProxy) {
+        const auth = yield* ServerAuth.Config
+        yield* router.addGlobalMiddleware((effect) =>
+          Effect.gen(function* () {
+            const request = yield* HttpServerRequest.HttpServerRequest
+            const port = domainProxyPort(request.headers.host, domainProxy)
+            if (port === undefined) return yield* effect
+            return yield* proxyDomainRequest(request, port, { ports, client, websocket, auth })
+          }),
+        )
+      }
+
+      yield* router.add("GET", "/ports", (request) =>
+        Effect.gen(function* () {
+          // 工作区目录来自 x-opencode-directory header (铁律 8; raw router 不经 WorkspaceRoutingMiddleware).
+          // 传入后只返回监听进程 cwd 在该工作区下的端口 (+ 白名单); 缺失则返回用户项目服务全集.
+          let workspace: string | undefined
+          const rawHeader = (request.headers as Record<string, string | undefined>)["x-opencode-directory"]
+          if (rawHeader) {
+            try { workspace = decodeURIComponent(rawHeader) } catch { workspace = rawHeader }
+          }
+          const list = yield* ports.scan(workspace)
+          return HttpServerResponse.jsonUnsafe(list)
+        }),
+      )
+      yield* router.add("POST", "/ports", (request) =>
+        Effect.gen(function* () {
+          let body = ""
           try {
-            root = decodeURIComponent(ws)
-          } catch { /* 原样用 */ }
-          yield* ports.registerWorkspace(root)
-        }
-        return HttpServerResponse.jsonUnsafe({ ok: true })
-      }),
-    )
-    // /ports/pids/:pid : 反注册 (PTY onExit / Agent 工具退出时调用)
-    yield* router.add("DELETE", "/ports/pids/*", (request) =>
-      Effect.gen(function* () {
-        const url = new URL(request.url, "http://localhost")
-        const m = url.pathname.match(/^\/ports\/pids\/(\d+)$/)
-        if (!m) return HttpServerResponse.jsonUnsafe({ error: "bad path" }, { status: 400 })
-        yield* ports.unregisterPid(Number(m[1]))
-        return HttpServerResponse.jsonUnsafe({ ok: true })
-      }),
-    )
-    // /proxy/<port>/<rest>: 任意方法反代
-    yield* router.add("GET", "/proxy/*", proxy)
-    yield* router.add("POST", "/proxy/*", proxy)
-    yield* router.add("PUT", "/proxy/*", proxy)
-    yield* router.add("DELETE", "/proxy/*", proxy)
-    yield* router.add("PATCH", "/proxy/*", proxy)
-  }),
-).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal))
+            body = yield* request.text
+          } catch {
+            return HttpServerResponse.jsonUnsafe({ error: "read body failed" }, { status: 400 })
+          }
+          let port = 0
+          try {
+            port = Number(JSON.parse(body).port)
+          } catch {
+            return HttpServerResponse.jsonUnsafe({ error: "invalid body" }, { status: 400 })
+          }
+          yield* ports.whitelist(port)
+          return HttpServerResponse.jsonUnsafe({ ok: true })
+        }),
+      )
+      yield* router.add("DELETE", "/ports/*", (request) =>
+        Effect.gen(function* () {
+          const url = new URL(request.url, "http://localhost")
+          const m = url.pathname.match(/^\/ports\/(\d+)$/)
+          if (!m) return HttpServerResponse.jsonUnsafe({ error: "bad path" }, { status: 400 })
+          yield* ports.remove(Number(m[1]))
+          return HttpServerResponse.jsonUnsafe({ ok: true })
+        }),
+      )
+      // POST /ports/:port/kill : 关闭 (杀) 监听该端口的进程 (面板"关闭进程"按钮)
+      yield* router.add("POST", "/ports/:port/kill", (request) =>
+        Effect.gen(function* () {
+          const url = new URL(request.url, "http://localhost")
+          const m = url.pathname.match(/^\/ports\/(\d+)\/kill$/)
+          if (!m) return HttpServerResponse.jsonUnsafe({ error: "bad path" }, { status: 400 })
+          yield* ports.kill(Number(m[1]))
+          return HttpServerResponse.jsonUnsafe({ ok: true })
+        }),
+      )
+      // /ports/pids {pid} : 注册 numas 主动 spawn 的根 PID (PTY create / Agent spawn 后调用)
+      yield* router.add("POST", "/ports/pids", (request) =>
+        Effect.gen(function* () {
+          let body = ""
+          try {
+            body = yield* request.text
+          } catch {
+            return HttpServerResponse.jsonUnsafe({ error: "read body failed" }, { status: 400 })
+          }
+          let pid = 0
+          try {
+            pid = Number(JSON.parse(body).pid)
+          } catch {
+            return HttpServerResponse.jsonUnsafe({ error: "invalid body" }, { status: 400 })
+          }
+          if (!Number.isInteger(pid) || pid <= 0) {
+            return HttpServerResponse.jsonUnsafe({ error: "bad pid" }, { status: 400 })
+          }
+          yield* ports.registerPid(pid)
+          // Agent spawn 请求带 workspace header 时顺带注册识别锚点 (容器 workspace 常挂 home 外)
+          const ws = (request.headers as Record<string, string>)["x-opencode-directory"]
+          if (ws) {
+            let root = ws
+            try {
+              root = decodeURIComponent(ws)
+            } catch { /* 原样用 */ }
+            yield* ports.registerWorkspace(root)
+          }
+          return HttpServerResponse.jsonUnsafe({ ok: true })
+        }),
+      )
+      // /ports/pids/:pid : 反注册 (PTY onExit / Agent 工具退出时调用)
+      yield* router.add("DELETE", "/ports/pids/*", (request) =>
+        Effect.gen(function* () {
+          const url = new URL(request.url, "http://localhost")
+          const m = url.pathname.match(/^\/ports\/pids\/(\d+)$/)
+          if (!m) return HttpServerResponse.jsonUnsafe({ error: "bad path" }, { status: 400 })
+          yield* ports.unregisterPid(Number(m[1]))
+          return HttpServerResponse.jsonUnsafe({ ok: true })
+        }),
+      )
+      // /proxy/<port>/<rest>: 任意方法反代
+      yield* router.add("GET", "/proxy/*", proxy)
+      yield* router.add("POST", "/proxy/*", proxy)
+      yield* router.add("PUT", "/proxy/*", proxy)
+      yield* router.add("DELETE", "/proxy/*", proxy)
+      yield* router.add("PATCH", "/proxy/*", proxy)
+    }),
+  ).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal))
 
 export * as PortsRoute from "./ports-route"

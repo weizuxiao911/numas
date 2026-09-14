@@ -55,6 +55,11 @@ const options = {
     type: "string" as const,
     describe: "vsix extension directory scanned by the built-in /extensions market (e.g. registry/vsix)",
   },
+  "domain-proxy": {
+    type: "string" as const,
+    describe:
+      "subdomain port proxy: expose known ports at http://<port>.<domain>/ (e.g. --domain-proxy numas.example.com)",
+  },
   "web-ui": {
     type: "string" as const,
     describe: "serve the web UI from this directory at runtime instead of the embedded bundle (dev: rebuild UI without recompiling the binary)",
@@ -107,6 +112,7 @@ export function resolveNetworkOptionsNoConfig(args: NetworkOptions, config?: Con
   const registry = args.registry
   const webUI = args["web-ui"]
   const extensionsDir = args["extensions-dir"]
+  const domainProxy = args["domain-proxy"]
 
-  return { hostname, port, mdns, mdnsDomain, cors, registry, webUI, extensionsDir }
+  return { hostname, port, mdns, mdnsDomain, cors, registry, webUI, extensionsDir, domainProxy }
 }

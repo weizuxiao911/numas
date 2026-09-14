@@ -5,6 +5,7 @@ import {
   aiListProviders,
   type ProviderInfo,
 } from '@/extensions/chat/commands/api';
+import { ProviderIcon } from './ProviderIcon';
 
 interface ModelInfo {
   id: string;
@@ -324,7 +325,10 @@ export const ModelPicker: React.FC<Props> = ({
               )}
               {selectGroups.map((g) => (
                 <div key={g.pid} className="chat__modal-group">
-                  <div className="chat__modal-group-title">{g.label}</div>
+                  <div className="chat__modal-group-title">
+                    <ProviderIcon id={g.pid} name={g.label} size={14} />
+                    <span className="chat__modal-group-name">{g.label}</span>
+                  </div>
                   {g.items.map((it) => {
                     const active = isCurrent(it);
                     const idx = (navItems as SelectItem[]).indexOf(it);
@@ -341,7 +345,7 @@ export const ModelPicker: React.FC<Props> = ({
                         <span className="chat__modal-item-name">{it.title}</span>
                         {it.free && <span className="chat__modal-tag">免费</span>}
                         {active && (
-                          <svg className="chat__modal-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          <svg className="chat__modal-check" width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         )}
                       </div>
                     );
@@ -406,14 +410,7 @@ export const ModelPicker: React.FC<Props> = ({
                       onClick={() => { setView({ kind: 'apikey', provider: p }); setApiKey(''); setError(''); }}
                     >
                       <span className="chat__modal-caticon" aria-hidden="true">
-                        {p.public
-                          ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z"/></svg>
-                          : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M2 12a10 10 0 0 1 20 0"/>
-                              <path d="M5 12a7 7 0 0 1 14 0"/>
-                              <path d="M8 12a4 4 0 0 1 8 0"/>
-                              <circle cx="12" cy="12" r="1"/>
-                            </svg>}
+                        <ProviderIcon id={p.id} name={p.name} size={16} />
                       </span>
                       <span className="chat__modal-catname">{p.name} ({p.id})</span>
                     </button>

@@ -146,11 +146,10 @@ if (this.sdk) {
   }
 
   private async getPtyCwd(): Promise<string> {
-    const c = this.ensureSdk();
-    const { data, error } = await c.path.get({ directory: effectiveCwd() });
-    if (error) throw new Error(`pty /path ${(error as any)?.message || 'unknown'}`);
-    const dir = (data as any)?.directory as string | undefined;
-    return (dir || '/workspace').replace(/\/+$/, '');
+    // numas: shell 工作目录 = workdir (logical symlink 路径), 不能用 path.get 的 directory
+    // (那是 server 端 realpath 后的物理路径). pwd 应显示用户选的 symlink 逻辑路径.
+    const cwd = effectiveCwd();
+    return (cwd || '/workspace').replace(/\/+$/, '');
   }
 
   private async createPty(launchConfig: IShellLaunchConfig, cwd: string): Promise<{ id: string; pid: number; command: string }> {

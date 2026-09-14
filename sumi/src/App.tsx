@@ -6,13 +6,14 @@ import '@codeblitzjs/ide-core/bundle/codeblitz.css';
 import '@codeblitzjs/ide-core/languages';
 
 import { getBuiltinModules } from './config/modules';
+import { isBootReady, resolveBoot } from './infra/url';
 import { preferences } from './config/preferences';
-import { ExtensionServiceImpl } from './service/extension';
+import { getPreloadedMetadata, preloadExtensionMetadata } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
 import { runtimeConfig } from './config/runtime';
-import { SIDEBAR_PANEL_ID } from './extensions/sidebar';
-import { ACTION_PANEL_ID } from './extensions/action';
-import { CHATBOT_PANEL_ID } from './extensions/chatbot';
+import { SIDE_TOPBAR_PANEL_ID, SESSIONS_PANEL_ID, ACTION_PANEL_ID, ASIDE_TOPBAR_PANEL_ID } from './extensions/solo';
+import { CHATBOT_PANEL_ID } from './extensions/chat';
+import { ASIDE_BROWSER_PANEL_ID } from './extensions/browser';
 import { SOLO_SLOTS } from './config/slots';
 import { IdeLayout } from './layouts/IdeLayout';
 import { SoloLayout } from './layouts/SoloLayout';
@@ -31,39 +32,58 @@ import './styles/app-shell.css';
  *   - devtools:    window.__appSetMode('ide')
  */
 export type AppMode = 'solo' | 'ide';
-let _appMode: AppMode = 'solo';
+/** 模式持久化 key: 模式切换按钮会 reload 页面重建 ClientApp (layoutComponent 只在 createApp
+ *  时消费一次, 运行时不换布局), 必须持久化否则 reload 后回落 solo. */
+const APP_MODE_STORAGE_KEY = 'NUMAS_MODE';
+function readStoredAppMode(): AppMode {
+  try { return window.localStorage.getItem(APP_MODE_STORAGE_KEY) === 'ide' ? 'ide' : 'solo'; } catch { return 'solo'; }
+}
+let _appMode: AppMode = readStoredAppMode();
 export const getAppMode = (): AppMode => _appMode;
 export const setAppMode = (m: AppMode): void => {
   if (_appMode === m) return;
   _appMode = m;
+  try { window.localStorage.setItem(APP_MODE_STORAGE_KEY, m); } catch { /* localStorage 不可用忽略 */ }
   window.dispatchEvent(new CustomEvent('app-mode-change'));
 };
 
-/** 全锁槽位 — 不让 codeblitz 装默认 module, vsix 拓展自己装 */
+/** 槽位模块映射 — 官方能力按需放开, 其余锁空 (vsix 拓展自己装).
+ *  - left: 官方 explorer 容器 (查看模式 aside.sidebar 渲染; IDE 模式左栏)
+ *  - main: 官方编辑器 workbench (查看模式 aside.container 渲染; IDE 模式主区)
+ *  - bottom: 官方终端 (solo 终端模式在 aside 中间渲染; IDE 模式底部面板) */
 const layout = {
   [SlotLocation.top]: { modules: [] },
   [SlotLocation.action]: { modules: [] },
-  [SlotLocation.left]: { modules: [] },
+  [SlotLocation.left]: { modules: ['@opensumi/ide-explorer'] },
   [SlotLocation.right]: { modules: [] },
-  [SlotLocation.main]: { modules: [] },
-  [SlotLocation.bottom]: { modules: [] },
+  [SlotLocation.main]: { modules: ['@opensumi/ide-editor'] },
+  [SlotLocation.bottom]: { modules: ['@opensumi/ide-terminal-next'] },
   [SlotLocation.extra]: { modules: [] },
 };
 
-/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开 dashboard + action + chatbot */
+/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开左列/中列各段 */
 const SOLO_MODE = {
   layout,
   panels: {
-    [SOLO_SLOTS.Sidebar]: SIDEBAR_PANEL_ID,
-    [SOLO_SLOTS.Action]: ACTION_PANEL_ID,
-    [SOLO_SLOTS.Main]: CHATBOT_PANEL_ID,
+    [SOLO_SLOTS.SidebarAction]: SIDE_TOPBAR_PANEL_ID,
+    [SOLO_SLOTS.SidebarContainer]: SESSIONS_PANEL_ID,
+    [SOLO_SLOTS.MainAction]: ACTION_PANEL_ID,
+    [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
+    [SOLO_SLOTS.AsideAction]: ASIDE_TOPBAR_PANEL_ID,
+    [SOLO_SLOTS.AsideBrowser]: ASIDE_BROWSER_PANEL_ID,
   },
 };
 
-/** IDE 模式 — 标准 SlotLocation, 不预设展开任何 panel */
+/** IDE 模式 — 标准 SlotLocation: explorer / editor / terminal;
+ *  IdeLayout 里同时渲染 SOLO 已注册的自定义槽组件 (顶栏 action + 右栏 chatbot),
+ *  不注册新 slot / 不改 SOLO 组件, 组合全部收敛在 IdeLayout.tsx. */
 const IDE_MODE = {
   layout,
-  panels: {},
+  panels: {
+    [SOLO_SLOTS.SidebarAction]: SIDE_TOPBAR_PANEL_ID,
+    [SOLO_SLOTS.MainAction]: ACTION_PANEL_ID,
+    [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
+  },
 };
 
 const MODES: Record<AppMode, { layout: any; panels: any }> = {
@@ -71,7 +91,7 @@ const MODES: Record<AppMode, { layout: any; panels: any }> = {
   ide: IDE_MODE,
 };
 
-const LAYOUTS: Record<AppMode, React.ComponentType> = {
+const LAYOUTS: Record<AppMode, React.FC> = {
   solo: SoloLayout,
   ide: IdeLayout,
 };
@@ -79,11 +99,19 @@ const LAYOUTS: Record<AppMode, React.ComponentType> = {
 export const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(() => getAppMode());
   const defaultModules = getDefaultAppConfig().modules || [];
-  const [meta, setMeta] = useState<ExtensionMetadata[]>([]);
-
+  // metadata 预取单例: index.tsx 渲染前已发起, 这里读全局缓存 (同步, 不再重复 fetch).
+  const [meta, setMeta] = useState<ExtensionMetadata[]>(() => getPreloadedMetadata());
+  // metadata 门控: AppRenderer 内 createApp 只在首次挂载执行一次 (useConstant),
+  // 若此时 vsix 元数据未就绪, ClientApp 会永久只剩内置扩展 (线上 vsix 全部失效的根因).
+  // 必须等预取落地再挂 AppRenderer; 超时 (请求挂起) 则降级为无 vsix 启动.
+  const [metaReady, setMetaReady] = React.useState(false);
   React.useEffect(() => {
-    const svc = new ExtensionServiceImpl();
-    svc.installMetadata().then(setMeta);
+    let alive = true;
+    const timer = setTimeout(() => { if (alive) setMetaReady(true); }, 8000);
+    preloadExtensionMetadata()
+      .then((m) => { if (!alive) return; clearTimeout(timer); setMeta(m); setMetaReady(true); })
+      .catch(() => { if (!alive) return; clearTimeout(timer); setMetaReady(true); });
+    return () => { alive = false; clearTimeout(timer); };
   }, []);
 
   React.useEffect(() => {
@@ -91,6 +119,16 @@ export const App: React.FC = () => {
     window.addEventListener('app-mode-change', onChange);
     return () => window.removeEventListener('app-mode-change', onChange);
   }, []);
+
+  // 启动门控: 消费 URL ?directory= (一次性) + 探一次 /path 拿 home 锚点后即放开.
+  // 未选项目也渲染 (显示「选择项目」空态); /path.directory 仅技术兜底, 不当已选项目.
+  const [wsReady, setWsReady] = React.useState<boolean>(() => isBootReady());
+  React.useEffect(() => {
+    if (wsReady) return;
+    let alive = true;
+    void resolveBoot().then(() => { if (alive) setWsReady(true); });
+    return () => { alive = false; };
+  }, [wsReady]);
 
   const cfg = MODES[mode];
   const Layout = LAYOUTS[mode];
@@ -100,7 +138,16 @@ export const App: React.FC = () => {
     layoutConfig: cfg?.layout,
     layoutComponent: Layout,
     defaultPanels: cfg?.panels,
+    // 面板初始宽度 (app 侧配置; SlotRenderer 上的 defaultSize 对 tabbar 面板无效):
+    // 未配置时 main-layout 的 panel.view 兜底 panelSize=335 → left 总宽 = 335+48 = 383.
+    // 拖拽下限在 IdeLayout.tsx 的 SlotRenderer minResize.
+    panelSizes: {
+      [SlotLocation.left]: 278,   // explorer
+      [SlotLocation.right]: 498,  // AI 对话 (自绘右栏, 见 IdeLayout .app-ide__right)
+    },
     componentCDNType: 'jsdelivr',
+    // 精简 explorer 容器: 移除官方 Outline/OpenedEditor 模块 (只留文件树 section)
+    useSimplifyExplorerPanel: true,
     defaultPreferences: preferences,
     extensionMetadata: meta as any,
     modules: [
@@ -109,10 +156,44 @@ export const App: React.FC = () => {
     ],
   };
 
+  // mount 后兜底: 若预取的 vsix metadata 为空 (fetch 瞬时失败/降级), reload 重试一次.
+  // 判定只看预取结果 (__APP_REGISTRY_METADATA__ 是 index 预取同步写入的), 不依赖 DI/时序,
+  // 避免误判正常启动. sessionStorage 标记防死循环.
+  const verifyExtensionOnLoad = React.useCallback(() => {
+    try {
+      const CHECK_KEY = '__numas_ext_check_done__';
+      if (sessionStorage.getItem(CHECK_KEY)) return;
+      const meta = getPreloadedMetadata();
+      const hasVsix = meta.some((m) => {
+        const p = m.extension?.publisher || '';
+        return p && p !== 'kaitian' && p !== 'alex-ext-public';
+      });
+      if (!hasVsix) {
+        sessionStorage.setItem(CHECK_KEY, '1');
+        console.warn('[extension] 预取 vsix metadata 为空, reload 重试一次');
+        window.location.reload();
+      }
+    } catch { /* 探测失败忽略, 不误杀 */ }
+  }, []);
+
+  if (!wsReady || !metaReady) {
+    return (
+      <div className="app-boot">
+        <div className="app-boot__spinner" aria-hidden />
+        <div className="app-boot__text">正在加载工作空间…</div>
+      </div>
+    );
+  }
+
   return (
     <AppRenderer
+      // key=mode: 模式切换时卸载旧 ClientApp (cleanup → app.destroy()) 并重建 —
+      // createApp 只在挂载时执行一次, 换 key 才能让新 mode 的 layoutComponent/layoutConfig
+      // 生效, 无需整页 reload.
+      key={mode}
       appConfig={appConfig}
       runtimeConfig={(runtimeConfig ?? {}) as any}
+      onLoad={verifyExtensionOnLoad}
     />
   );
 };

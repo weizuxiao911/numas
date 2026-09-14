@@ -53,14 +53,21 @@ const config = {
         filename: '[name].[contenthash:8].js',
         publicPath: '/',
     },
-    cache: {
-        type: 'filesystem',
-        cacheDirectory: path_1.default.resolve(WEB, '.webpack-cache'),
-        // monaco-editor 等大依赖单独缓存, 避免每次 dev rebuild 都全量转译
-        buildDependencies: {
-            config: [__filename],
+    // cache 策略:
+    //   - dev (webpack serve): memory. filesystem pack 在 watch 重建时常被并发写/清理,
+    //     触发 `Caching failed for pack: ENOENT ... .webpack-cache/default-development/N.pack`
+    //     并把 dev server 进程带崩 (需人工 rm -rf .webpack-cache 重启). 内存缓存不落盘,
+    //     增量 rebuild 仍在 300ms 级, 换来 dev 不再崩.
+    //   - production build: filesystem, 保留大依赖 (monaco 等) 的跨次构建缓存收益.
+    cache: isDev
+        ? { type: 'memory' }
+        : {
+            type: 'filesystem',
+            cacheDirectory: path_1.default.resolve(WEB, '.webpack-cache'),
+            buildDependencies: {
+                config: [__filename],
+            },
         },
-    },
     watchOptions: {
         // 排除输出/缓存/运行期数据目录, 避免删除/重建目录时 watcher ENOENT 风暴杀掉 webpack
         ignored: [
@@ -77,7 +84,20 @@ const config = {
         // 把 monaco-editor 这种超大模块拆到独立 chunk, 避免单个 bundle 过大
         splitChunks: {
             chunks: 'all',
+            // 单 chunk 上限 1MB: 大组按模块边界再切, 避免小带宽服务器上单连接传大文件被
+            // 超时切断 (浏览器 ERR_INCOMPLETE_CHUNKED_ENCODING → 白屏)
+            maxSize: 1024 * 1024,
             cacheGroups: {
+                // shiki (语法高亮, 含全部 langs/themes ~5.9MB) 只在动态 import 使用:
+                // 必须单独 async 组 — 否则会被 'vendors' (chunks:'all' + 命名) 并进初始
+                // chunk 打进 HTML (实测 initial=true, 启动就拉 5.9MB)
+                shiki: {
+                    test: /[\\/]node_modules[\\/](shiki|@shikijs)[\\/]/,
+                    name: 'shiki',
+                    chunks: 'async',
+                    priority: 40,
+                    enforce: true,
+                },
                 monaco: {
                     test: /[\\/]node_modules[\\/]@opensumi[\\/]monaco-editor-core[\\/]/,
                     name: 'monaco-core',
@@ -110,6 +130,9 @@ const config = {
         alias: {
             '@': path_1.default.resolve(WEB, 'src'),
             '@/': path_1.default.resolve(WEB, 'src') + path_1.default.sep,
+            // tiktoken (3.13MB wasm) 仅服务 @opensumi/ide-ai-native 的 inline-completions,
+            // numas 不使用 → stub 掉, 启动不再加载 3MB wasm (详见 src/shims/tiktoken-stub.ts)
+            'tiktoken': path_1.default.resolve(WEB, 'src', 'shims', 'tiktoken-stub.ts'),
             // 注: customEditors.js (customEditor webview 挂载) 由 postinstall 就地改 node_modules
             //     (scripts/patch-opensumi-customeditors.js), 不走 alias
             //     (opensumi 包内相对路径互引, alias 匹配不上)
@@ -366,8 +389,10 @@ const config = {
                     '/share',
                     '/debug',
                     '/template',
+                    '/extensions',
+                    '/instance',
                 ],
-                target: process.env.OPENCODE_PROXY_URL || 'http://127.0.0.1:4096',
+                target: process.env.OPENCODE_PROXY_URL || 'http://127.0.0.1:24096',
                 changeOrigin: true,
                 ws: true,
                 logLevel: 'warn',

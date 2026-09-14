@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 
 export interface TodoItem {
   content: string;
@@ -55,68 +55,53 @@ export function findTodosInPart(part: any): TodoItem[] {
   return [];
 }
 
-export const TodoCard: React.FC<{ part: any; done?: boolean }> = ({ part, done }) => {
+export const TodoCard: React.FC<{ part: any; done?: boolean }> = ({ part }) => {
   const todos = useMemo(() => {
     // 官方 (packages/web part.tsx TodoWriteTool): state.input.todos, 排序 in_progress→pending→completed
     const priority: Record<string, number> = { in_progress: 0, pending: 1, completed: 2 };
     const raw = findTodosInPart(part);
     return [...raw].sort((a, b) => priority[a.status] - priority[b.status]);
   }, [part]);
-  const toolStatus: string = part?.state?.status || 'pending';
-  const starting = todos.length > 0 && todos.every((t) => t.status === 'pending');
-  const allDone = todos.length > 0 && todos.every((t) => t.status === 'completed' || t.status === 'cancelled');
-  const allCancelled = todos.length > 0 && todos.every((t) => t.status === 'cancelled');
-  const title = allCancelled ? '已取消计划' : allDone ? '完成计划' : starting ? '创建计划' : '更新计划';
   const stats = useMemo(() => {
-    let total = todos.length, completed = 0, inProgress = 0, cancelled = 0;
-    for (const t of todos) {
-      if (t.status === 'completed') completed += 1;
-      else if (t.status === 'cancelled') cancelled += 1;
-      else if (t.status === 'in_progress') inProgress += 1;
-    }
-    return { total, completed, inProgress, cancelled };
+    let total = todos.length, completed = 0;
+    for (const t of todos) if (t.status === 'completed') completed += 1;
+    return { total, completed };
   }, [todos]);
-  const [open, setOpen] = useState(true);
-  // 对话完成后自动折叠
-  useEffect(() => { if (done) setOpen(false); }, [done]);
 
   if (todos.length === 0) {
     return (
-      <div className="todo todo--empty">
-        <span className="todo__icon todo__icon--spin">◐</span>
-        <span>正在规划任务...</span>
+      <div className="oc-tool">
+        <button type="button" className="oc-tool__trigger is-static is-pending">
+          <span className="oc-tool__spinner" />
+          <span className="oc-tool__title">Todos</span>
+        </button>
       </div>
     );
   }
 
   return (
-    <div className={`todo${open ? ' is-open' : ''}`}>
-      <button type="button" className="todo__head" onClick={() => setOpen((v) => !v)}>
-        <span className={`todo__status todo__status--${toolStatus}`}>
-          {toolStatus === 'completed' ? '✓' : toolStatus === 'running' ? '◐' : '○'}
+    <div className="oc-tool oc-todo is-open">
+      <div className="oc-tool__trigger is-static">
+        <span className="oc-todo__icon" aria-hidden>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12l2 2 4-4"/></svg>
         </span>
-        <span className="todo__title">
-          {`${title} ${stats.completed}/${stats.total}`}
-          {stats.inProgress > 0 ? ` · ${stats.inProgress} 进行中` : ''}
-          {stats.cancelled > 0 ? ` · ${stats.cancelled} 已取消` : ''}
-        </span>
-        <span className="todo__caret">{open ? '▾' : '▸'}</span>
-      </button>
-      {open && (
-        <ol className="todo__list">
+        <span className="oc-tool__title">Todos</span>
+        <span className="oc-tool__sep">·</span>
+        <span className="oc-tool__subtitle">{stats.completed}/{stats.total}</span>
+      </div>
+      <div className="oc-todo__list">
           {todos.map((t, i) => (
-            <li key={i} className={`todo__item is-${t.status}`}>
-              <span className="todo__check">
-                {t.status === 'completed' ? '✓' : t.status === 'cancelled' ? '✕' : t.status === 'in_progress' ? '◐' : (i + 1)}
+            <label key={i} className={`oc-todo__item is-${t.status}`}>
+              <span className="oc-todo__box" data-state={t.status === 'completed' ? 'checked' : t.status === 'in_progress' ? 'progress' : 'none'}>
+                {t.status === 'completed' && (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                )}
+                {t.status === 'in_progress' && <span className="oc-todo__bar" />}
               </span>
-              <span className="todo__content">{t.content}</span>
-              {t.priority && t.priority !== 'medium' && (
-                <span className={`todo__pri is-${t.priority}`}>{t.priority}</span>
-              )}
-            </li>
+              <span className="oc-todo__content">{t.content}</span>
+            </label>
           ))}
-        </ol>
-      )}
+        </div>
     </div>
   );
 };

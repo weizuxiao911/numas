@@ -129,7 +129,10 @@ export class EditorRestoreFallbackContribution implements BrowserEditorContribut
       await Promise.all(
         uris.map(async (uriStr) => {
           try {
-            if (cwd && !uriStr.startsWith(`file://${cwd.replace(/\/+$/, '')}`)) {
+            // URI 是 encodeURI 形态 (中文/空格), cwd 是原始路径 — 必须解码后比较
+            let decoded = uriStr;
+            try { decoded = decodeURIComponent(uriStr); } catch { /* 保留原样 */ }
+            if (cwd && !decoded.startsWith(`file://${cwd.replace(/\/+$/, '')}`)) {
               console.log('[editor-restore] 跳过跨 workspace 文件:', uriStr);
               return;
             }
