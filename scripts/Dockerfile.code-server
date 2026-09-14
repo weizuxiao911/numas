@@ -1,39 +1,36 @@
-# numas code-server + opencode 组合镜像
+# vscode + opencode 组合镜像
 #
-# 与根 Dockerfile (轻量组装 numas 原生 UI) 不同, 本镜像提供:
-#   - code-server (浏览器 VSCode) 作为主交互界面 — 唯一对外端口 8080
-#   - opencode CLI 容器内 4096 (不暴露), 供 code-server 内插件 / 终端命令调用
-#   - nvm + node 22 + npm i -g opencode-ai (用户拍板, 容器内装官方 opencode-ai 包)
+# 提供:
+#   - code-server (浏览器 VSCode) 主交互界面 — 唯一对外端口 8080
+#   - opencode CLI 容器内预装 (nvm + node 22 + npm i -g opencode-ai)
+#   - sst-dev.opencode VSCode 扩展预装, Cmd+Esc / editor title 按钮即在容器内
+#     起 `opencode --port <rand>` TUI 终端 (终端 tab 内交互, 随机端口绑回环, 不暴露)
 #
-# 运行 (entrypoint 拉起双进程, tini 回收):
-#   docker build -f scripts/Dockerfile.code-server -t numas:code-server .
-#   docker run --rm -p 8080:8080 numas:code-server
+# 运行:
+#   docker build -f scripts/Dockerfile.code-server -t vscode-opencode:v1.0.0 .
+#   docker run --rm -p 8080:8080 vscode-opencode:v1.0.0
 #   挂载工作区: -v $(pwd):/home/community
 #
-# 端口: 只 EXPOSE 8080 (code-server); opencode 内部 127.0.0.1:4096 不对外.
-# 用户访问 8080 = code-server 原生 VSCode UI, 容器内 code-server 扩展/终端
-# 通过 127.0.0.1:4096 与 opencode 交互.
+# 端口: 只 EXPOSE 8080 (code-server); opencode 不跑常驻 serve, 由 VSCode 扩展
+# 在用户点击时拉起 TUI 终端.
 
-ARG NUMAS_VERSION=0.0.0
-ARG NUMAS_GIT_SHA=unknown
+ARG BUILD_VERSION=0.0.0
+ARG BUILD_SHA=unknown
 
 FROM ubuntu:24.04
 
-ARG NUMAS_VERSION
-ARG NUMAS_GIT_SHA
+ARG BUILD_VERSION
+ARG BUILD_SHA
 
-LABEL org.opencontainers.image.title="numas-code-server" \
-      org.opencontainers.image.description="Numas (code-server + opencode) — 浏览器 VSCode + AI agent 组合镜像" \
-      org.opencontainers.image.version="${NUMAS_VERSION}" \
-      org.opencontainers.image.revision="${NUMAS_GIT_SHA}" \
-      org.opencontainers.image.source="https://github.com/weizuxiao911/numas" \
-      org.opencontainers.image.licenses="MIT" \
-      maintainer="Numas <numas@local>"
+LABEL org.opencontainers.image.title="vscode-opencode" \
+      org.opencontainers.image.description="Browser VSCode (code-server) + opencode AI agent" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_SHA}" \
+      org.opencontainers.image.licenses="MIT"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# HOME=/home: 与 numas 主镜像对齐 (工作区 /home/community, codeblitz 虚拟家目录前缀 /home).
-# root 仅为运行 uid, 所有交互工具链装 /home 下.
+# HOME=/home 与工作区 /home/community 同根, code-server 扩展/配置目录都在 /home 下.
 ENV HOME=/home
 
 # 运行时依赖: 容器内跑 code-server + opencode + 工作区开发常用工具.
@@ -66,7 +63,7 @@ RUN sed -i \
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# oh-my-zsh + nvm + node 22 + npm i -g opencode-ai (用户拍板)
+# oh-my-zsh + nvm + node 22 + npm i -g opencode-ai
 #   所有交互工具链装 /home 下: oh-my-zsh → /home/.oh-my-zsh, nvm → /home/.nvm,
 #   zsh 配置 → /home/.zshrc. nvm 仅 zsh 交互自动加载 (官方设计); 非交互需 source nvm.sh.
 #   opencode-ai 走 npm 全局安装 (装到 $NVM_DIR/versions/node/v22.x.x/lib/node_modules,
@@ -80,7 +77,6 @@ RUN mkdir -p /home \
   && git clone --depth=1 https://gitee.com/mirrors/nvm.git "$NVM_DIR" \
   && /bin/zsh -c 'export NVM_NODEJS_ORG_MIRROR=https://npmmirror.com/mirrors/node && . "$NVM_DIR/nvm.sh" && nvm install 22 && nvm alias default 22 && nvm use default' \
   && chsh -s /bin/zsh root \
-  # npm i -g opencode-ai (用户拍板); 走 npmmirror 注册表加速, 装完立即 --version 冒烟
   && /bin/zsh -c '. "$NVM_DIR/nvm.sh" && npm config set registry https://registry.npmmirror.com && npm i -g opencode-ai && opencode --version' \
   && /bin/zsh -ic 'node --version && npm --version && which opencode'
 
@@ -90,16 +86,26 @@ RUN mkdir -p /home \
 RUN curl -fsSL https://code-server.dev/install.sh | sh \
   && code-server --version
 
-# root 仅为运行 uid, 家目录不是 /root (chsh + ENV HOME=/home 已对齐)
+# 内置 opencode VSCode 扩展 (sst-dev.opencode): 容器启动后 code-server 自动加载,
+# 用户 Cmd+Esc / editor title 按钮即在容器内起 `opencode --port <rand>` TUI 终端
+# (终端 tab 交互, 随机端口绑回环, 不暴露).
+# --extensions-dir 指定到 /home/.local/share/code-server/extensions (HOME=/home 的默认
+# 扩展目录), 装完即可用; 无需用户手动 install.
+COPY scripts/sst-dev.opencode-0.0.13.vsix /tmp/sst-dev.opencode-0.0.13.vsix
+RUN code-server --install-extension /tmp/sst-dev.opencode-0.0.13.vsix \
+      --extensions-dir /home/.local/share/code-server/extensions \
+  && rm /tmp/sst-dev.opencode-0.0.13.vsix \
+  && ls /home/.local/share/code-server/extensions/
+
+# root 仅为运行 uid, 家目录 /home (chsh + ENV HOME=/home 已对齐)
 USER root
 
 # 容器内工作区根 = /home/community (workdir + 默认工作区根, code-server 启动默认 cwd)
 # code-server 配置/扩展目录 (与 HOME=/home 对齐):
 #   /home/.config/code-server/       code-server 配置 (config.yaml)
 #   /home/.local/share/code-server/  code-server 数据 (扩展 / User / logs)
-#   /home/.numas/                    opencode 数据 (~/.numas 与主镜像对齐)
 WORKDIR /home/community
-RUN mkdir -p /home/.config/code-server /home/.local/share/code-server /home/.numas
+RUN mkdir -p /home/.config/code-server /home/.local/share/code-server
 
 # code-server 默认配置: 监听 0.0.0.0:8080, 无认证 (内网/本地场景; 公网需自行加 auth 或反代)
 # 用户可 -v 挂载自定义 config.yaml 覆盖
@@ -109,15 +115,13 @@ RUN printf 'bind-addr: 0.0.0.0:8080\nauth: none\ncert: false\ndisable-telemetry:
 COPY scripts/entrypoint-code-server.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# 端口默认值 (entrypoint 可见; 用户 -e 短名覆盖)
-#   CODE_SERVER_PORT: code-server 监听 (默认 8080, EXPOSE 的对外口)
-#   OPENCODE_PORT:    opencode 内部监听 (默认 4096, 只绑 127.0.0.1 不对外)
-#   WORKDIR:          双进程 cwd (默认 /home/community)
+# 端口默认值 (entrypoint 可见; 用户 -e 覆盖)
+#   CODE_SERVER_PORT: code-server 监听端口 (默认 8080, EXPOSE 的对外口)
+#   WORKDIR:          工作区 cwd         (默认 /home/community)
 ENV CODE_SERVER_PORT=8080
-ENV OPENCODE_PORT=4096
 
 EXPOSE 8080
 
-# ENTRYPOINT 拉起 tini → entrypoint.sh → code-server (主) + opencode (后台)
+# ENTRYPOINT 拉起 tini → entrypoint.sh → code-server 单进程
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]
 CMD []
