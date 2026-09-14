@@ -167,6 +167,12 @@
   display: inline-block !important;
 }
 .app-solo__aside-container { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+/* 浏览器视图常驻渲染 wrapper: 铺满 middle (position:absolute 的包含块), 显隐由 style.display 控制 */
+.app-solo__aside-browser {
+  position: absolute; inset: 0;
+  overflow: hidden;
+}
+.app-solo__aside-browser .app-browser { position: absolute; inset: 0; }
 /* 终端模式: 隐藏底部模块 tab 条 (仅终端一个模块, 冗余; 保留终端面板自身 zsh 标题栏) */
 .app-solo__aside-container .bottom-slot .next_bottom_bar { display: none; }
 /* 查看模式: 隐藏编辑器 tab 栏右侧 actions 区 (design 主题下 .kt-icon::before 被全局 display:none,

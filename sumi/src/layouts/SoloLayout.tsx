@@ -203,25 +203,34 @@ export function SoloLayout(): React.ReactElement {
             <SlotRenderer slot={SOLO_SLOTS.AsideAction} />
           </div>
           <div className="app-solo__aside-middle">
-            {asideView === 'view' ? (
-              /* 文件系统: 照搬 IDE 渲染结构 (SplitPanel: left | [main / bottom]), 终端用同款 isTabbar */
-              <SplitPanel id="solo-fs-horizontal" flex={1}>
-                {!asideExplorerCollapsed && (
-                  <SlotRenderer
-                    slot={SlotLocation.left}
-                    isTabbar
-                    minResize={204}
-                    savedSize={asideSidebarW}
-                  />
-                )}
-                <SplitPanel id="solo-fs-vertical" minResize={300} flexGrow={1} direction="top-to-bottom">
-                  <SlotRenderer flex={2} flexGrow={1} minResize={200} slot={SlotLocation.main} />
-                  <SlotRenderer flex={1} slot={SlotLocation.bottom} isTabbar />
-                </SplitPanel>
+            {/* 文件系统: 照搬 IDE 渲染结构 (SplitPanel: left | [main / bottom]), 终端用同款 isTabbar.
+                双视图常驻渲染 (不卸载), 靠 CSS display 切换显隐 — 对齐 IDE tabbar 面板行为:
+                切「浏览器」再切回时终端 DOM/xterm 不丢, 否则 xterm 单例 raw.element 指向已卸载节点会空白 */}
+            <SplitPanel
+              id="solo-fs-horizontal"
+              flex={1}
+              style={{ display: asideView === 'view' ? 'flex' : 'none' }}
+            >
+              {!asideExplorerCollapsed && (
+                <SlotRenderer
+                  slot={SlotLocation.left}
+                  isTabbar
+                  minResize={204}
+                  savedSize={asideSidebarW}
+                />
+              )}
+              <SplitPanel id="solo-fs-vertical" minResize={300} flexGrow={1} direction="top-to-bottom">
+                <SlotRenderer flex={2} flexGrow={1} minResize={200} slot={SlotLocation.main} />
+                <SlotRenderer flex={1} slot={SlotLocation.bottom} isTabbar />
               </SplitPanel>
-            ) : (
+            </SplitPanel>
+            {/* 浏览器视图: position:absolute 覆盖 (见 BrowserView styles), 常驻渲染仅切换显隐 */}
+            <div
+              className="app-solo__aside-browser"
+              style={{ display: asideView === 'view' ? 'none' : 'block' }}
+            >
               <SlotRenderer key="aside-browser" slot={SOLO_SLOTS.AsideBrowser} />
-            )}
+            </div>
           </div>
           <div className="app-solo__aside-footer">
             <SlotRenderer slot={SOLO_SLOTS.AsideFooter} />
