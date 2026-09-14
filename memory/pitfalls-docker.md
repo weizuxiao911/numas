@@ -60,3 +60,38 @@
 - **复现**: `curl -I https://mirrors.ustc.edu.cn/pypi/packages/<hash>/pyecharts-2.0.7-py3-none-any.whl` → 403; 阿里云同路径 → 200.
 - **解决方案**: pip.conf 主源换阿里云 `https://mirrors.aliyun.com/pypi/simple` (实测 pyecharts whl 200, 全量 12 依赖安装+import 通过). 大包偶发超时用 `timeout = 120` 兜底.
 - **排查方法**: ① 装到某个包 403/失败时, 用 `curl -I <wheel 完整 URL>` 直接验证该文件的 3 个镜像 (USTC/清华/阿里云) 返回码, 别整体换源再全量重试; ② 改源后先在独立容器验证完整依赖清单再 build.
+
+#### 72. 基础镜像 OS 实际 ≠ Dockerfile 注释写 (Debian trixie vs Ubuntu noble)
+
+- **现象**: Dockerfile 注释写 "Ubuntu noble 24.04 deb822 格式 /etc/apt/sources.list.d/ubuntu.sources", 但 `codercom/code-server:4.137.0` 实际是 **Debian trixie** (实测 `cat /etc/apt/sources.list.d/debian.sources` → `URIs: http://deb.debian.org/debian Suites: trixie`). 原 sed 替换 `archive.ubuntu.com` 完全 noop, apt-get update 走 `deb.debian.org` 拿 InRelease OK 但解析 9.7MB 包列表后卡死 10+ 分钟 (buildkit 容器内 apt 内部锁/单线程问题).
+- **根因**: 信任注释不看实际镜像元数据 (`docker run --entrypoint bash <base> -c "cat /etc/os-release"` 拿 PRETTY_NAME; 或看 sources.list.d/ 实际文件名), 容器起 apt 前**必须**实测一次确认 base distro.
+- **解决方案**: apt 源替换 sed 加 debian trixie 分支 (deb822 格式 `URIs: http://deb.debian.org/debian`):
+  ```bash
+  if [ -f /etc/apt/sources.list.d/debian.sources ]; then
+    sed -i 's|https\?://deb.debian.org/debian|https://mirrors.aliyun.com/debian|g; \
+            s|https\?://security.debian.org/debian-security|https://mirrors.aliyun.com/debian-security|g' \
+      /etc/apt/sources.list.d/debian.sources
+  fi
+  ```
+  国内用 `mirrors.aliyun.com/debian` (实测 0.6s/1.0s/1.2s/1.4s 拿到 trixie + trixie-updates + trixie-security + main Packages, 替换前 deb.debian.org 14s 才拿到 main Packages); 保留 ubuntu 分支兼容多 base.
+- **排查方法**: ① build 卡 step apt update 时, 先 docker run base 看 `/etc/os-release` 和 `/etc/apt/sources.list.d/` 实际文件; ② 别注释说什么信什么, 注释是给人类看的, buildkit 跑的是文件; ③ 卡 10 分钟先 kill 别等, 不可能等出来.
+
+#### 73. code-server 容器化必须关闭 workspace trust + supportUntrustedWorkspaces
+
+- **现象**: code-server 容器默认开启 `security.workspace.trust.enabled: true`, 容器内无人交互点 Trust 弹窗, vsix 扩展 (如 sst-dev.opencode) 进入 restricted mode, 大部分功能 (任务运行/调试/受限命令) 不可用.
+- **解决方案**: dockerfile RUN 阶段写 USER $HOME/.local/share/code-server/User/settings.json:
+  ```json
+  {
+    "security.workspace.trust.enabled": false,
+    "extensions.supportUntrustedWorkspaces": true
+  }
+  ```
+  必须在 `USER coder` + `WORKDIR /home/community` 之后, 装 vsix 之前; 否则 code-server --install-extension 阶段 extension 声明 `untrustedWorkspaces: limited` 时会被 restricted 拒绝.
+- **排查方法**: ① code-server 容器起来但扩展列表里 vsix 标 "restricted" 或点了无反应, 先 `docker exec <c> cat /home/coder/.local/share/code-server/User/settings.json` 确认设置在; ② 不要让用户进浏览器手点 Trust (k8s/远程容器没法点), 必须 build 期关掉.
+
+#### 74. SSH 密码重试多次被 fail2ban 临时锁 (1~5 分钟)
+
+- **现象**: 同一会话内连发多个 sshpass 命令, 偶发第二个起开始 Permission denied (publickey,password), `sleep 60` + 一次新连接恢复; 等更久 (3 分钟) 必恢复.
+- **根因**: sshd + pam_fail2ban (或同类 IP 限速), 密码错误 (包括 sshpass echo 方式鉴权失败) 计数累加到阈值触发 ban; ban 时长 60~300s 可配置.
+- **解决方案**: ① 命令间**主动 sleep 5~10s** 别背靠背发; ② 失败一次后等 60s 重试, 别连发; ③ 优先用 ssh key + agent 鉴权绕开密码限速; ④ 长命令 (build/log tail) 跑一次拿够数据, 别一条一查.
+- **排查方法**: Permission denied 一次后立刻 `sleep 60 && sshpass -e ssh ... 'echo READY'`, 通则继续, 不通再 sleep 180.

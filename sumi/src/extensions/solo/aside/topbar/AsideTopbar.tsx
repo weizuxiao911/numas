@@ -28,36 +28,59 @@ export const AsideTopbar: React.FC = () => {
   const terminals = useInjectable<ITerminalController>(ITerminalController);
   const [view, setView] = useState<AsideView>(() => layout.state.aside.view);
   const [explorerCollapsed, setExplorerCollapsed] = useState<boolean>(() => layout.state.aside.explorerCollapsed);
+  // 创建中标志: createTerminal 是异步的, client 注册进 clients 前 size 仍为 0,
+  // 轮询/恢复竞争时按 size===0 判定会重复创建 → 刷新后累积一堆 terminal tab
+  const creatingRef = React.useRef(false);
 
   useEffect(() => layout.subscribe((s) => {
     setView(s.aside.view);
     setExplorerCollapsed(s.aside.explorerCollapsed);
   }), [layout]);
 
-  /** 确保终端实例存在 (无则新建; 有则聚焦) — 终端全关后重开也走这里 */
+  /** 确保终端实例存在 (无则新建; 有则聚焦) — 终端全关后重开也走这里.
+   *  必须在终端恢复 (controller.ready, 即 recovery 完成后) 之后判断: 否则刷新时
+   *  opensumi 尚未恢复历史终端, clients.size===0 → 误判新建 → 每次刷新 +1 个终端. */
   const ensureTerminal = () => {
     const t = terminals as any;
     const size = t?.clients?.size ?? 0;
-    if (size === 0) {
+    if (size === 0 && !creatingRef.current) {
+      creatingRef.current = true;
       try {
-        void (t?.createTerminal ? t.createTerminal({}) : commandService.executeCommand('terminal.add'));
-      } catch { /* ignore */ }
+        const p = t?.createTerminal ? t.createTerminal({}) : commandService.executeCommand('terminal.add');
+        Promise.resolve(p)
+          .catch(() => {})
+          .finally(() => { creatingRef.current = false; });
+      } catch { creatingRef.current = false; }
       return;
     }
-    try { t?.activeClient?.focus?.(); } catch { /* ignore */ }
+    if (size > 0) {
+      try { t?.activeClient?.focus?.(); } catch { /* ignore */ }
+    }
   };
 
   // 终端已并入「查看」视图底部 (SoloLayout 内常驻渲染 bottom slot).
   // 这里确保存在终端实例 + 保活 (全关自动重建), 保证随时有终端可用.
   useEffect(() => {
     if (view === 'browser') return;
-    ensureTerminal();
-    // 保活: 终端全部关闭 → 自动重建 (确保随时有终端可用)
-    const timer = setInterval(() => {
-      const t = terminals as any;
-      if ((t?.clients?.size ?? 0) === 0) ensureTerminal();
-    }, 1500);
-    return () => clearInterval(timer);
+    // 先等终端控制器初始化完成 (含历史终端恢复), 再判断是否需要创建
+    const t = terminals as any;
+    const readyP = t?.ready?.promise;
+    const start = () => {
+      ensureTerminal();
+      // 保活: 终端全部关闭 → 自动重建 (确保随时有终端可用)
+      const timer = setInterval(() => {
+        const c = terminals as any;
+        if ((c?.clients?.size ?? 0) === 0 && !creatingRef.current) ensureTerminal();
+      }, 1500);
+      return () => clearInterval(timer);
+    };
+    if (readyP) {
+      readyP.then(start).catch(start);
+    } else {
+      // ready 不可得 (类型兜底): 延迟到恢复窗口后再建, 避免与恢复竞争
+      const t0 = window.setTimeout(start, 3000);
+      return () => window.clearTimeout(t0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, terminals, commandService]);
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AppRenderer, getDefaultAppConfig } from '@codeblitzjs/ide-core';
 import { SlotLocation } from '@opensumi/ide-core-browser';
+import { TERMINAL_CONTAINER_ID } from '@opensumi/ide-core-browser/lib/common/container-id';
 import type { IAppRendererProps } from '@codeblitzjs/ide-core';
 import '@codeblitzjs/ide-core/bundle/codeblitz.css';
 import '@codeblitzjs/ide-core/languages';
@@ -61,7 +62,9 @@ const layout = {
   [SlotLocation.extra]: { modules: [] },
 };
 
-/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开左列/中列各段 */
+/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开左列/中列各段.
+ *  bottom 固定激活 terminal: solo 终端常驻 aside 底部, 冷启动必须展开 (否则
+ *  layoutState.bottom.currentId 为空/'' → 终端面板折叠 25px → xterm 不渲染) */
 const SOLO_MODE = {
   layout,
   panels: {
@@ -71,6 +74,7 @@ const SOLO_MODE = {
     [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
     [SOLO_SLOTS.AsideAction]: ASIDE_TOPBAR_PANEL_ID,
     [SOLO_SLOTS.AsideBrowser]: ASIDE_BROWSER_PANEL_ID,
+    [SlotLocation.bottom]: TERMINAL_CONTAINER_ID,
   },
 };
 
