@@ -693,7 +693,11 @@ export const ChatbotView: React.FC = () => {
         const idx = prev.findIndex((r) => r.id === id);
         if (idx < 0) return [...prev, { id, role, parts, time, ...meta }];
         const next = [...prev];
-        next[idx] = { ...next[idx], parts, ...(time ? { time } : {}), ...(meta ? meta : {}) };
+        // parts 为空数组表示"仅更新元数据" (完成态 updated 事件可能不带 parts):
+        // 保留原行已有 parts, 只合并 time/tokens/cost, 避免把流式文本清空.
+        const patch: Partial<Row> = { ...(time ? { time } : {}), ...(meta ? meta : {}) };
+        if (parts.length) patch.parts = parts;
+        next[idx] = { ...next[idx], ...patch };
         return next;
       });
     };
@@ -862,7 +866,10 @@ export const ChatbotView: React.FC = () => {
               break;
             }
             case 'message.updated': {
-              // 完整消息更新 (message.updated 可能不带 parts, 只在有 parts 时覆盖, 避免清空流式文本)
+              // 完整消息更新. 注意: 完成态 updated 事件可能不带 parts (只回传
+              // time/tokens/cost 元数据), 此时也要把 cost/tokens/time 合并进已有行,
+              // 否则底部会话累计统计 (由 rows 派生) 永远停在旧值 → "消耗卡着不更新,
+              // 刷新才更新". parts 非空才覆盖, 避免清空流式文本.
               const info = properties.info;
               if (!info?.id || !info.role) break;
               if (info.parts?.length) disarmStepIdle();
@@ -878,15 +885,23 @@ export const ChatbotView: React.FC = () => {
                   if (info.parts?.length) return [...prev, { id: info.id, role: 'user', parts: info.parts }];
                   return prev;
                 });
-              } else if (info.parts?.length) {
-                upsertRow(info.id, info.role, info.parts, info.time, {
-                  modelID: info.modelID,
-                  providerID: info.providerID,
-                  agent: info.agent,
-                  mode: info.mode,
-                  tokens: info.tokens,
-                  cost: info.cost,
-                });
+              } else {
+                // assistant: parts 非空 → 全量覆盖; parts 空 → 只合并元数据 (tokens/cost/time)
+                if (info.parts?.length) {
+                  upsertRow(info.id, info.role, info.parts, info.time, {
+                    modelID: info.modelID,
+                    providerID: info.providerID,
+                    agent: info.agent,
+                    mode: info.mode,
+                    tokens: info.tokens,
+                    cost: info.cost,
+                  });
+                } else {
+                  upsertRow(info.id, info.role, [], info.time, {
+                    tokens: info.tokens,
+                    cost: info.cost,
+                  });
+                }
               }
               break;
             }
