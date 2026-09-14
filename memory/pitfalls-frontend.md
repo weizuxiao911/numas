@@ -268,3 +268,17 @@
 
 - **问题描述**: 标注蒙层放滚动容器外层用视口坐标定位, 滚动时 rAF 节流重绘追不上, 视觉上蒙层「漂移」.
 - **解决方案**: 覆盖层直接作为**滚动内容元素的子元素** (页 div 内), 坐标用**页内百分比** (`left: x*100%` 等) — 与内容同一坐标系, 滚动/缩放天然跟随, 零坐标换算零漂移. 交互命中判定仍用 `getBoundingClientRect` (视觉坐标) + 归一化, 与存储格式一致.
+
+#### 75. SplitPanel `PanelContext.hidePanel` 每次渲染换新闭包 → 放进 effect deps 变无限重渲染 (renderer OOM crash)
+
+- **现象**: 打开 SOLO 工作台 60-90 秒后整页 crash (页面变 about:blank / "Aw Snap"); heap 以 ~60MB/s 线性涨到 ~3.5GB; 与打开的 tab 内容无关 (关掉 PDF tab 也涨); 伴随 ce-patch `__paperTryMount/__paperHide` 每 ~8ms 刷屏 (下游症状).
+- **根因**: `AsideExplorer` (`SoloLayout.tsx`) 的 `useEffect(() => hidePanel(!collapsed), [collapsed, hidePanel])`. SplitPanel 每次渲染都重建 PanelContext value — `hidePanel: hidePanelHandle(index)` 是新闭包 (`split-panel.js:151`); 且 `hidePanel` 内部无条件 `setHides(新数组)` (值没变也是新引用) → effect 每次渲染后重跑 → setState → 再渲染 → 无限循环; 循环里 `fireResizeEvent` 又触发编辑器事件风暴 → ce-patch 反复 mount/hide webview, 放大分配.
+- **复现路径**: 任意工作区打开 SOLO 布局 (aside 常驻渲染, 不受折叠影响) → 必崩; CDP `Performance.getMetrics` 看 `JSHeapUsedSize` 线性上涨, `HeapProfiler` 采样分配栈全在 `SplitPanel/ResizeHandleHorizontal` 的 React 渲染路径.
+- **解决方案**: 用 ref 持最新 hidePanel, effect 只依赖业务状态:
+  ```tsx
+  const hidePanelRef = React.useRef(hidePanel);
+  React.useEffect(() => { hidePanelRef.current = hidePanel; });
+  React.useEffect(() => { hidePanelRef.current(!collapsed); }, [collapsed]);
+  ```
+  验证: 修复后 heap 稳定在 ~150-190MB (60s+), 不再崩; 临时对照实验可只改编译产物 (dist) 的 deps 数组快速验证.
+- **排查方法**: 页面 OOM 先用 HeapProfiler 采样分配栈定位「哪个组件在循环渲染」; 再查该组件 effect deps 是否含「每次渲染都换新」的值 (context value/内联闭包); 上游框架 context value 不可 memo 时一律用 ref 隔离. 注意上游 `resizeDelegates.current.push(delegate)` (`resize.js`) 也是每渲染泄一个 delegate, 循环存在时是助燃剂.

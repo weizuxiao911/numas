@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { AppRenderer, getDefaultAppConfig } from '@codeblitzjs/ide-core';
 import { SlotLocation } from '@opensumi/ide-core-browser';
-import { TERMINAL_CONTAINER_ID } from '@opensumi/ide-core-browser/lib/common/container-id';
 import type { IAppRendererProps } from '@codeblitzjs/ide-core';
 import '@codeblitzjs/ide-core/bundle/codeblitz.css';
 import '@codeblitzjs/ide-core/languages';
@@ -63,8 +62,8 @@ const layout = {
 };
 
 /** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开左列/中列各段.
- *  bottom 固定激活 terminal: solo 终端常驻 aside 底部, 冷启动必须展开 (否则
- *  layoutState.bottom.currentId 为空/'' → 终端面板折叠 25px → xterm 不渲染) */
+ *  bottom 不强制激活: 终端面板开合/关闭/刷新状态全交给框架 layoutState 持久化,
+ *  与 IDE 模式行为一致 (用户关闭终端 tab 后刷新不复活). */
 const SOLO_MODE = {
   layout,
   panels: {
@@ -74,7 +73,6 @@ const SOLO_MODE = {
     [SOLO_SLOTS.MainContainer]: CHATBOT_PANEL_ID,
     [SOLO_SLOTS.AsideAction]: ASIDE_TOPBAR_PANEL_ID,
     [SOLO_SLOTS.AsideBrowser]: ASIDE_BROWSER_PANEL_ID,
-    [SlotLocation.bottom]: TERMINAL_CONTAINER_ID,
   },
 };
 
@@ -146,7 +144,7 @@ export const App: React.FC = () => {
     // 未配置时 main-layout 的 panel.view 兜底 panelSize=335 → left 总宽 = 335+48 = 383.
     // 拖拽下限在 IdeLayout.tsx 的 SlotRenderer minResize.
     panelSizes: {
-      [SlotLocation.left]: 278,   // explorer
+      [SlotLocation.left]: 268,   // explorer
       [SlotLocation.right]: 498,  // AI 对话 (自绘右栏, 见 IdeLayout .app-ide__right)
     },
     componentCDNType: 'jsdelivr',

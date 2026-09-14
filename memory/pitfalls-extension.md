@@ -79,3 +79,10 @@
 - **根因**: vsix 内 `dist/webview.js` 以同版本 URL 提供, 浏览器按缓存策略命中旧文件; 页面刷新只重载拓展壳, 不保证重新拉取 webview bundle.
 - **解决方案**: 每次重打包后 **bump 版本** (`package.json` version +1) 再 package, 新版本 URL 天然破缓存; 验证时确认 market metadata 已显示新版本 (如 `pdf: ['0.1.3']`). 参考 #11 (镜像没重建的"改了没修复"假象) 同类问题.
 - **排查方法**: 「代码改了、构建成功、刷新后行为没变」→ 先查 market metadata 版本号与当前 vsix 文件是否一致; 再在页面 console 找旧逻辑的日志/错误路径佐证.
+
+#### 70. 外部 --registry 双源带不适配浏览器环境的扩展 → 页面崩溃假象 (错误代码 5 / webview 激活失败)
+
+- **问题描述**: dev.js 默认指向外部市场 (gateway-test) + 内置 /extensions 双源时, 页面加载/操作报 `process is not defined`、`instanceof` 契约 TypeError、`Tab close updated received for index 0 which does not exist`, 或浏览器「错误代码: 5」连接中断; server health 200 但 CPU 瞬时飙高 (前端持续拉扩展 + 端口扫描).
+- **根因**: 外部市场里的扩展面向**桌面 Node 环境**, 在浏览器 webview (worker-host) 加载不适配 — yunyan.* 系列直接用 Node `process` 激活即挂, show-docx 等契约与 codeblitz 浏览器宿主不符抛未捕获异常 → 前端连带 tab 竞态报错, 表现成"崩溃".
+- **解决方案**: 默认**单源内置** (`--registry /extensions` + `--extensions-dir registry/vsix`), 外部市场需自行筛选浏览器兼容扩展再用 `--registry <url>` 显式接入; 排查时对比 `GET <registry>/metadata.json` 与内置 vsix 列表, 外部源多出的 publisher (如 yunyan/showdocx) 即疑点.
+- **排查方法**: 页面报错先看 console 错误来自哪个扩展 (`worker-host.js ... failed to activate <publisher>.<name>`); 再查该扩展是否来自外部市场 metadata; 单源后对比扩展列表确认不兼容项消失.

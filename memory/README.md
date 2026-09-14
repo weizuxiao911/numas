@@ -10,8 +10,8 @@
 | `practices.md` | 实践指南（AGENTS.md §4.1 原文） | 1-4 |
 | `pitfalls-docker.md` | Docker 构建 / 镜像源 / 产物 / 运行时 | 11,12,14,15,16,18,22,58,59 |
 | `pitfalls-server.md` | opencode 服务端 / 路径 / 沙箱 / CLI / 网络 | 1,2,3,13,21,24,25,26,30,31,32,33,41,44,48 |
-| `pitfalls-frontend.md` | sumi 前端 / codeblitz / 布局 / chat | 19,20,27,28,29,34-39,42,43,45,46,47,50,51,54-57 |
-| `pitfalls-extension.md` | vsix / 扩展 / 浏览器 / pdf / registry | 10,17,40,49,52,53 |
+| `pitfalls-frontend.md` | sumi 前端 / codeblitz / 布局 / chat | 19,20,27,28,29,34-39,42,43,45,46,47,50,51,54-57,75 |
+| `pitfalls-extension.md` | vsix / 扩展 / 浏览器 / pdf / registry | 10,17,40,49,52,53,63,69,70 |
 | `pitfalls-workflow.md` | git / 协作 / 工作流 / 杂项 | 4,5,6,7,8,9,23 |
 
 ## 维护规则

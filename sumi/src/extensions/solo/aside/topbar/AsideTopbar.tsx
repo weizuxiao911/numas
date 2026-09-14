@@ -28,52 +28,34 @@ export const AsideTopbar: React.FC = () => {
   const terminals = useInjectable<ITerminalController>(ITerminalController);
   const [view, setView] = useState<AsideView>(() => layout.state.aside.view);
   const [explorerCollapsed, setExplorerCollapsed] = useState<boolean>(() => layout.state.aside.explorerCollapsed);
-  // 创建中标志: createTerminal 是异步的, client 注册进 clients 前 size 仍为 0,
-  // 轮询/恢复竞争时按 size===0 判定会重复创建 → 刷新后累积一堆 terminal tab
-  const creatingRef = React.useRef(false);
 
   useEffect(() => layout.subscribe((s) => {
     setView(s.aside.view);
     setExplorerCollapsed(s.aside.explorerCollapsed);
   }), [layout]);
 
-  /** 确保终端实例存在 (无则新建; 有则聚焦) — 终端全关后重开也走这里.
-   *  必须在终端恢复 (controller.ready, 即 recovery 完成后) 之后判断: 否则刷新时
-   *  opensumi 尚未恢复历史终端, clients.size===0 → 误判新建 → 每次刷新 +1 个终端. */
+  /** 确保终端实例存在 (无则新建; 有则聚焦). 只在用户进入查看视图时调用 —
+   *  用户主动关闭全部终端后保持关闭, 不自动重建 (与 IDE 行为一致). */
   const ensureTerminal = () => {
     const t = terminals as any;
     const size = t?.clients?.size ?? 0;
-    if (size === 0 && !creatingRef.current) {
-      creatingRef.current = true;
+    if (size === 0) {
       try {
-        const p = t?.createTerminal ? t.createTerminal({}) : commandService.executeCommand('terminal.add');
-        Promise.resolve(p)
-          .catch(() => {})
-          .finally(() => { creatingRef.current = false; });
-      } catch { creatingRef.current = false; }
+        t?.createTerminal ? t.createTerminal({}) : commandService.executeCommand('terminal.add');
+      } catch { /* ignore */ }
       return;
     }
-    if (size > 0) {
-      try { t?.activeClient?.focus?.(); } catch { /* ignore */ }
-    }
+    try { t?.activeClient?.focus?.(); } catch { /* ignore */ }
   };
 
-  // 终端已并入「查看」视图底部 (SoloLayout 内常驻渲染 bottom slot).
-  // 这里确保存在终端实例 + 保活 (全关自动重建), 保证随时有终端可用.
+  // 终端已并入「查看」视图底部 (SoloLayout 内渲染 bottom slot).
+  // 首次进入查看视图 (含冷启动默认 view) 时确保存在终端实例;
+  // 等 terminals.ready (恢复完成后) 再判断, 避免恢复窗口期误建.
   useEffect(() => {
-    if (view === 'browser') return;
-    // 先等终端控制器初始化完成 (含历史终端恢复), 再判断是否需要创建
+    if (view !== 'view') return;
     const t = terminals as any;
     const readyP = t?.ready?.promise;
-    const start = () => {
-      ensureTerminal();
-      // 保活: 终端全部关闭 → 自动重建 (确保随时有终端可用)
-      const timer = setInterval(() => {
-        const c = terminals as any;
-        if ((c?.clients?.size ?? 0) === 0 && !creatingRef.current) ensureTerminal();
-      }, 1500);
-      return () => clearInterval(timer);
-    };
+    const start = () => ensureTerminal();
     if (readyP) {
       readyP.then(start).catch(start);
     } else {

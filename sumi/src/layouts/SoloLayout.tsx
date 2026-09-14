@@ -20,7 +20,7 @@
  */
 import React, { useRef, useEffect } from 'react';
 import { SlotLocation, SlotRenderer } from '@opensumi/ide-core-browser';
-import { SplitPanel } from '@opensumi/ide-core-browser/lib/components';
+import { SplitPanel, PanelContext } from '@opensumi/ide-core-browser/lib/components';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { ITerminalController } from '@opensumi/ide-terminal-next/lib/common';
 
@@ -30,12 +30,39 @@ import { SOLO_SLOTS } from '../config/slots';
 import { LayoutToken, type ILayoutService } from '../service/layout';
 import { getWorkdir, subscribeWorkdir } from '../infra/url';
 
-/** aside 中间左栏 (explorer) 宽度持久化: 默认 280, 范围 160-520 */
+/** aside 中间左栏 (explorer) 宽度持久化: 默认 268, 范围 160-520 */
 const ASIDE_SIDEBAR_W_KEY = 'NUMAS_SOLO_ASIDE_SIDEBAR_W';
 const loadAsideSidebarW = (): number => {
   const n = Number(localStorage.getItem(ASIDE_SIDEBAR_W_KEY));
-  return Number.isFinite(n) && n > 0 ? Math.min(520, Math.max(160, n)) : 280;
+  return Number.isFinite(n) && n > 0 ? Math.min(520, Math.max(160, n)) : 268;
 };
+
+/** aside 内 explorer (SplitPanel 左槽). 常驻渲染 (子元素数量恒定, 避免 SplitPanel
+ *  索引错乱导致同容器终端 xterm 丢失), 折叠经 PanelContext.hidePanel 让 SplitPanel
+ *  内部 display:none — 对齐 6fa2a6a 双视图常驻 CSS 显隐的处理. */
+function AsideExplorer({ collapsed, savedSize }: { collapsed: boolean; savedSize: number }) {
+  const { hidePanel } = React.useContext(PanelContext);
+  // 坑: SplitPanel 每次渲染都重建 PanelContext value (hidePanel 是新闭包), 若把它放进
+  // effect deps, 每次渲染 effect 都重跑; 而 hidePanel 内部无条件 setHides(新数组) →
+  // 无限重渲染 (实测 ~60MB/s 泄漏, 60-90s 后 renderer OOM). 用 ref 持最新引用, effect
+  // 只跟随 collapsed.
+  const hidePanelRef = React.useRef(hidePanel);
+  React.useEffect(() => {
+    hidePanelRef.current = hidePanel;
+  });
+  React.useEffect(() => {
+    // hidePanel(show?): show=true→显示, show=false→隐藏 (内部取 !show)
+    hidePanelRef.current(!collapsed);
+  }, [collapsed]);
+  return (
+    <SlotRenderer
+      slot={SlotLocation.left}
+      isTabbar
+      minResize={204}
+      savedSize={savedSize}
+    />
+  );
+}
 
 export function SoloLayout(): React.ReactElement {
   const layout = useInjectable<ILayoutService>(LayoutToken);
@@ -211,14 +238,7 @@ export function SoloLayout(): React.ReactElement {
               flex={1}
               style={{ display: asideView === 'view' ? 'flex' : 'none' }}
             >
-              {!asideExplorerCollapsed && (
-                <SlotRenderer
-                  slot={SlotLocation.left}
-                  isTabbar
-                  minResize={204}
-                  savedSize={asideSidebarW}
-                />
-              )}
+              <AsideExplorer collapsed={asideExplorerCollapsed} savedSize={asideSidebarW} />
               <SplitPanel id="solo-fs-vertical" minResize={300} flexGrow={1} direction="top-to-bottom">
                 <SlotRenderer flex={2} flexGrow={1} minResize={200} slot={SlotLocation.main} />
                 <SlotRenderer flex={1} slot={SlotLocation.bottom} isTabbar />

@@ -333,6 +333,7 @@ AI **仍需 `question`**:
 - **57** 图片/视频无法预览: StaticResourceService 缺 file provider
 - **60** 中文目录下编辑区持久化失效 (cwd vs encodeURI URI 比较)
 - **62** codeblitz webview 双层 iframe + 内层重建清 DOM: 外挂层挂 iframe body
+- **75** SplitPanel hidePanel 闭包每次渲染换新 → effect deps 无限重渲染 (OOM crash)
 
 **vsix / 扩展 / 浏览器 / pdf / registry** → `memory/pitfalls-extension.md`
 - **10** 内置浏览器默认 <embed> 渲染 PDF 不可靠 (依赖 Chrome PDF 插件)
@@ -343,6 +344,7 @@ AI **仍需 `question`**:
 - **53** vsix webview 资源不能手拼 registryBase, 必须用 asWebviewUri
 - **63** 网关市场下 vsix webview 子资源被 CSP 拦 (cspSource 带 path 不匹配)
 - **69** 同版本 vsix 重打包后浏览器仍加载旧 webview → 修复不生效
+- **70** 外部 --registry 双源带浏览器不适配扩展 → 页面崩溃假象 (process is not defined / 错误代码 5)
 - **64** React createPortal 进命令式 DOM 容器 → 蒙层不渲染 (静默)
 - **65** 弹层用释放点固定坐标 → 滚动后不跟随目标元素
 - **66** 滚动内容上的覆盖层用视口坐标 → 滚动漂移
