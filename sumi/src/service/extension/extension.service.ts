@@ -209,25 +209,49 @@ export class RegistryStaticResourceContribution implements StaticResourceContrib
   }
 }
 
+/** 版本号比较: 数值段逐级比较 (1.2.10 > 1.2.9), 段数不同缺位补 0; 全等回退字符串比较.
+ *  同拓展多版本只生效最新版用 (版本号越大越新). */
+function compareVersion(a: string, b: string): number {
+  const pa = String(a || '').split('.');
+  const pb = String(b || '').split('.');
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i += 1) {
+    const na = parseInt(pa[i] || '0', 10);
+    const nb = parseInt(pb[i] || '0', 10);
+    const va = Number.isNaN(na) ? 0 : na;
+    const vb = Number.isNaN(nb) ? 0 : nb;
+    if (va !== vb) return va - vb;
+  }
+  return String(a || '').localeCompare(String(b || ''));
+}
+
 @Injectable()
 export class ExtensionServiceImpl implements IExtensionService {
   async listMetadata(): Promise<ExtensionMetadata[]> {
     const bases = registryBaseUrls();
-    // 多市场合并: 逐个拉 metadata, 按 extension name 去重 (靠前源优先, 内置 /extensions 在前)
-    const merged: ExtensionMetadata[] = [];
-    const seen = new Set<string>();
+    // 多市场合并 + 同拓展多版本过滤: 按 extension name 去重, 只保留版本号最大的
+    // (版本号越大越新; 版本相同保留靠前源, 内置 /extensions 在前).
+    // 不比较版本会让生效版本取决于 metadata 条目顺序 — 实测 pdf 0.1.5 排在 0.1.6 前,
+    // 旧版生效而新版被丢弃.
+    const byName = new Map<string, { metadata: ExtensionMetadata; base: string }>();
     for (const base of bases) {
       const items = await fetchMetadataFromBase(base);
       for (const { metadata, base: b } of items) {
         const name = metadata?.extension?.name;
-        if (!name || seen.has(name)) continue;
-        seen.add(name);
-        // 来源记录两个 key: metadata.name (扩展名) + uri 首段 id (静态资源路径用, 如 numas.pdf-0.1.0)
-        sourceByExtId.set(name, b);
-        const uriId = metadataUriFirstSegment(metadata?.uri);
-        if (uriId) sourceByExtId.set(uriId, b);
-        merged.push(metadata);
+        if (!name) continue;
+        const cur = byName.get(name);
+        if (!cur || compareVersion(metadata.extension.version, cur.metadata.extension.version) > 0) {
+          byName.set(name, { metadata, base: b });
+        }
       }
+    }
+    // 来源记录两个 key: metadata.name (扩展名) + uri 首段 id (静态资源路径用, 如 numas.pdf-0.1.6)
+    const merged: ExtensionMetadata[] = [];
+    for (const [name, { metadata, base }] of byName) {
+      sourceByExtId.set(name, base);
+      const uriId = metadataUriFirstSegment(metadata?.uri);
+      if (uriId) sourceByExtId.set(uriId, base);
+      merged.push(metadata);
     }
     return merged;
   }

@@ -345,6 +345,7 @@ AI **仍需 `question`**:
 - **63** 网关市场下 vsix webview 子资源被 CSP 拦 (cspSource 带 path 不匹配)
 - **69** 同版本 vsix 重打包后浏览器仍加载旧 webview → 修复不生效
 - **70** 外部 --registry 双源带浏览器不适配扩展 → 页面崩溃假象 (process is not defined / 错误代码 5)
+- **76** 同拓展多版本共存 → 前端按 name 去重先到先得, 旧版本生效 (已改 sumi 取最新版)
 - **64** React createPortal 进命令式 DOM 容器 → 蒙层不渲染 (静默)
 - **65** 弹层用释放点固定坐标 → 滚动后不跟随目标元素
 - **66** 滚动内容上的覆盖层用视口坐标 → 滚动漂移
