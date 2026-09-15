@@ -84,6 +84,7 @@ import { FollowupDock } from './components/FollowupDock';
 import { QuestionDock } from './components/QuestionDock';
 import { normalizeQuestions } from './parts/QuestionCard';
 import { SkillsModal } from './components/SkillsModal';
+import { ContextUsageModal } from './components/ContextUsageModal';
 import { Portal } from './parts/Portal';
 
 function loadClientCmds() {
@@ -254,6 +255,8 @@ export const ChatbotView: React.FC = () => {
   const [showSkills, setShowSkills] = useState(false);
   /** 输入框底部设置 popover (当前只有「重新加载」) */
   const [showSettings, setShowSettings] = useState(false);
+  /** 上下文用量弹层 (stats bar 点 tokens 触发) */
+  const [showContextUsage, setShowContextUsage] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [skills, setSkills] = useState<Array<{ name: string; description?: string; location?: string }>>([]);
   const [questionRev, setQuestionRev] = useState(0);
@@ -2736,13 +2739,31 @@ export const ChatbotView: React.FC = () => {
                   <span className="chat__session-stats-item">{formatDurationHMS(sessionStats.durationMs)}</span>
                 )}
                 {sessionStats.input + sessionStats.output + sessionStats.reasoning > 0 && (
-                  <span className="chat__session-stats-item">{formatTokens({ input: sessionStats.input, output: sessionStats.output, reasoning: sessionStats.reasoning })}</span>
+                  <button
+                    type="button"
+                    className="chat__session-stats-item chat__session-stats-item--clickable"
+                    title="点击查看上下文用量 (含子代理开销)"
+                    onClick={() => setShowContextUsage(true)}
+                  >
+                    {formatTokens({ input: sessionStats.input, output: sessionStats.output, reasoning: sessionStats.reasoning })}
+                  </button>
                 )}
                 {formatCost(sessionStats.cost) && <span className="chat__session-stats-item">{formatCost(sessionStats.cost)}</span>}
               </>
             ) : null}
           </div>
         </div>
+      )}
+
+      {/* 上下文用量弹层 (stats bar 点 tokens 触发; 用 opensumi Modal 包装) */}
+      {showContextUsage && sessionID && (
+        <ContextUsageModal
+          visible={showContextUsage}
+          onClose={() => setShowContextUsage(false)}
+          sessionID={sessionID}
+          providerID={currentProvider}
+          modelID={currentModel}
+        />
       )}
 
     </div>

@@ -610,6 +610,92 @@ export const styles = `
   background: transparent; border: none; color: var(--ai-fg-muted);
   cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px;
 }
+/* stats bar 里 tokens 文本变可点 button (触发上下文用量弹层) */
+.chat__session-stats-item--clickable {
+  border: 0; background: transparent;
+  color: var(--ai-fg-muted);
+  font: inherit; font-variant-numeric: tabular-nums;
+  padding: 0; margin: 0;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+  transition: color .12s, background .12s;
+}
+.chat__session-stats-item--clickable:hover {
+  color: var(--ai-fg);
+  background: color-mix(in srgb, var(--ai-fg) 8%, transparent);
+}
+
+/* ─────────────── 上下文用量弹层 (ContextUsageModal) ───────────────
+ * 跟 chat__modal 同款 (对齐 ModelPicker / Settings 弹层视觉), ESC + 点击 overlay 关闭.
+ * 内容: 摘要 (限制/总 token/使用率) + token 细分 (input/output/reasoning/cache/消息数) + 5 分类细分条. */
+
+.chat__modal-body--context { padding: 0 !important; }
+.chat__modal--context { display: flex; flex-direction: column; max-height: min(calc(100vh - 80px), 560px); }
+
+.chat__context-summary {
+  display: flex; flex-direction: column;
+  padding: 4px 0 8px;
+}
+.chat__context-summary-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ai-fg) 6%, transparent);
+  font-size: 12.5px;
+}
+.chat__context-summary-row:last-child { border-bottom: 0; }
+.chat__context-summary-key { color: var(--ai-fg-muted); }
+.chat__context-summary-val { color: var(--ai-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.chat__context-details {
+  display: flex; flex-direction: column;
+  padding: 4px 0;
+  background: color-mix(in srgb, var(--ai-fg) 3%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--ai-fg) 6%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ai-fg) 6%, transparent);
+}
+.chat__context-detail-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 18px;
+  font-size: 12px;
+}
+.chat__context-detail-key { color: var(--ai-fg-muted); }
+.chat__context-detail-val { color: var(--ai-fg); font-variant-numeric: tabular-nums; }
+
+.chat__context-section-title {
+  padding: 12px 18px 6px;
+  font-size: 11px; font-weight: 700;
+  color: var(--ai-fg-muted);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+
+/* 多色进度条: 5 段堆叠 (相对 limit) */
+.chat__context-bar {
+  display: flex; align-items: stretch; gap: 1px;
+  height: 6px; margin: 0 18px 8px;
+  background: color-mix(in srgb, var(--ai-fg) 8%, transparent);
+  border-radius: 999px; overflow: hidden;
+}
+.chat__context-bar-seg {
+  height: 100%;
+  min-width: 1px;
+  transition: filter .12s;
+}
+.chat__context-bar-seg:hover { filter: brightness(1.15); }
+
+.chat__context-legend {
+  list-style: none; padding: 0 18px 14px; margin: 0;
+  display: flex; flex-wrap: wrap; gap: 4px 12px;
+  font-size: 11.5px; color: var(--ai-fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.chat__context-legend li { display: inline-flex; align-items: center; gap: 5px; }
+.chat__context-dot {
+  width: 7px; height: 7px; border-radius: 999px;
+  flex: 0 0 auto;
+}
+.chat__context-legend-label { color: var(--ai-fg); }
+.chat__context-legend-val { color: var(--ai-fg-muted); }
 .chat__session-stats-x:hover { color: var(--ai-fg); }
 /* 重试状态 (复用同一行): 琥珀警示 + 次要信息淡色 + 详情链接 */
 .chat__session-stats-notice.is-warning { color: var(--ai-warning); }
