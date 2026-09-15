@@ -265,7 +265,8 @@ export const styles = `
   transition: background .12s, color .12s;
 }
 .app-action__new:hover {
-  background: color-mix(in srgb, var(--button-background, #6366f1) 18%, transparent);
-  color: var(--button-background, #6366f1);
+  /* hover 用前景色 (不用 --button-background: light 主题下 = #ffffff, icon 变白不可见; 见 pitfalls-frontend #35) */
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  color: var(--editor-foreground, var(--ai-fg, #1f2328));
 }
 `;

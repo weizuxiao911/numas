@@ -433,6 +433,9 @@ export interface ModelInfo {
   status?: string;
   providerName?: string;
   free?: boolean;
+  /** 模型变体名列表 (e.g. ['low','medium','high','max'] — reasoningEffort 档位);
+   *  空数组 = 该模型不支持变体. 跟官方 composer "选择模型变体" 同源 (model.variants). */
+  variants?: string[];
 }
 
 /** 模型列表 — 用 SDK config.providers 拿, 按规则过滤:
@@ -467,6 +470,7 @@ export async function aiListModels(): Promise<ModelInfo[]> {
         status: m.status,
         providerName,
         free: isPublic,
+        variants: m.variants && typeof m.variants === 'object' ? Object.keys(m.variants) : [],
       });
     }
   }

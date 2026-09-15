@@ -38,6 +38,8 @@ const FOLLOWUP_MODE_KEY = 'NUMAS_CHAT_FOLLOWUP_MODE';
 /** 输入历史持久化 key + 上限 (对齐官方 App prompt-history: 全局持久化, max 100, 连续重复去重) */
 const PROMPT_HISTORY_KEY = 'NUMAS_CHAT_PROMPT_HISTORY';
 const PROMPT_HISTORY_MAX = 100;
+/** 模型变体持久化 key (对齐官方 composer "选择模型变体"; 空 = default 不传 variant) */
+const CHAT_VARIANT_KEY = 'NUMAS_CHAT_VARIANT';
 
 function readPromptHistory(): string[] {
   try {
@@ -240,6 +242,18 @@ export const ChatbotView: React.FC = () => {
   const [, setModelsRefresh] = useState(0);
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentProvider, setCurrentProvider] = useState<string>('');
+  /** 模型变体 (reasoningEffort 档位: low/medium/high/max; '' = default 不传 variant) */
+  const [currentVariant, setCurrentVariant] = useState<string>(() => {
+    try { return localStorage.getItem(CHAT_VARIANT_KEY) || ''; } catch { return ''; }
+  });
+  const setCurrentVariantPersist = useCallback((v: string) => {
+    setCurrentVariant(v);
+    try {
+      if (v) localStorage.setItem(CHAT_VARIANT_KEY, v);
+      else localStorage.removeItem(CHAT_VARIANT_KEY);
+    } catch { /* ignore */ }
+  }, []);
+  const [showVariants, setShowVariants] = useState(false);
   const [currentTitle, setCurrentTitle] = useState<string>('');
   /** 当前会话累计统计 (会话列表 / session.updated 事件回填): { cost, tokens, durationMs } */
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
@@ -573,23 +587,26 @@ export const ChatbotView: React.FC = () => {
     if (showModels) setTimeout(() => modelSearchRef.current?.focus(), 30);
   }, [showModels]);
   useEffect(() => {
-    if (!showAgents && !showModels && !showSettings) return;
+    if (!showAgents && !showModels && !showSettings && !showVariants) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (t.closest('.chat__mpop')
         || t.closest('.chat__modal')
         || t.closest('[data-ai-pop="agents"]')
         || t.closest('[data-ai-pop="models"]')
+        || t.closest('[data-ai-pop="variants"]')
         || t.closest('[data-ai-pop="settings"]')) return;
       setShowAgents(false);
       setShowModels(false);
       setShowSettings(false);
+      setShowVariants(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       setShowAgents(false);
       setShowModels(false);
       setShowSettings(false);
+      setShowVariants(false);
     };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
@@ -597,7 +614,7 @@ export const ChatbotView: React.FC = () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [showAgents, showModels, showSettings]);
+  }, [showAgents, showModels, showSettings, showVariants]);
 
   const loadMessages = useCallback(async (sid?: string) => {
     const target = sid || sessionIDRef.current;
@@ -1109,6 +1126,11 @@ export const ChatbotView: React.FC = () => {
     () => agents.find((a: any) => (a.id || a.name) === currentAgent),
     [agents, currentAgent]
   );
+  /** 当前模型的变体列表 (官方 composer "选择模型变体" 同源; 空 = 不显示按钮) */
+  const modelVariants = useMemo(() => {
+    const vs = (selectedModel as any)?.variants;
+    return Array.isArray(vs) ? vs : [];
+  }, [selectedModel]);
   const currentModelLabel = useMemo(() => {
     if (!selectedModel) return '';
     // 只显示模型名, 不拼接服务商 (同名模型跨 provider 时服务商信息在 ModelPicker 里看)
@@ -1159,9 +1181,11 @@ export const ChatbotView: React.FC = () => {
               x.id === currentModel &&
               (!currentProvider || x.providerID === currentProvider)
             );
+            // variant 只在选中时带 ('' = default 不传; 跟官方 submit.ts: model.variant 同款)
+            const variantPart = currentVariant ? { variant: currentVariant } : {};
             return m
-              ? { providerID: m.providerID, modelID: m.id }
-              : { modelID: currentModel, ...(currentProvider ? { providerID: currentProvider } : {}) };
+              ? { providerID: m.providerID, modelID: m.id, ...variantPart }
+              : { modelID: currentModel, ...(currentProvider ? { providerID: currentProvider } : {}), ...variantPart };
           })()
         : undefined;
       if (sid) setStatusBySession((prev) => ({ ...prev, [sid]: { type: 'busy' } }));
@@ -1190,7 +1214,7 @@ export const ChatbotView: React.FC = () => {
       setApiError(e);
       return false;
     }
-  }, [currentAgent, currentModel, models, currentProvider, client, setApiError, setSessionID]);
+  }, [currentAgent, currentModel, currentVariant, models, currentProvider, client, setApiError, setSessionID]);
 
   // 弹出队首并发送 (idle 终态后自动调用). flushingRef 同步锁防重复 idle 事件重入.
   // assumeIdle: idle 终态事件点调用时 ref 可能尚未提交新状态, 跳过 busy 校验.
@@ -2571,6 +2595,8 @@ export const ChatbotView: React.FC = () => {
                         setCurrentModel(id);
                         setCurrentProvider(providerID);
                          modelPrefs.setDefault(id, providerID);
+                         // 换模型 → variant 重置 (不同 model 的 variants 不同, 旧档位可能无效)
+                         setCurrentVariantPersist('');
                          setShowModels(false);
                          // 选完模型回到 input, 光标放末尾继续输入
                          requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus()));
@@ -2591,6 +2617,66 @@ export const ChatbotView: React.FC = () => {
                   </Portal>
                 )}
               </div>
+
+              {/* 模型变体 (跟官方 composer "选择模型变体" 同款: default + model.variants; 仅当前 model 支持时显示) */}
+              {modelVariants.length > 0 && (
+                <div className="chat__select">
+                  <button
+                    data-ai-pop="variants"
+                    type="button"
+                    className="chat__bar-btn chat__bar-text"
+                    title="选择模型变体"
+                    onClick={() => { setShowVariants((v) => !v); setShowModels(false); setShowAgents(false); }}
+                  >
+                    <span>{currentVariant || 'default'}</span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  {showVariants && (
+                    <Portal>
+                      <div
+                        className="chat__modal-overlay"
+                        onMouseDown={(e) => {
+                          if (e.target === e.currentTarget) {
+                            setShowVariants(false);
+                            requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus()));
+                          }
+                        }}
+                      >
+                        <div className="chat__modal" style={{ width: 300 }} role="dialog" aria-modal="true">
+                          <div className="chat__modal-header chat__modal-header--page">
+                            <div className="chat__modal-title">模型变体</div>
+                          </div>
+                          <div className="chat__modal-body">
+                            {['', ...modelVariants].map((v) => {
+                              const active = currentVariant === v;
+                              const pick = () => {
+                                setCurrentVariantPersist(v);
+                                setShowVariants(false);
+                                requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus()));
+                              };
+                              return (
+                                <div
+                                  key={v || '__default__'}
+                                  role="button"
+                                  tabIndex={0}
+                                  className={`chat__modal-item${active ? ' is-active' : ''}`}
+                                  onClick={pick}
+                                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') pick(); }}
+                                >
+                                  <span className="chat__modal-item-name">{v || 'default'}</span>
+                                  {active && (
+                                    <svg className="chat__modal-check" width="18" height="18" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </Portal>
+                  )}
+                </div>
+              )}
 
               <div className="chat__bar-spacer" />
 
