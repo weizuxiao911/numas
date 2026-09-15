@@ -1074,10 +1074,15 @@ export const ChatbotView: React.FC = () => {
                 const next = [...prev];
                 const row = { ...next[idx] };
                 const parts = row.parts || [];
-                // 匹配: 同 id, 或本地占位 part (无 id 且同 type 同 text) → 替换, 避免 "你好你好" 重复
+                // 匹配: 同 id, 或本地占位 part (无 id) → 替换, 避免 "你好你好" / 图片附件重复.
+                // file part: 本地乐观 part 带 __local 标记 (server 端会重编码 dataUrl, url 不相等,
+                // 不能用 url 比对) → 无标记的 server file part 替换第一个带标记的本地占位
                 const replaceIdx = parts.findIndex((p: any) =>
                   (p?.id && p.id === part.id)
-                  || (!p?.id && p?.type === part.type && part.text != null && p.text === part.text)
+                  || (!p?.id && p?.type === part.type && (
+                    (part.text != null && p.text === part.text)
+                    || (part.type === 'file' && (p.__local === true || (!!p.url && p.url === part.url)))
+                  ))
                 );
                 row.parts = replaceIdx >= 0
                   ? parts.map((p: any, i: number) => (i === replaceIdx ? part : p))
@@ -1388,6 +1393,9 @@ export const ChatbotView: React.FC = () => {
         mime: (a.dataUrl!.split(',')[0].match(/data:([^;]+)/)?.[1] || 'image/png'),
         filename: a.name,
         url: a.dataUrl,
+        // 本地乐观标记: server 端会对 dataUrl 重编码 (url 与本地不同), 不能用 url 匹配 →
+        // 收到 server 的 file part 时靠这个标记替换本地占位, 避免同一附件渲染两次
+        __local: true,
       })));
     }
     setRows((prev) => [...prev, { id: rowId, role: 'user', parts: localParts }]);
@@ -2303,9 +2311,13 @@ export const ChatbotView: React.FC = () => {
     // 纯文本/代码片段 (kind 不为 file) 走 textarea 默认行为
     const fileItems = items.filter((it) => it.kind === 'file');
     if (fileItems.length === 0) return;
+    // macOS 截图: 同一张图以 image/png + image/tiff 两种格式同时入剪贴板 →
+    // 丢 tiff 保 png, 避免同一次粘贴产生两张重复附件 (多张不同图不受影响)
+    const hasPng = fileItems.some((it) => it.type === 'image/png');
+    const picked = hasPng ? fileItems.filter((it) => it.type !== 'image/tiff') : fileItems;
     // 关键: 剪贴板 DataTransferItem 在 paste 事件同步阶段结束后失效 →
     // 必须先同步取 File 快照, 再走异步写盘 (否则 await 后 getAsFile() 返回 null)
-    const files = fileItems.map((it) => it.getAsFile()).filter((f): f is File => !!f);
+    const files = picked.map((it) => it.getAsFile()).filter((f): f is File => !!f);
     if (files.length === 0) return;
     e.preventDefault();
     if (!fs?.write) { setError('沙箱文件系统未就绪'); return; }

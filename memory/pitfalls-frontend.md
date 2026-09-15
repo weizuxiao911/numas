@@ -305,3 +305,19 @@
 - **根因**: 移动/清理代码时只删了声明没删使用 (或反之); React 组件 render 抛错 → 子树卸载.
 - **解决方案**: 重构后 `grep -n "<变量名>" <文件>` 确认声明与使用配对; 组件崩溃优先看 console 的 ReferenceError.
 - **排查方法**: 页面某区域整块不渲染 + console 有 ReferenceError → 查该组件依赖的变量声明是否完整.
+
+#### 80. macOS 截图粘贴进 chat 输入框重复 (剪贴板同图多格式 png + tiff)
+
+- **现象**: macOS 截图 (Cmd+Shift+4) 后粘贴到 chat 输入框, 一次粘贴出现两个附件 (`image.png` + `image.tiff`, 同一张图).
+- **根因**: macOS 截图进剪贴板时同一张图以**两种格式**存在 (public.png + public.tiff) → 浏览器 `clipboardData.items` 含**两个 `kind:'file'` 项** → `onPaste` (ChatbotView.tsx) 逐个 `getAsFile()` 上传 → 两张重复附件. 代码无"同图多格式"去重逻辑.
+- **解决方案 (已修)**: paste 同步阶段检测 `fileItems.some(it => it.type === 'image/png')` → 有 png 则 `filter(it => it.type !== 'image/tiff')` 丢掉 tiff; 多张不同图 (都 png) 不受影响.
+- **复现/验证**: Playwright 构造 `new DataTransfer()` + 加 png/tiff 两个 File → `textarea.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt }))` → 断言附件名 (修前 png+tiff 两个, 修后仅 png); 再用两张不同 png 验证不误伤 (仍两个).
+- **适用**: 任何接收剪贴板文件粘贴的输入框 (macOS 截图/复制的图片都会带 png+tiff 双格式).
+
+#### 81. 发送带图消息后消息列表 1 图变 2 图 (本地乐观 part 与 server part 合并未去重)
+
+- **现象**: 粘贴截图发送后, user 消息气泡里同一张图渲染两次 (2 个 `oc-att__img` 同 dataUrl); **刷新页面后恢复正常** (server 数据只有 1 个 file part).
+- **根因**: `ChatbotView.tsx` `message.part.updated` 处理里, 本地乐观 part (无 id) 与 server part 的匹配规则是 `!p.id && p.type === part.type && part.text != null && p.text === part.text` — **只比对 text**. file part **没有 text 字段** → 规则失效 → 走 `[...parts, part]` 追加 → 本地 1 个 + server 1 个 = 2 个. text part 因有 text 可比不重复.
+- **解决方案 (最终)**: **url 匹配不可用** — server 端会对 dataUrl **重编码** (实测同一张 3.6MB 截图: 本地乐观 423010 字符 vs server 返回 430546 字符, 内容不同) → url 永不相等. 正解: 本地乐观 file part 打 **`__local: true`** 标记 (只加在 `localParts`, 不发给 server) → `message.part.updated` 匹配规则改为 `(part.type === 'file' && (p.__local === true || (!!p.url && p.url === part.url)))` → 无标记的 server file part 替换带标记的本地占位.
+- **复现/验证**: ① paste (png+tiff) → Enter 发送 → 数 `.oc-msg.is-user` 里 `img` 数量; ② **必须用大图** (canvas 生成 1200x900 噪点 PNG ~3.6MB) — 小图 server 可能不重编码/恰好相等, 复现不出 (首次小图测试 1 图, 误以为已修); ③ 对比两个 img 的 `src.length` 是否不同 (不同 = server 重编码, url 匹配方案失效); ④ reload 页面验证历史消息渲染 (server 数据本就 1 part).
+- **适用**: 任何「本地乐观行 + server 事件流合并」的渲染 — 乐观 part 与 server part 的匹配字段必须覆盖**所有** part 类型 (text 比 text, file 比 url, tool 比 callID 等).
