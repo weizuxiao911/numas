@@ -2733,23 +2733,24 @@ export const ChatbotView: React.FC = () => {
                 <button type="button" className="chat__session-stats-x" title="关闭提醒" onClick={() => setNotice('')}>×</button>
               </>
             ) : sessionStats ? (
-              <>
-                <span className="chat__session-stats-item">消耗</span>
+              // 整行可点 → 弹上下文 modal (跟官方 SessionContextUsage 触发一致: 任何 segment 都触发)
+              // 3 维度: 耗时 / 消耗 / 成本 (成本有才显示, 跟官方 app session-context-tab stats 一致)
+              <button
+                type="button"
+                className="chat__session-stats-items"
+                title="点击查看上下文用量 (含子代理开销)"
+                onClick={() => setShowContextUsage(true)}
+              >
                 {sessionStats.durationMs > 0 && (
-                  <span className="chat__session-stats-item">{formatDurationHMS(sessionStats.durationMs)}</span>
+                  <span className="chat__session-stats-item">耗时 {formatDurationHMS(sessionStats.durationMs)}</span>
                 )}
                 {sessionStats.input + sessionStats.output + sessionStats.reasoning > 0 && (
-                  <button
-                    type="button"
-                    className="chat__session-stats-item chat__session-stats-item--clickable"
-                    title="点击查看上下文用量 (含子代理开销)"
-                    onClick={() => setShowContextUsage(true)}
-                  >
-                    {formatTokens({ input: sessionStats.input, output: sessionStats.output, reasoning: sessionStats.reasoning })}
-                  </button>
+                  <span className="chat__session-stats-item">消耗 {formatTokens({ input: sessionStats.input, output: sessionStats.reasoning })}</span>
                 )}
-                {formatCost(sessionStats.cost) && <span className="chat__session-stats-item">{formatCost(sessionStats.cost)}</span>}
-              </>
+                {formatCost(sessionStats.cost) && (
+                  <span className="chat__session-stats-item">成本 {formatCost(sessionStats.cost)}</span>
+                )}
+              </button>
             ) : null}
           </div>
         </div>

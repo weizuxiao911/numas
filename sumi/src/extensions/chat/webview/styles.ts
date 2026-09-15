@@ -610,20 +610,29 @@ export const styles = `
   background: transparent; border: none; color: var(--ai-fg-muted);
   cursor: pointer; font-size: 12px; line-height: 1; padding: 0 2px;
 }
-/* stats bar 里 tokens 文本变可点 button (触发上下文用量弹层) */
-.chat__session-stats-item--clickable {
-  border: 0; background: transparent;
-  color: var(--ai-fg-muted);
-  font: inherit; font-variant-numeric: tabular-nums;
-  padding: 0; margin: 0;
-  cursor: pointer;
-  border-radius: 4px;
-  text-align: left;
-  transition: color .12s, background .12s;
+/* stats bar 整体变可点 button (触发上下文用量弹层).
+   跟原 div 一样横向排布 + min-height, 默认无背景, hover 高亮 (跟官方 SessionContextUsage 一致:
+   任何 segment 点击都开 context tab). */
+.chat__session-stats-items {
+  flex: 1 1 auto;
+  display: flex; align-items: center; flex-wrap: nowrap; gap: 12px;
+  min-height: 25px; padding: 0;
+  border: 0; background: transparent; text-align: left;
+  color: inherit; font: inherit; font-size: 11px; line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer; border-radius: 6px;
+  transition: background .12s;
 }
-.chat__session-stats-item--clickable:hover {
+.chat__session-stats-items:hover {
+  background: color-mix(in srgb, var(--ai-fg) 6%, transparent);
+}
+.chat__session-stats-items:focus-visible {
+  outline: 1px solid var(--ai-accent);
+  outline-offset: -1px;
+}
+/* 内部 segments 去掉自身的 link 颜色, 跟随 button hover */
+.chat__session-stats-items:hover .chat__session-stats-item {
   color: var(--ai-fg);
-  background: color-mix(in srgb, var(--ai-fg) 8%, transparent);
 }
 
 /* ─────────────── 上下文用量弹层 (ContextUsageModal) ───────────────
@@ -806,6 +815,20 @@ export const styles = `
   overflow: hidden;
   font-size: 13px; color: var(--ai-fg);
   animation: chat-pop .14s ease-out;
+}
+/* 上下文 modal 改用纯 #fff solid 背景 (numas --app-panel-bg token, light=#fff, dark 跟随主题).
+   比 .chat__modal 的玻璃透色对比度更清晰 (token 数 / 进度条等读起来更稳),
+   跟官方 app SessionContextTab 的 bg-surface-base 同款 solid 风格. */
+.chat__modal--context {
+  background-color: var(--app-panel-bg);
+  background-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.chat__modal--context.chat__modal {
+  background: var(--app-panel-bg) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 @keyframes chat-pop {
   from { opacity: 0; transform: translateY(8px) scale(0.98); }
