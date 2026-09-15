@@ -337,12 +337,20 @@ export async function aiGetTodos(sessionID: string): Promise<any[]> {
   return Array.isArray(data) ? data : [];
 }
 
-/** 压缩会话上下文 — v2.session.compact({ sessionID })
+/** 压缩会话上下文 — v1 session.summarize (TUI /compact 同款; v2.session.compact 服务端
+ *  返回 "not available yet" 不可用). 服务端链路: revert cleanup → compact.create → prompt loop.
  *  AI 摘要历史消息, 保留关键信息, 减少后续上下文 token 占用 */
-export async function aiCompactSession(sessionID: string): Promise<void> {
+export async function aiCompactSession(
+  sessionID: string,
+  model: { providerID: string; modelID: string },
+): Promise<void> {
   await waitForAiReady();
   const client = getAiClient()!;
-  const { error } = await (client as any).v2.session.compact({ sessionID });
+  const { error } = await (client as any).session.summarize({
+    sessionID,
+    providerID: model.providerID,
+    modelID: model.modelID,
+  });
   if (error) throw error;
 }
 
