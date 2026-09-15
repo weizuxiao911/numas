@@ -365,17 +365,31 @@ export const ChatbotView: React.FC = () => {
   }, []);
   const setApiError = useCallback((e: any, ctx?: string) => {
     const tag = e?.data?._tag || e?.name || '';
-    const msg = String(e?.data?.message || e?.message || e);
+    const rawMsg = String(e?.data?.message || e?.message || e);
+    // HTTP 状态码提取 (SDK 错误格式: "POST url → 500 Internal Server Error" / e.status / e.data.statusCode)
+    const statusMatch = rawMsg.match(/→\s*(\d{3})|HTTP\s*(\d{3})|\b([45]\d{2})\b/);
+    const status: number = typeof e?.status === 'number'
+      ? e.status
+      : typeof e?.data?.statusCode === 'number'
+        ? e.data.statusCode
+        : statusMatch ? Number(statusMatch[1] || statusMatch[2] || statusMatch[3]) : 0;
+    // 友好中文提示 (按状态码分类; 未识别状态码 → 原始信息)
+    const friendly =
+      status === 429 ? '请求过于频繁 (429), 请稍后重试'
+      : status === 401 || status === 403 ? `认证失败 (${status}), 请检查 API Key 或重新连接服务商`
+      : status >= 500 ? `服务端错误 (${status}), 请稍后重试或切换模型`
+      : status >= 400 ? `请求错误 (${status}), 请检查输入或稍后重试`
+      : '';
+    const text = friendly || (ctx ? `${ctx}: ${rawMsg}` : rawMsg);
     const isServerError =
+      status >= 500 ||
       tag === 'UnknownError' ||
       tag === 'ServerError' ||
       tag === 'ServiceUnavailableError' ||
-      msg.includes('Unexpected server error') ||
-      msg.toLowerCase().includes('not available') ||
-      (typeof e?.status === 'number' && e.status >= 500) ||
+      rawMsg.includes('Unexpected server error') ||
+      rawMsg.toLowerCase().includes('not available') ||
       (e?.data?.service && typeof e.data.service === 'string');
-    const text = ctx ? `${ctx}: ${msg}` : msg;
-    if (isServerError) showNotice(text + ' (服务端异常, 可重试或新建会话)');
+    if (isServerError) showNotice(text);
     else setError(text);
   }, [showNotice]);
   const [ready, setReady] = useState<boolean>(false);
@@ -2313,32 +2327,6 @@ export const ChatbotView: React.FC = () => {
       )}
       </div>
 
-      {error && (
-        <div className="chat__error">
-          <span className="chat__error-text">{error}</span>
-          <button onClick={() => { setError(''); if (sessionID) loadMessages(sessionID); }}>重试</button>
-        </div>
-      )}
-
-      {/* 会话生成错误条 (session.error 事件): 显式告知上游 502/限流等失败, 带重试/关闭 */}
-      {curSessionError && (
-        <div className="chat__error">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, marginBottom: 2 }}>
-              AI 回复失败{curSessionError.name ? ` · ${curSessionError.name.replace(/Error$/, '')}` : ''}
-            </div>
-            <div style={{ opacity: 0.85, wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
-              {curSessionError.message}
-            </div>
-            <div style={{ opacity: 0.6, marginTop: 2, fontSize: 11 }}>
-              可能是模型服务商过载或网络问题, 可稍后重试或切换模型
-            </div>
-          </div>
-          <button onClick={() => retryLastPrompt()}>重试</button>
-          <button onClick={() => clearSessionError()}>×</button>
-        </div>
-      )}
-
       {ready && (
         <div className="chat__composer">
           {/* 子代理会话: 只读查看执行过程; 仅一个「返回」按钮 */}
@@ -2910,6 +2898,36 @@ export const ChatbotView: React.FC = () => {
                     {curStatus.action.label || '查看详情'}
                   </a>
                 )}
+              </>
+            ) : (error || curSessionError) ? (
+              // 错误消息 (统一放 stats bar, 跟 notice 同位置; 优先级: retry > error > notice > stats)
+              <>
+                <span
+                  className="chat__session-stats-notice is-warning"
+                  title={error || `AI 回复失败${curSessionError?.name ? ` · ${curSessionError.name.replace(/Error$/, '')}` : ''}: ${curSessionError?.message || ''}`}
+                >
+                  {error
+                    ? error
+                    : `AI 回复失败${curSessionError?.name ? ` · ${curSessionError.name.replace(/Error$/, '')}` : ''}: ${curSessionError?.message || ''}`}
+                </span>
+                <button
+                  type="button"
+                  className="chat__session-stats-x"
+                  title="重试"
+                  onClick={() => {
+                    if (error) { setError(''); if (sessionID) void loadMessages(sessionID); }
+                    else retryLastPrompt();
+                  }}
+                >重试</button>
+                <button
+                  type="button"
+                  className="chat__session-stats-x"
+                  title="关闭"
+                  onClick={() => {
+                    if (error) setError('');
+                    if (curSessionError) clearSessionError();
+                  }}
+                >×</button>
               </>
             ) : notice ? (
               <>
