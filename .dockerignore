@@ -1,52 +1,12 @@
-# git / 临时
-# (保留 .git: opencode build.ts 跑 'git branch --show-current' 拿 channel,
-#  无 .git 会导致 build 失败)
-.tmp
-.tmp/**
-*.log
-.DS_Store
-
-# node_modules (在 builder 阶段内 npm/bun install 重新装)
+.git
+.opencode
+.sst
+.turbo
+.wrangler
+node_modules
 **/node_modules
-**/node_modules/**
-
-# dist: 轻量组装镜像需 COPY 的产物目录白名单 (sumi/dist + opencode dist), 其余 dist 一律排除
+**/.output
 **/dist
-!sumi/dist
-!sumi/dist/**
-!opencode/packages/opencode/dist
-!opencode/packages/opencode/dist/**
-
-# 构建缓存 marker
-**/.numas-*
-**/.numas-*/**
-**/.tsbuildinfo
-**/*.tsbuildinfo
-
-# docs (与运行时无关)
-docs
-docs/**
-
-# registry: 源码不进镜像 (registry-server 本地产物预编译), 只放行产物目录
-#   vsix/*.vsix (extensions 挂载点默认内容) + bin/ (registry-server 单文件)
-registry
-registry/**
-!registry/vsix
-!registry/vsix/**
-!registry/bin
-!registry/bin/**
-
-# extensions (vsix 源码; 打包产物在 registry/vsix, 源码不进镜像)
-extensions
-extensions/**
-
-# IDE 配置
-.vscode
-.vscode/**
-.idea
-.idea/**
-*.swp
-*.swo
-
-# 注: opencode/packages/opencode/test/tool/fixtures/models-api.json 需保留
-# (build.ts 用 MODELS_DEV_API_JSON env 读取); 不在 ignore 列表内, 自然被 COPY 进 builder
+**/.turbo
+**/.vite
+**/coverage
