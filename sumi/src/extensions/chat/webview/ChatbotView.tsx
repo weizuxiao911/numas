@@ -149,12 +149,6 @@ export const ChatbotView: React.FC = () => {
   }, []);
   const [rows, setRows] = useState<Row[]>([]);
   const [input, setInput] = useState('');
-  // 按会话记录已发送消息历史 (↑↓ 切换历史输入): map sid → 已发送文本列表 (新→旧)
-  const historyBySessionRef = useRef<Record<string, string[]>>({});
-  // 浏览游标: -1 = 正在编辑草稿; >=0 指向 historyBySession 索引
-  const historyIdxRef = useRef(-1);
-  // 临时草稿: ↑ 时保存当前未发送的输入, ↓ 翻到末尾时恢复
-  const historyDraftRef = useRef('');
   // 会话状态按 sid 维护 (busy/retry/idle + retry 细节): SSE 事件即时更新 + 15s 对账全量校准;
   // 渲染/发送时取当前会话. retry 期间 isBusyStatus=true (锁发送/可停止) + 状态条展示原因
   const [statusBySession, setStatusBySession] = useState<Record<string, SessionStatusInfo>>({});
@@ -1166,48 +1160,6 @@ export const ChatbotView: React.FC = () => {
     });
   }, []);
 
-  // 记录发送历史 (按当前会话, 新→旧, 去重: 同文本连续重复只记一次)
-  const pushInputHistory = useCallback((text: string) => {
-    const t = (text || '').trim();
-    if (!t) return;
-    const sid = sessionIDRef.current;
-    const list = historyBySessionRef.current[sid] || [];
-    if (list[0] === t) return;
-    historyBySessionRef.current = { ...historyBySessionRef.current, [sid]: [t, ...list.filter((x) => x !== t)] };
-    // 发送完成后浏览游标复位到草稿
-    historyIdxRef.current = -1;
-    historyDraftRef.current = '';
-  }, []);
-
-  // 输入框 ↑ 切换上一条历史; ↓ 下一条/回到草稿 (仅在无候选框打开时由 onKeyDown 调用)
-  const navHistory = useCallback((dir: 1 | -1) => {
-    const sid = sessionIDRef.current;
-    const list = historyBySessionRef.current[sid] || [];
-    const el = taRef.current;
-    const setVal = (v: string) => {
-      setInput(v);
-      if (el) {
-        el.style.height = 'auto';
-        el.style.height = Math.min(el.scrollHeight, 220) + 'px';
-        // 光标移到底 (历史文本一般整段查看)
-        requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = el.value.length; });
-      }
-    };
-    // 编辑态首次按 ↑: 当前输入存为草稿 (游标从 -1 进入历史)
-    if (historyIdxRef.current === -1 && dir === -1) {
-      historyDraftRef.current = input;
-    }
-    const nextIdx = Math.min(Math.max(historyIdxRef.current + dir, -1), list.length - 1);
-    if (nextIdx === -1) {
-      // 回到草稿
-      historyIdxRef.current = -1;
-      setVal(historyDraftRef.current);
-    } else {
-      historyIdxRef.current = nextIdx;
-      setVal(list[nextIdx]);
-    }
-  }, [input]);
-
   const sendPrompt = useCallback(async (text: string, opts?: { files?: Array<{ name: string; path: string }>; images?: Array<{ name: string; path: string; dataUrl?: string }>; context?: ChatContextItem[] }) => {
     const t = (text || '').trim();
     const images = opts?.images || [];
@@ -1242,9 +1194,7 @@ export const ChatbotView: React.FC = () => {
     }
     if (sid) setQueuePaused(sid, false);
     await firePrompt(fullText, images, sid || undefined);
-    // 记录历史 (当前会话): 按去重后的最前插入 (新→旧); 同文本连续重复只记一次
-    pushInputHistory(t);
-  }, [client, firePrompt, buildFullText, setQueuePaused, pushInputHistory]);
+  }, [client, firePrompt, buildFullText, setQueuePaused]);
 
   // 当前会话的生成错误 (session.error 事件渲染用)
   const curSessionError = sessionID ? sessionErrors[sessionID] : undefined;
@@ -1826,7 +1776,7 @@ export const ChatbotView: React.FC = () => {
     if (showCommands && filteredCommands.length > 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setCmdIndex((i) => (i + 1) % filteredCommands.length); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setCmdIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length); return; }
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing) {
         e.preventDefault(); applyCommand(filteredCommands[cmdIndex]); return;
       }
       if (e.key === 'Tab' || (e.key === 'Enter' && e.shiftKey)) {
@@ -1837,23 +1787,27 @@ export const ChatbotView: React.FC = () => {
     if (showMentions && mentionList.length > 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex((i) => (i + 1) % mentionList.length); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex((i) => (i - 1 + mentionList.length) % mentionList.length); return; }
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing) {
         e.preventDefault(); applyMention(mentionList[mentionIndex]); return;
       }
       if (e.key === 'Tab') { e.preventDefault(); applyMention(mentionList[mentionIndex]); return; }
       if (e.key === 'Escape') { e.preventDefault(); setShowMentions(false); return; }
     }
-    // ↑↓ 切换历史发送消息 (仅无候选框打开时; 有命令/@/模型/代理候选框时由上方分支接管)
-    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !showCommands && !showMentions && !showModels && !showAgents) {
-      const dir = e.key === 'ArrowUp' ? -1 : 1;
-      // 当前会话有历史才拦截 (否则保留 textarea 默认光标移动)
-      if ((historyBySessionRef.current[sessionID] || []).length > 0) {
-        e.preventDefault();
-        navHistory(dir);
-        return;
-      }
+    // Option(Alt)+Enter 换行: 浏览器对 Alt+Enter 无默认换行行为, 手动在光标处插 \n
+    if (e.key === 'Enter' && e.altKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      const el = taRef.current;
+      const start = el ? el.selectionStart : input.length;
+      const end = el ? el.selectionEnd : input.length;
+      const next = input.slice(0, start) + '\n' + input.slice(end);
+      setInput(next);
+      requestAnimationFrame(() => {
+        if (el) { try { el.setSelectionRange(start + 1, start + 1); } catch { /* ignore */ } }
+      });
+      return;
     }
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    // Enter 发送; Shift+Enter 走 textarea 默认换行
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing) {
       e.preventDefault(); onSend();
       return;
     }
@@ -1871,7 +1825,7 @@ export const ChatbotView: React.FC = () => {
         }
       }
     }
-  }, [onSend, onAbort, busy, showNotice, showCommands, showMentions, showModels, showAgents, filteredCommands, mentionList, cmdIndex, mentionIndex, applyCommand, applyMention, navHistory, sessionID, historyBySessionRef]);
+  }, [input, onSend, onAbort, busy, showNotice, showCommands, showMentions, filteredCommands, mentionList, cmdIndex, mentionIndex, applyCommand, applyMention]);
 
   const onUploadFile = useCallback(async (files: FileList | null) => {
     if (!files || !files.length) return;

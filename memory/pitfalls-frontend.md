@@ -282,3 +282,11 @@
   ```
   验证: 修复后 heap 稳定在 ~150-190MB (60s+), 不再崩; 临时对照实验可只改编译产物 (dist) 的 deps 数组快速验证.
 - **排查方法**: 页面 OOM 先用 HeapProfiler 采样分配栈定位「哪个组件在循环渲染」; 再查该组件 effect deps 是否含「每次渲染都换新」的值 (context value/内联闭包); 上游框架 context value 不可 memo 时一律用 ref 隔离. 注意上游 `resizeDelegates.current.push(delegate)` (`resize.js`) 也是每渲染泄一个 delegate, 循环存在时是助燃剂.
+
+#### 77. textarea 对 Option(Alt)+Enter 无默认换行行为 (Shift+Enter 有)
+
+- **问题描述**: 给聊天输入框加「Option/Shift+Enter 换行」时, 只把 Enter 发送分支加上 `!e.altKey` 放行默认行为 — Shift+Enter 换行生效, Alt+Enter 无任何反应 (不换行也不发送).
+- **根因**: 浏览器 (Chrome) 对 textarea 的 Enter 默认动作只覆盖无修饰/Shift 组合; `Alt+Enter` 无默认插入换行行为, 不拦截也等于丢弃按键.
+- **解决方案**: Alt+Enter 需**手动插换行** — `e.preventDefault()` 后在光标处插 `\n` (`input.slice(0,start) + '\n' + input.slice(end)`), setInput 后 rAF 里 `setSelectionRange(start+1, start+1)` 恢复光标 (受控 textarea); Shift+Enter 保持放行默认即可.
+- **验证**: Playwright 在输入框按 `Alt+Enter` / `Shift+Enter` 后断言 `inputValue()` 含 `\n`.
+- **适用**: 任何「Enter 发送 + 多行输入」的聊天框 (macOS Option 即 Alt).

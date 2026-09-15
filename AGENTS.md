@@ -334,6 +334,7 @@ AI **仍需 `question`**:
 - **60** 中文目录下编辑区持久化失效 (cwd vs encodeURI URI 比较)
 - **62** codeblitz webview 双层 iframe + 内层重建清 DOM: 外挂层挂 iframe body
 - **75** SplitPanel hidePanel 闭包每次渲染换新 → effect deps 无限重渲染 (OOM crash)
+- **77** textarea 对 Option(Alt)+Enter 无默认换行 (需手动插 \n; Shift+Enter 有)
 
 **vsix / 扩展 / 浏览器 / pdf / registry** → `memory/pitfalls-extension.md`
 - **10** 内置浏览器默认 <embed> 渲染 PDF 不可靠 (依赖 Chrome PDF 插件)
