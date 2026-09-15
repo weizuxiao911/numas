@@ -1,6 +1,34 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Markdown } from './Markdown';
 import { DiffView } from './DiffView';
+import { toolPartsPrefs } from '@/extensions/chat/commands/toolPartsPrefs';
+
+/** 纯删除变更 (对齐官方 part-default-open): metadata.files 全 delete, 或 filediff.additions=0 且有删除 */
+function deletionOnly(part: any): boolean {
+  const metadata = part?.state?.metadata;
+  if (!metadata) return false;
+  const files = metadata.files;
+  if (Array.isArray(files) && files.length > 0) {
+    return files.every((f: any) => f && typeof f === 'object' && f.type === 'delete');
+  }
+  const filediff = metadata.filediff;
+  if (!filediff || typeof filediff !== 'object') return false;
+  if (!('additions' in filediff) || !('deletions' in filediff)) return false;
+  return filediff.additions === 0 && typeof filediff.deletions === 'number' && filediff.deletions > 0;
+}
+
+/** 工具卡默认展开 (对齐官方 partDefaultOpen): bash/shell → shell 设置;
+ *  edit/write/patch/apply_patch → edit 设置 (纯删除 diff 不展开); 其余默认折叠. */
+export function partDefaultOpen(part: any, shell: boolean, edit: boolean): boolean {
+  if (part?.type !== 'tool') return false;
+  const tool = String(part.tool || '');
+  if (tool === 'bash' || tool === 'shell') return shell;
+  if (tool === 'edit' || tool === 'write' || tool === 'patch' || tool === 'apply_patch') {
+    if (!edit) return false;
+    return !deletionOnly(part);
+  }
+  return false;
+}
 
 function safeStringify(v: any): string {
   if (v == null) return '';
@@ -213,8 +241,17 @@ export const ToolView: React.FC<{ part: any; streaming?: boolean }> = ({ part, s
   const diffAdd = typeof filediff?.additions === 'number' ? filediff.additions : 0;
   const diffDel = typeof filediff?.deletions === 'number' ? filediff.deletions : 0;
 
-  // 默认折叠 (含 shell). 错误强制展开.
-  const [open, setOpen] = useState(false);
+  // 默认展开按官方 partDefaultOpen + 设置 (shell/edit 工具卡); 用户点击后以用户为准 (toolOpen ?? defaultOpen).
+  // 错误强制展开.
+  const [prefs, setPrefs] = useState(() => toolPartsPrefs.get());
+  useEffect(() => toolPartsPrefs.subscribe(() => setPrefs(toolPartsPrefs.get())), []);
+  const defaultOpen = partDefaultOpen(part, prefs.shell, prefs.edit);
+  const [open, setOpen] = useState(() => defaultOpen);
+  const userToggledRef = useRef(false);
+  // 设置变化时, 未手动切换过的卡片跟随默认值
+  useEffect(() => {
+    if (!userToggledRef.current) setOpen(defaultOpen);
+  }, [defaultOpen]);
   const forceOpenedRef = useRef(false);
   useEffect(() => {
     if (isError && !forceOpenedRef.current) { setOpen(true); forceOpenedRef.current = true; }
@@ -253,7 +290,7 @@ export const ToolView: React.FC<{ part: any; streaming?: boolean }> = ({ part, s
       <button
         type="button"
         className={`oc-tool__trigger${canExpand ? '' : ' is-static'}${pending && !interrupted ? ' is-pending' : ''}`}
-        onClick={() => canExpand && setOpen((v) => !v)}
+        onClick={() => { if (!canExpand) return; userToggledRef.current = true; setOpen((v) => !v); }}
       >
         {pending && !interrupted ? (
           <span className="oc-tool__spinner" />

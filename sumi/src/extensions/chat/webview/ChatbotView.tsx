@@ -28,10 +28,41 @@ import {
   aiGetSessionInfo,
 } from '@/extensions/chat/commands/api';
 import { modelPrefs } from '@/extensions/chat/commands/modelPrefs';
+import { toolPartsPrefs } from '@/extensions/chat/commands/toolPartsPrefs';
 import { getWorkspace, subscribeWorkspace } from '@/infra/url';
 
 /** 当前会话持久化 key (session 级恢复: 有值启动加载该会话, 无值保持空态) */
 const CHAT_SESSION_KEY = 'NUMAS_CHAT_SESSION';
+/** follow-up 行为持久化 key (对齐官方 App settings.general.followup; 默认 steer) */
+const FOLLOWUP_MODE_KEY = 'NUMAS_CHAT_FOLLOWUP_MODE';
+/** 输入历史持久化 key + 上限 (对齐官方 App prompt-history: 全局持久化, max 100, 连续重复去重) */
+const PROMPT_HISTORY_KEY = 'NUMAS_CHAT_PROMPT_HISTORY';
+const PROMPT_HISTORY_MAX = 100;
+
+function readPromptHistory(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PROMPT_HISTORY_KEY) || '[]');
+    return Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [];
+  } catch { return []; }
+}
+
+/** 提交时前插历史 (对齐官方 prependHistoryEntry): 空文本不记, 与最新一条相同去重, 上限 100. */
+function prependPromptHistory(entries: string[], text: string): string[] {
+  const t = (text || '').trim();
+  if (!t) return entries;
+  if (entries[0] === t) return entries;
+  return [t, ...entries.filter((x) => x !== t)].slice(0, PROMPT_HISTORY_MAX);
+}
+
+/** ↑↓ 历史导航光标条件 (对齐官方 canNavigateHistoryAtCursor):
+ *  未浏览历史: ↑ 仅当光标在开头且输入为空; ↓ 仅当光标在末尾.
+ *  浏览历史中: 光标在开头或末尾即可. */
+function canNavigateHistoryAtCursor(direction: 'up' | 'down', text: string, cursor: number, inHistory: boolean): boolean {
+  const position = Math.max(0, Math.min(cursor, text.length));
+  if (inHistory) return position === 0 || position === text.length;
+  if (direction === 'up') return position === 0 && text.length === 0;
+  return position === text.length;
+}
 import { onEvent } from '@/service/event/eventBus';
 import { PartRenderer } from './parts/PartRenderer';
 import { ProviderDefs, ProviderIcon } from './parts/ProviderIcon';
@@ -161,6 +192,29 @@ export const ChatbotView: React.FC = () => {
   // abort 后暂停自动续发 (排队项保留); 下次任意发送解除暂停
   const pausedQueueRef = useRef<Set<string>>(new Set());
   const [pausedSessions, setPausedSessions] = useState<Record<string, boolean>>({});
+  // follow-up 行为 (对齐官方 App settings.general.followup, 默认 steer):
+  //   steer = busy 时直接发送 (服务端在当前回合的下个 step 边界拾取处理)
+  //   queue = busy 时进 dock 排队, idle 终态后自动逐条发送
+  const [followupMode, setFollowupMode] = useState<'steer' | 'queue'>(() => {
+    try { return localStorage.getItem(FOLLOWUP_MODE_KEY) === 'queue' ? 'queue' : 'steer'; } catch { return 'steer'; }
+  });
+  const setFollowupModePersist = useCallback((m: 'steer' | 'queue') => {
+    setFollowupMode(m);
+    try { localStorage.setItem(FOLLOWUP_MODE_KEY, m); } catch { /* ignore */ }
+  }, []);
+  // 发送失败的排队项 id (对齐官方 followup.failed): 自动续发跳过, 手动发送/新排队解除
+  const [failedQueued, setFailedQueued] = useState<Record<string, string | undefined>>({});
+  const failedQueuedRef = useRef<Record<string, string | undefined>>({});
+  failedQueuedRef.current = failedQueued;
+  // 正在发送的排队项 id (dock 按钮禁用态, 对齐官方 sending)
+  const [sendingQueued, setSendingQueued] = useState<Record<string, string | undefined>>({});
+  // 工具卡默认展开设置 (对齐官方 settings.general.shellToolPartsExpanded / editToolPartsExpanded)
+  const [toolPrefs, setToolPrefs] = useState(() => toolPartsPrefs.get());
+  useEffect(() => toolPartsPrefs.subscribe(() => setToolPrefs(toolPartsPrefs.get())), []);
+  // 输入历史 (对齐官方 App prompt-history): 全局持久化列表 + 浏览游标 (-1=草稿) + 草稿快照
+  const historyRef = useRef<string[]>(readPromptHistory());
+  const historyIndexRef = useRef(-1);
+  const historySavedRef = useRef('');
   // 输入框连续两次 ESC abort: 记录首次 ESC 时间戳
   const lastEscRef = useRef(0);
   const setQueuePaused = useCallback((sid: string, on: boolean) => {
@@ -1107,10 +1161,12 @@ export const ChatbotView: React.FC = () => {
         parts,
         ...(model ? { model } : {}),
       });
+      return true;
     } catch (e) {
       setStatusBySession((prev) => ({ ...prev, [sessionIDRef.current]: { type: 'idle' } }));
       setRows((prev) => prev.filter((r) => r.id !== rowId));
       setApiError(e);
+      return false;
     }
   }, [currentAgent, currentModel, models, currentProvider, client, setApiError, setSessionID]);
 
@@ -1118,6 +1174,7 @@ export const ChatbotView: React.FC = () => {
   // assumeIdle: idle 终态事件点调用时 ref 可能尚未提交新状态, 跳过 busy 校验.
   // 只 flush 当前查看的会话 (rows 单会话视图); abort 暂停期间不自动续发.
   // idOverride: dock「立即发送」指定某条 (仅 idle/paused 态可用, busy 中按钮已禁用).
+  // 对齐官方 followup: 自动续发跳过 failed 项; 手动发送解除 failed 并可重试.
   const flushQueue = useCallback((sid: string, assumeIdle = false, idOverride?: string) => {
     if (!sid || flushingRef.current.has(sid)) return;
     if (sid !== sessionIDRef.current) return;
@@ -1127,13 +1184,27 @@ export const ChatbotView: React.FC = () => {
     const idx = idOverride ? q.findIndex((x) => x.id === idOverride) : 0;
     const item = idx >= 0 ? q[idx] : undefined;
     if (!item) return;
+    // 自动续发跳过上次失败的项 (官方: failed 的队首不自动重试)
+    if (!idOverride && failedQueuedRef.current[sid] === item.id) return;
     flushingRef.current.add(sid);
+    if (idOverride) setFailedQueued((prev) => (prev[sid] ? { ...prev, [sid]: undefined } : prev));
+    setSendingQueued((prev) => ({ ...prev, [sid]: item.id }));
     const remain = q.filter((x) => x.id !== item.id);
     const next: Record<string, QueuedPrompt[]> = { ...queueBySessionRef.current };
     if (remain.length) next[sid] = remain; else delete next[sid];
     queueBySessionRef.current = next;
     setQueueBySession(next);
-    void firePrompt(item.fullText, item.opts?.images || [], sid).finally(() => {
+    void firePrompt(item.fullText, item.opts?.images || [], sid).then((ok) => {
+      if (!ok) {
+        // 发送失败: 项放回队首 + 标记 failed (等手动发送/新排队解除, 不自动重试)
+        const back: Record<string, QueuedPrompt[]> = { ...queueBySessionRef.current };
+        back[sid] = [item, ...(back[sid] || [])];
+        queueBySessionRef.current = back;
+        setQueueBySession(back);
+        setFailedQueued((prev) => ({ ...prev, [sid]: item.id }));
+      }
+    }).finally(() => {
+      setSendingQueued((prev) => (prev[sid] === item.id ? { ...prev, [sid]: undefined } : prev));
       // firePrompt 已乐观置 busy; 下一宏任务 busy 已 commit 到 ref, 重入 idle 会被 busy 拦
       setTimeout(() => flushingRef.current.delete(sid), 0);
     });
@@ -1149,8 +1220,10 @@ export const ChatbotView: React.FC = () => {
     flushQueueRef.current(sid, false, id);
   }, [setQueuePaused]);
 
-  // 取消单条排队消息 (dock chip ✕): 仅移出队列, 未上屏无需动 rows
-  const cancelQueuedPrompt = useCallback((sid: string, id: string) => {
+  // dock「编辑」: 移出队列 + 文本回填输入框 (对齐官方 followup edit: 退回编辑器)
+  const editQueuedPrompt = useCallback((sid: string, id: string) => {
+    const item = (queueBySessionRef.current[sid] || []).find((x) => x.id === id);
+    if (!item) return;
     setQueueBySession((prev) => {
       const arr = (prev[sid] || []).filter((x) => x.id !== id);
       const next = { ...prev };
@@ -1158,6 +1231,9 @@ export const ChatbotView: React.FC = () => {
       queueBySessionRef.current = next;
       return next;
     });
+    setFailedQueued((prev) => (prev[sid] === id ? { ...prev, [sid]: undefined } : prev));
+    setInput(item.fullText);
+    requestAnimationFrame(() => taRef.current?.focus());
   }, []);
 
   const sendPrompt = useCallback(async (text: string, opts?: { files?: Array<{ name: string; path: string }>; images?: Array<{ name: string; path: string; dataUrl?: string }>; context?: ChatContextItem[] }) => {
@@ -1167,16 +1243,24 @@ export const ChatbotView: React.FC = () => {
     const ctx = opts?.context || [];
     // 纯文件/图片/上下文 (无文字) 也允许发送
     if ((!t && !images.length && !files.length && !ctx.length) || !client) return;
+    // 提交即记入输入历史 (对齐官方 addToHistory): 全局持久化, 连续重复去重, 上限 100
+    historyRef.current = prependPromptHistory(historyRef.current, t);
+    try { localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(historyRef.current)); } catch { /* ignore */ }
+    historyIndexRef.current = -1;
+    historySavedRef.current = '';
     const sid = sessionIDRef.current;
     const fullText = buildFullText(t, files, ctx);
     const backlog = sid ? (queueBySessionRef.current[sid] || []) : [];
-    // busy 响应中, 或 abort 后仍有积压 (paused) → 进入 dock 队列, 不直接上屏;
-    // 新消息排到积压末尾, 同时解除暂停让队列在 idle 后逐条自动补送
-    const shouldQueue = !!sid
+    // follow-up 行为对齐官方 App: 仅 queue 模式下 busy / 暂停有积压时才进 dock 排队;
+    // steer (默认) 模式 busy 时直接发 — 服务端在当前回合下个 step 边界拾取 (官方 steer 语义)
+    const shouldQueue = followupMode === 'queue'
+      && !!sid
       && !flushingRef.current.has(sid)
       && (isBusyStatus(statusBySessionRef.current[sid]) || (pausedQueueRef.current.has(sid) && backlog.length > 0));
     if (shouldQueue) {
       setQueuePaused(sid, false);
+      // 新排队解除 failed 标记 (官方 queueFollowup 清 failed)
+      setFailedQueued((prev) => (prev[sid] ? { ...prev, [sid]: undefined } : prev));
       const item: QueuedPrompt = {
         id: `fq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         displayText: t,
@@ -1194,7 +1278,7 @@ export const ChatbotView: React.FC = () => {
     }
     if (sid) setQueuePaused(sid, false);
     await firePrompt(fullText, images, sid || undefined);
-  }, [client, firePrompt, buildFullText, setQueuePaused]);
+  }, [client, firePrompt, buildFullText, setQueuePaused, followupMode]);
 
   // 当前会话的生成错误 (session.error 事件渲染用)
   const curSessionError = sessionID ? sessionErrors[sessionID] : undefined;
@@ -1772,6 +1856,58 @@ export const ChatbotView: React.FC = () => {
     }
   }, [sessionID, onAbort, recoverPendingInteractions]);
 
+  /** 应用历史项: 设值 + 光标置 start/end (对齐官方 applyHistoryPrompt) */
+  const applyHistoryText = useCallback((text: string, cursor: 'start' | 'end') => {
+    setInput(text);
+    requestAnimationFrame(() => {
+      const el = taRef.current;
+      if (!el) return;
+      const pos = cursor === 'start' ? 0 : text.length;
+      try { el.setSelectionRange(pos, pos); } catch { /* ignore */ }
+      el.focus({ preventScroll: true });
+    });
+  }, []);
+
+  /** ↑↓ 历史导航 (对齐官方 navigatePromptHistory): ↑ 取更旧 (光标 start), ↓ 取更新 (光标 end);
+   *  首次 ↑ 存当前草稿, ↓ 回到草稿; 最旧一条 ↑ 不处理 (无循环). */
+  const navigateHistory = useCallback((direction: 'up' | 'down') => {
+    const entries = historyRef.current;
+    const idx = historyIndexRef.current;
+    if (direction === 'up') {
+      if (entries.length === 0) return false;
+      if (idx === -1) {
+        historySavedRef.current = input;
+        historyIndexRef.current = 0;
+        applyHistoryText(entries[0], 'start');
+        return true;
+      }
+      if (idx < entries.length - 1) {
+        historyIndexRef.current = idx + 1;
+        applyHistoryText(entries[idx + 1], 'start');
+        return true;
+      }
+      return false;
+    }
+    if (idx > 0) {
+      historyIndexRef.current = idx - 1;
+      applyHistoryText(entries[idx - 1], 'end');
+      return true;
+    }
+    if (idx === 0) {
+      historyIndexRef.current = -1;
+      applyHistoryText(historySavedRef.current, 'end');
+      return true;
+    }
+    return false;
+  }, [input, applyHistoryText]);
+
+  /** 编辑输入即退出历史浏览 (对齐官方 resetHistoryNavigation) */
+  const resetHistoryNavigation = useCallback(() => {
+    if (historyIndexRef.current < 0) return;
+    historyIndexRef.current = -1;
+    historySavedRef.current = '';
+  }, []);
+
   const onKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (showCommands && filteredCommands.length > 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setCmdIndex((i) => (i + 1) % filteredCommands.length); return; }
@@ -1792,6 +1928,20 @@ export const ChatbotView: React.FC = () => {
       }
       if (e.key === 'Tab') { e.preventDefault(); applyMention(mentionList[mentionIndex]); return; }
       if (e.key === 'Escape') { e.preventDefault(); setShowMentions(false); return; }
+    }
+    // ↑↓ 历史输入 (对齐官方 App prompt-history: 无修饰键 + 光标折叠 + 光标位置条件;
+    // 命令/@/模型/代理候选框打开时由上方分支接管)
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.altKey && !e.ctrlKey && !e.metaKey
+      && !showCommands && !showMentions && !showModels && !showAgents) {
+      const el = taRef.current;
+      const collapsed = !el || el.selectionStart === el.selectionEnd;
+      if (collapsed) {
+        const cursor = el ? (el.selectionStart ?? input.length) : input.length;
+        const direction = e.key === 'ArrowUp' ? ('up' as const) : ('down' as const);
+        if (canNavigateHistoryAtCursor(direction, input, cursor, historyIndexRef.current >= 0)) {
+          if (navigateHistory(direction)) { e.preventDefault(); return; }
+        }
+      }
     }
     // Option(Alt)+Enter 换行: 浏览器对 Alt+Enter 无默认换行行为, 手动在光标处插 \n
     if (e.key === 'Enter' && e.altKey && !e.nativeEvent.isComposing) {
@@ -1825,7 +1975,7 @@ export const ChatbotView: React.FC = () => {
         }
       }
     }
-  }, [input, onSend, onAbort, busy, showNotice, showCommands, showMentions, filteredCommands, mentionList, cmdIndex, mentionIndex, applyCommand, applyMention]);
+  }, [input, onSend, onAbort, busy, showNotice, showCommands, showMentions, showModels, showAgents, filteredCommands, mentionList, cmdIndex, mentionIndex, applyCommand, applyMention, navigateHistory]);
 
   const onUploadFile = useCallback(async (files: FileList | null) => {
     if (!files || !files.length) return;
@@ -1900,6 +2050,7 @@ export const ChatbotView: React.FC = () => {
   }, [fs]);
 
   const onInput = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    resetHistoryNavigation();
     const val = e.target.value;
     setInput(val);
     const m = val.match(/(?:^|\s)([\/@#])(\S*)$/);
@@ -1914,7 +2065,7 @@ export const ChatbotView: React.FC = () => {
     const el = e.target;
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 220) + 'px';
-  }, []);
+  }, [resetHistoryNavigation]);
 
   const filteredModels = useMemo(() => {
     const q = modelQuery.trim().toLowerCase();
@@ -2102,8 +2253,10 @@ export const ChatbotView: React.FC = () => {
             items={(queueBySession[sessionID] || []).map((q) => ({ id: q.id, text: q.displayText }))}
             paused={!!pausedSessions[sessionID]}
             busy={busy}
+            sendingId={sendingQueued[sessionID]}
+            failedId={failedQueued[sessionID]}
             onSend={sendQueuedNow}
-            onCancel={(id) => cancelQueuedPrompt(sessionID, id)}
+            onEdit={(id) => editQueuedPrompt(sessionID, id)}
           />
           {showCommands && (
             <div className="chat__cmd-pop" ref={cmdPopRef}>
@@ -2463,6 +2616,55 @@ export const ChatbotView: React.FC = () => {
                               <span className="chat__modal-item-desc">重载 agents / skills / tools / 配置</span>
                             </span>
                           </button>
+                          {/* follow-up 行为 (对齐官方 App settings.general.followup; 默认 steer) */}
+                          <div className="chat__modal-item chat__modal-item--row" style={{ cursor: 'default' }}>
+                            <span className="chat__modal-item-icon">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                            </span>
+                            <span className="chat__modal-item-body">
+                              <span className="chat__modal-item-name">跟进消息行为</span>
+                              <span className="chat__modal-item-desc">回复生成中再发消息: 立即发送 (steer) 或排队等回复完成 (queue)</span>
+                            </span>
+                            <span className="chat__seg">
+                              <button
+                                type="button"
+                                className={followupMode === 'steer' ? 'is-active' : ''}
+                                onClick={() => setFollowupModePersist('steer')}
+                              >立即</button>
+                              <button
+                                type="button"
+                                className={followupMode === 'queue' ? 'is-active' : ''}
+                                onClick={() => setFollowupModePersist('queue')}
+                              >排队</button>
+                            </span>
+                          </div>
+                          {/* 工具卡默认展开 (对齐官方 shellToolPartsExpanded / editToolPartsExpanded; 默认折叠) */}
+                          <div className="chat__modal-item chat__modal-item--row" style={{ cursor: 'default' }}>
+                            <span className="chat__modal-item-icon">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
+                            </span>
+                            <span className="chat__modal-item-body">
+                              <span className="chat__modal-item-name">Shell 工具卡默认展开</span>
+                              <span className="chat__modal-item-desc">bash/shell 执行结果默认展开显示</span>
+                            </span>
+                            <span className="chat__seg">
+                              <button type="button" className={toolPrefs.shell ? 'is-active' : ''} onClick={() => toolPartsPrefs.setShell(true)}>展开</button>
+                              <button type="button" className={!toolPrefs.shell ? 'is-active' : ''} onClick={() => toolPartsPrefs.setShell(false)}>折叠</button>
+                            </span>
+                          </div>
+                          <div className="chat__modal-item chat__modal-item--row" style={{ cursor: 'default' }}>
+                            <span className="chat__modal-item-icon">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                            </span>
+                            <span className="chat__modal-item-body">
+                              <span className="chat__modal-item-name">编辑工具卡默认展开</span>
+                              <span className="chat__modal-item-desc">edit/write/apply_patch 的变更默认展开 (纯删除不展开)</span>
+                            </span>
+                            <span className="chat__seg">
+                              <button type="button" className={toolPrefs.edit ? 'is-active' : ''} onClick={() => toolPartsPrefs.setEdit(true)}>展开</button>
+                              <button type="button" className={!toolPrefs.edit ? 'is-active' : ''} onClick={() => toolPartsPrefs.setEdit(false)}>折叠</button>
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>

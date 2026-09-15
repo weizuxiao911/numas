@@ -64,3 +64,19 @@
 - **挂载**: 不要依赖 `mainLayout.getTabbarHandler('terminal')` 轮询激活 (SOLO 下不存在, 会 8 次重试后放弃, 终端永不创建); 直接 `terminals.createTerminal({})`.
 - **保活**: 终端 tab 全部关闭后必须自动重建 — 在终端视图激活时挂 1.5s 轮询 `clients.size === 0 → ensureTerminal()`; 点胶囊/切 tab 时也调 ensureTerminal (无则建/有则聚焦).
 - **运行代码**: 新建终端后等 pty 就绪 (~800ms) 再 sendText, 提交键用 `\r` (见 pitfalls-server #70/#71).
+
+#### 6. chat 功能对齐官方 App 的基准 (followup / ↑↓ 历史 / 工具卡默认展开)
+
+> 用户要求「功能完整对齐官方实现, 只改 UI 表现」时, 以 `opencode/packages/app` (官方 App) 为唯一基准, **不要用 TUI 对照**.
+> 官方 App 用 **V2 管线** (`api.session.prompt` + `session.next.*` 事件 + sync/reducer); numas chat 是 **V1 管线** (`promptAsync` + `message.part.*` 事件). 行为语义可在 V1 上对齐; 管线迁移是大工程 (单独立项).
+
+- **followup (busy 时再发消息)**: 官方设置 `settings.general.followup: "steer"(默认) | "queue"` (`app/src/context/settings.tsx:187`).
+  - steer: 立即发送 (服务端在下一个 provider turn 边界拾取处理)
+  - queue: 进 followup dock (状态在 `app/src/pages/session.tsx` items/paused/failed; UI `composer/session-followup-dock.tsx`): idle 后自动逐条发, 手动 [发送] [编辑], abort → `paused` (不自动发), 新排队/手动发送解除暂停, 发送失败标 `failed`
+  - **abort 语义**: 官方 `api.session.interrupt` + 暂停 dock — **不存在「abort 时先发排队消息」**
+  - numas 实现: `NUMAS_CHAT_FOLLOWUP_MODE` (默认 steer) + dock ([立即发送][编辑] + failed/sending 态), `ChatbotView.tsx`
+- **↑↓ 输入历史**: 官方 `app/src/components/prompt-input/history.ts` — 全局持久化 (`prompt-history.v1`), max 100, 连续重复去重; 光标条件 `canNavigateHistoryAtCursor`: 未浏览时 ↑ 仅当输入为空且光标在开头, ↓ 仅当光标在末尾; 浏览中开头/末尾均可; ↑ 光标置 start, ↓ 置 end; 首次 ↑ 存草稿, ↓ 回草稿; 最旧一条不循环; 编辑输入即退出浏览
+  - numas: `NUMAS_CHAT_PROMPT_HISTORY` + 同款光标/草稿逻辑 (ChatbotView)
+- **工具卡默认展开**: 官方 `packages/session-ui/src/components/part-default-open.ts` — bash/shell 由 `shellToolPartsExpanded` 决定; edit/write/patch/apply_patch 由 `editToolPartsExpanded` 决定 (纯删除 diff 不展开); 其余折叠. 用户点击切换后以用户为准 (`toolOpen ?? defaultOpen`)
+  - numas: `chat.toolParts.v1` (设置面板两个开关) + `ToolView.partDefaultOpen`
+- **官方实现定位速查**: 消息列表 `app/src/pages/session/timeline/`; 输入框 `app/src/components/prompt-input/` (submit.ts = 发送/abort); 工具卡 UI `packages/session-ui/src/components/basic-tool.tsx` (Collapsible + trigger); dock 系列 `app/src/pages/session/composer/session-*-dock.tsx`

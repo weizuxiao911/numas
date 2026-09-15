@@ -10,9 +10,12 @@ export const FollowupDock: React.FC<{
   paused: boolean;
   busy: boolean;
   sendingId?: string;
+  /** 上次发送失败的项 (对齐官方 followup.failed): 红色提示 + 手动发送可重试 */
+  failedId?: string;
   onSend: (id: string) => void;
-  onCancel: (id: string) => void;
-}> = ({ items, paused, busy, sendingId, onSend, onCancel }) => {
+  /** 编辑 = 移出队列 + 回填输入框 (对齐官方 followup edit) */
+  onEdit: (id: string) => void;
+}> = ({ items, paused, busy, sendingId, failedId, onSend, onEdit }) => {
   const [open, setOpen] = useState(true);
   const total = items.length;
   if (!total) return null;
@@ -32,29 +35,34 @@ export const FollowupDock: React.FC<{
       </button>
       {open && (
         <div className="oc-followup__items">
-          {items.map((item) => (
-            <div key={item.id} className={`oc-followup__item${paused ? ' is-paused' : ''}`}>
-              <span className="oc-followup__item-text" title={item.text}>{item.text}</span>
-              <button
-                type="button"
-                className="oc-followup__send"
-                disabled={busy || !!sendingId}
-                title={busy ? '当前回复完成后自动发送' : '立即发送该消息'}
-                onClick={() => onSend(item.id)}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-              </button>
-              <button
-                type="button"
-                className="oc-followup__x"
-                disabled={!!sendingId}
-                aria-label="取消排队"
-                onClick={() => onCancel(item.id)}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              </button>
-            </div>
-          ))}
+          {items.map((item) => {
+            const failed = failedId === item.id;
+            const sending = sendingId === item.id;
+            return (
+              <div key={item.id} className={`oc-followup__item${paused ? ' is-paused' : ''}${failed ? ' is-failed' : ''}`}>
+                <span className="oc-followup__item-text" title={item.text}>{item.text}</span>
+                {failed && <span className="oc-followup__failed">发送失败</span>}
+                <button
+                  type="button"
+                  className="oc-followup__send"
+                  disabled={busy || !!sendingId}
+                  title={failed ? '重试发送该消息' : busy ? '当前回复完成后自动发送' : '立即发送该消息'}
+                  onClick={() => onSend(item.id)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                </button>
+                <button
+                  type="button"
+                  className="oc-followup__edit"
+                  disabled={!!sendingId}
+                  title="编辑 (移出队列并回填输入框)"
+                  onClick={() => onEdit(item.id)}
+                >
+                  编辑
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

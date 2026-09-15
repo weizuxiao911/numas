@@ -257,3 +257,18 @@
 - **根因**: `ITerminalController.createTerminal()` resolve 只代表前端 TerminalClient 建立, 底层 pty 是异步创建的; 在 pty 就绪前 `sendText` 写入的数据被丢弃 (无报错).
 - **解决方案**: 新建终端后 `await new Promise(r => setTimeout(r, 800))` 等 pty 就绪再 `sendText`; 已有终端 (activeClient) 直接发. 更严谨可监听终端 ready 事件.
 - **排查方法**: 「终端打开但命令没出现」→ 对比 `sent` 与 `create2 ok` 时间戳顺序; 命令丢失优先怀疑时序, 不是通道问题 (与 #70 提交键区分: #70 是显示不执行, 本坑是根本不显示).
+
+#### 72. opencode 启动加载「已删除/已重命名项目」残留路径 → 所有 fs.* 端点 500/404 + bash 工具 NotFound
+
+- **问题描述**: 启动 dev.js 后 IDE 模式 sidebar 项目 tab 显示「实验2」, 但实际目录 `/Users/weizuxiao/Documents/data/实验2` 不存在 (只有「实验二_万相大模型创意工坊」汉字名 symlink). 导致:
+  - bash 工具调用 `ls` 报 `NotFound: FileSystem.access (/Users/weizuxiao/Documents/data/实验2)`
+  - `/api/fs/watch?directory=...` 500
+  - `/api/fs/stat?path=.` 404
+  - `/api/fs/read/.codeblitz/launch.json` 404
+  - chat 工具卡标红 is-error, 文件树空, 资源管理器读不出
+- **根因**: numas 把 opencode server 启动时恢复的"最近项目"直接当 active project, 没校验目录存在性. opencode `~/.config/opencode/opencode.json` 里无该项目记录, 说明残留来自 numas 自家 InstanceStore (项目切换时存的 last directory) 或之前会话的 workspace state. 项目被用户删除/重命名后, 启动时仍加载旧路径, opencode server 把它当 fallback workspace.
+- **解决方案** (待拍板):
+  - 启动时 `fs.stat` 校验当前项目目录存在, 不存在则清空 workspace (走 empty home 页) 或提示用户重选
+  - 或 dev.js `--cwd` 默认值取自 `git rev-parse --show-toplevel` 之类 (工作目录根), 不沿用 opencode 旧 project
+  - 或加「项目不存在提示」组件, 给「切换到其他项目」按钮
+- **排查方法**: console error 出现 `500 /api/fs/watch?directory=...` 或 `404 /api/fs/stat?path=.` + bash 工具 `NotFound: FileSystem.access` → 立即验证 `ls <project-path>` 是否存在. 不存在就是 #72. 验证方法: dev.js 重启前 `find . -name 'lastProject*' -o -name 'workspace.json' 2>/dev/null` 看 state service 持久化的项目路径.

@@ -855,6 +855,18 @@ export const styles = `
 .chat__modal-item--row .chat__modal-item-icon {
   margin-top: 1px;
 }
+/* 设置项内的分段选择 (如 follow-up 行为: 立即/排队) */
+.chat__seg {
+  flex-shrink: 0; display: inline-flex; margin-top: 1px;
+  border: .5px solid var(--ai-hairline); border-radius: 8px; overflow: hidden;
+}
+.chat__seg button {
+  border: none; background: none; cursor: pointer; font-family: inherit;
+  font-size: 12px; color: var(--ai-fg-muted); padding: 4px 10px;
+}
+.chat__seg button + button { border-left: .5px solid var(--ai-hairline); }
+.chat__seg button:hover { background: var(--ai-hover); }
+.chat__seg button.is-active { background: var(--ai-hover); color: var(--ai-fg); font-weight: 600; }
 /* 单行 item (跟 ModelPicker 一致: icon + name + tag + check) */
 .chat__modal-item-emoji {
   font-size: 14px; line-height: 1; flex-shrink: 0;
@@ -2039,13 +2051,16 @@ export const styles = `
   border-radius: 8px; background: var(--ai-surface-1); min-width: 0;
 }
 .oc-followup__item.is-paused { opacity: .7; }
+.oc-followup__item.is-failed { border: .5px solid var(--ai-danger, #e5484d); }
+.oc-followup__failed { flex-shrink: 0; font-size: 11px; color: var(--ai-danger, #e5484d); white-space: nowrap; }
 .oc-followup__item-text { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.oc-followup__send, .oc-followup__x {
+.oc-followup__send, .oc-followup__x, .oc-followup__edit {
   flex-shrink: 0; border: none; background: none; cursor: pointer;
   color: var(--ai-fg-muted); border-radius: 6px; padding: 3px; display: inline-flex;
 }
-.oc-followup__send:hover:not(:disabled), .oc-followup__x:hover { color: var(--ai-fg); background: var(--ai-hover); }
-.oc-followup__send:disabled { opacity: .4; cursor: default; }
+.oc-followup__edit { font-family: inherit; font-size: 12px; padding: 3px 6px; }
+.oc-followup__send:hover:not(:disabled), .oc-followup__x:hover, .oc-followup__edit:hover:not(:disabled) { color: var(--ai-fg); background: var(--ai-hover); }
+.oc-followup__send:disabled, .oc-followup__edit:disabled { opacity: .4; cursor: default; }
 
 /* ---------- Question dock (输入框上方) — 官方 DockPrompt: DockShell + DockTray ---------- */
 .oc-qd {
