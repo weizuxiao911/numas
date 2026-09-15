@@ -568,7 +568,7 @@ export const ChatbotView: React.FC = () => {
     if (showModels) setTimeout(() => modelSearchRef.current?.focus(), 30);
   }, [showModels]);
   useEffect(() => {
-    if (!showAgents && !showModels) return;
+    if (!showAgents && !showModels && !showSettings) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (t.closest('.chat__mpop')
@@ -592,7 +592,7 @@ export const ChatbotView: React.FC = () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [showAgents, showModels]);
+  }, [showAgents, showModels, showSettings]);
 
   const loadMessages = useCallback(async (sid?: string) => {
     const target = sid || sessionIDRef.current;
