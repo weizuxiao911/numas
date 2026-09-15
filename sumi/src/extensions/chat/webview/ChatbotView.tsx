@@ -36,7 +36,7 @@ import { getWorkspace, subscribeWorkspace } from '@/infra/url';
 /** 当前会话持久化 key (session 级恢复: 有值启动加载该会话, 无值保持空态) */
 const CHAT_SESSION_KEY = 'NUMAS_CHAT_SESSION';
 /** follow-up 行为持久化 key (对齐官方 App settings.general.followup; 默认 steer) */
-const FOLLOWUP_MODE_KEY = 'NUMAS_CHAT_FOLLOWUP_MODE';
+
 /** 输入历史持久化 key + 上限 (对齐官方 App prompt-history: 全局持久化, max 100, 连续重复去重) */
 const PROMPT_HISTORY_KEY = 'NUMAS_CHAT_PROMPT_HISTORY';
 const PROMPT_HISTORY_MAX = 100;
@@ -85,7 +85,7 @@ import { styles } from './styles';
 import { ConnectingView } from './components/ConnectingView';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { MessageRow } from './components/MessageRow';
-import { FollowupDock } from './components/FollowupDock';
+
 import { QuestionDock } from './components/QuestionDock';
 import { normalizeQuestions } from './parts/QuestionCard';
 import { SkillsModal } from './components/SkillsModal';
@@ -119,20 +119,6 @@ type SessionStatusInfo =
 /** busy 判定: retry 也算 busy — 服务端还在重试流程里 (未终止的 run), 不锁输入会撞 busy 报错 */
 function isBusyStatus(st?: SessionStatusInfo): boolean {
   return !!st && (st.type === 'busy' || st.type === 'retry');
-}
-
-/** busy 期间排队的用户消息 (idle 后按序自动发送; abort 后 paused, 下次发送解除) */
-interface QueuedPrompt {
-  id: string;
-  /** dock 预览文本 (用户输入首行, 不含上下文/附件笔记) */
-  displayText: string;
-  /** 已拼好上下文笔记/附件清单的完整发送文本 */
-  fullText: string;
-  opts?: {
-    files?: Array<{ name: string; path: string }>;
-    images?: Array<{ name: string; path: string; dataUrl?: string }>;
-    context?: ChatContextItem[];
-  };
 }
 
 /** retry 状态条的 next 字段展示: 绝对时间戳 (epoch ms) → 本地 HH:MM 时钟.
@@ -191,29 +177,6 @@ export const ChatbotView: React.FC = () => {
   const [statusBySession, setStatusBySession] = useState<Record<string, SessionStatusInfo>>({});
 
   const busy = isBusyStatus(statusBySession[sessionID]);
-  // busy 时发送的消息排队: 按会话维护, idle 终态后自动依次发送
-  const [queueBySession, setQueueBySession] = useState<Record<string, QueuedPrompt[]>>({});
-  const queueBySessionRef = useRef<Record<string, QueuedPrompt[]>>({});
-  queueBySessionRef.current = queueBySession;
-  // abort 后暂停自动续发 (排队项保留); 下次任意发送解除暂停
-  const pausedQueueRef = useRef<Set<string>>(new Set());
-  const [pausedSessions, setPausedSessions] = useState<Record<string, boolean>>({});
-  // follow-up 行为 (对齐官方 App settings.general.followup, 默认 steer):
-  //   steer = busy 时直接发送 (服务端在当前回合的下个 step 边界拾取处理)
-  //   queue = busy 时进 dock 排队, idle 终态后自动逐条发送
-  const [followupMode, setFollowupMode] = useState<'steer' | 'queue'>(() => {
-    try { return localStorage.getItem(FOLLOWUP_MODE_KEY) === 'queue' ? 'queue' : 'steer'; } catch { return 'steer'; }
-  });
-  const setFollowupModePersist = useCallback((m: 'steer' | 'queue') => {
-    setFollowupMode(m);
-    try { localStorage.setItem(FOLLOWUP_MODE_KEY, m); } catch { /* ignore */ }
-  }, []);
-  // 发送失败的排队项 id (对齐官方 followup.failed): 自动续发跳过, 手动发送/新排队解除
-  const [failedQueued, setFailedQueued] = useState<Record<string, string | undefined>>({});
-  const failedQueuedRef = useRef<Record<string, string | undefined>>({});
-  failedQueuedRef.current = failedQueued;
-  // 正在发送的排队项 id (dock 按钮禁用态, 对齐官方 sending)
-  const [sendingQueued, setSendingQueued] = useState<Record<string, string | undefined>>({});
   // 工具卡默认展开设置 (对齐官方 settings.general.shellToolPartsExpanded / editToolPartsExpanded)
   const [toolPrefs, setToolPrefs] = useState(() => toolPartsPrefs.get());
   useEffect(() => toolPartsPrefs.subscribe(() => setToolPrefs(toolPartsPrefs.get())), []);
@@ -223,17 +186,6 @@ export const ChatbotView: React.FC = () => {
   const historySavedRef = useRef('');
   // 输入框连续两次 ESC abort: 记录首次 ESC 时间戳
   const lastEscRef = useRef(0);
-  const setQueuePaused = useCallback((sid: string, on: boolean) => {
-    if (on) pausedQueueRef.current.add(sid); else pausedQueueRef.current.delete(sid);
-    setPausedSessions((prev) => {
-      if (!!prev[sid] === on) return prev;
-      const n = { ...prev };
-      if (on) n[sid] = true; else delete n[sid];
-      return n;
-    });
-  }, []);
-  // 正在 flush (发送队首) 期间到达的 idle 事件不重复触发, 且该会话不再入新队
-  const flushingRef = useRef<Set<string>>(new Set());
   const statusBySessionRef = useRef<Record<string, SessionStatusInfo>>({});
   statusBySessionRef.current = statusBySession;
   // 当前会话完整状态 (retry 时驱动输入框上方的状态条)
@@ -741,7 +693,7 @@ export const ChatbotView: React.FC = () => {
   const refreshSubagentStats = useCallback(async () => {
     const rootSid = sessionIDRef.current;
     if (!rootSid) {
-      setSubagentStats({ count: 0, tokens: 0, cost: 0, durationMs: 0 });
+      setSubagentStats({ count: 0, tokens: 0, cost: 0, durationMs: 0, input: 0, output: 0, cacheRead: 0 });
       return;
     }
     try {
@@ -959,7 +911,6 @@ export const ChatbotView: React.FC = () => {
         });
         if (sid === sessionIDRef.current) {
           void loadMessages(sid).catch(() => {});
-          flushQueueRef.current(sid, true);
         }
       }, 800);
     };
@@ -986,8 +937,6 @@ export const ChatbotView: React.FC = () => {
                 disarmStepIdle();
                 setStatusBySession((prev) => ({ ...prev, [ssid]: { type: 'idle' } }));
                 if (ssid === sessionIDRef.current) void loadMessages(ssid);
-                // 终态: 自动续发该会话排队消息 (loadMessages 先定稿上一轮 rows, flush 再追加乐观气泡)
-                flushQueueRef.current(ssid, true);
               } else {
                 setStatusBySession((prev) => ({ ...prev, [ssid]: st }));
               }
@@ -999,7 +948,6 @@ export const ChatbotView: React.FC = () => {
             if (ssid) {
               disarmStepIdle();
               setStatusBySession((prev) => ({ ...prev, [ssid]: { type: 'idle' } }));
-              flushQueueRef.current(ssid, true);
             }
             return;
           }
@@ -1450,72 +1398,6 @@ export const ChatbotView: React.FC = () => {
     }
   }, [currentAgent, currentModel, currentVariant, models, currentProvider, client, setApiError, setSessionID]);
 
-  // 弹出队首并发送 (idle 终态后自动调用). flushingRef 同步锁防重复 idle 事件重入.
-  // assumeIdle: idle 终态事件点调用时 ref 可能尚未提交新状态, 跳过 busy 校验.
-  // 只 flush 当前查看的会话 (rows 单会话视图); abort 暂停期间不自动续发.
-  // idOverride: dock「立即发送」指定某条 (仅 idle/paused 态可用, busy 中按钮已禁用).
-  // 对齐官方 followup: 自动续发跳过 failed 项; 手动发送解除 failed 并可重试.
-  const flushQueue = useCallback((sid: string, assumeIdle = false, idOverride?: string) => {
-    if (!sid || flushingRef.current.has(sid)) return;
-    if (sid !== sessionIDRef.current) return;
-    if (pausedQueueRef.current.has(sid) && !idOverride) return;
-    if (!assumeIdle && !idOverride && isBusyStatus(statusBySessionRef.current[sid])) return;
-    const q = queueBySessionRef.current[sid] || [];
-    const idx = idOverride ? q.findIndex((x) => x.id === idOverride) : 0;
-    const item = idx >= 0 ? q[idx] : undefined;
-    if (!item) return;
-    // 自动续发跳过上次失败的项 (官方: failed 的队首不自动重试)
-    if (!idOverride && failedQueuedRef.current[sid] === item.id) return;
-    flushingRef.current.add(sid);
-    if (idOverride) setFailedQueued((prev) => (prev[sid] ? { ...prev, [sid]: undefined } : prev));
-    setSendingQueued((prev) => ({ ...prev, [sid]: item.id }));
-    const remain = q.filter((x) => x.id !== item.id);
-    const next: Record<string, QueuedPrompt[]> = { ...queueBySessionRef.current };
-    if (remain.length) next[sid] = remain; else delete next[sid];
-    queueBySessionRef.current = next;
-    setQueueBySession(next);
-    void firePrompt(item.fullText, item.opts?.images || [], sid).then((ok) => {
-      if (!ok) {
-        // 发送失败: 项放回队首 + 标记 failed (等手动发送/新排队解除, 不自动重试)
-        const back: Record<string, QueuedPrompt[]> = { ...queueBySessionRef.current };
-        back[sid] = [item, ...(back[sid] || [])];
-        queueBySessionRef.current = back;
-        setQueueBySession(back);
-        setFailedQueued((prev) => ({ ...prev, [sid]: item.id }));
-      }
-    }).finally(() => {
-      setSendingQueued((prev) => (prev[sid] === item.id ? { ...prev, [sid]: undefined } : prev));
-      // firePrompt 已乐观置 busy; 下一宏任务 busy 已 commit 到 ref, 重入 idle 会被 busy 拦
-      setTimeout(() => flushingRef.current.delete(sid), 0);
-    });
-  }, [firePrompt]);
-  const flushQueueRef = useRef(flushQueue);
-  flushQueueRef.current = flushQueue;
-
-  // dock「立即发送」: 解除暂停 (如有), idle 态立即发指定项
-  const sendQueuedNow = useCallback((id: string) => {
-    const sid = sessionIDRef.current;
-    if (!sid) return;
-    setQueuePaused(sid, false);
-    flushQueueRef.current(sid, false, id);
-  }, [setQueuePaused]);
-
-  // dock「编辑」: 移出队列 + 文本回填输入框 (对齐官方 followup edit: 退回编辑器)
-  const editQueuedPrompt = useCallback((sid: string, id: string) => {
-    const item = (queueBySessionRef.current[sid] || []).find((x) => x.id === id);
-    if (!item) return;
-    setQueueBySession((prev) => {
-      const arr = (prev[sid] || []).filter((x) => x.id !== id);
-      const next = { ...prev };
-      if (arr.length) next[sid] = arr; else delete next[sid];
-      queueBySessionRef.current = next;
-      return next;
-    });
-    setFailedQueued((prev) => (prev[sid] === id ? { ...prev, [sid]: undefined } : prev));
-    setInput(item.fullText);
-    requestAnimationFrame(() => taRef.current?.focus());
-  }, []);
-
   const sendPrompt = useCallback(async (text: string, opts?: { files?: Array<{ name: string; path: string }>; images?: Array<{ name: string; path: string; dataUrl?: string }>; context?: ChatContextItem[] }) => {
     const t = (text || '').trim();
     const images = opts?.images || [];
@@ -1530,35 +1412,9 @@ export const ChatbotView: React.FC = () => {
     historySavedRef.current = '';
     const sid = sessionIDRef.current;
     const fullText = buildFullText(t, files, ctx);
-    const backlog = sid ? (queueBySessionRef.current[sid] || []) : [];
-    // follow-up 行为对齐官方 App: 仅 queue 模式下 busy / 暂停有积压时才进 dock 排队;
-    // steer (默认) 模式 busy 时直接发 — 服务端在当前回合下个 step 边界拾取 (官方 steer 语义)
-    const shouldQueue = followupMode === 'queue'
-      && !!sid
-      && !flushingRef.current.has(sid)
-      && (isBusyStatus(statusBySessionRef.current[sid]) || (pausedQueueRef.current.has(sid) && backlog.length > 0));
-    if (shouldQueue) {
-      setQueuePaused(sid, false);
-      // 新排队解除 failed 标记 (官方 queueFollowup 清 failed)
-      setFailedQueued((prev) => (prev[sid] ? { ...prev, [sid]: undefined } : prev));
-      const item: QueuedPrompt = {
-        id: `fq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        displayText: t,
-        fullText,
-        opts: { files, images, context: ctx },
-      };
-      setQueueBySession((prev) => {
-        const next = { ...prev, [sid!]: [...(prev[sid!] || []), item] };
-        queueBySessionRef.current = next;
-        return next;
-      });
-      // 已 idle (abort 后补排) 立即触发一次; busy 中则等 idle 终态事件
-      if (!isBusyStatus(statusBySessionRef.current[sid])) flushQueueRef.current(sid, true);
-      return;
-    }
-    if (sid) setQueuePaused(sid, false);
+    // 对齐官方 TUI: busy 时直接发 (steer, 服务端在当前回合下个 step 边界拾取处理), 无本地队列
     await firePrompt(fullText, images, sid || undefined);
-  }, [client, firePrompt, buildFullText, setQueuePaused, followupMode]);
+  }, [client, firePrompt, buildFullText]);
 
   // 当前会话的生成错误 (session.error 事件渲染用)
   const curSessionError = sessionID ? sessionErrors[sessionID] : undefined;
@@ -1613,8 +1469,6 @@ export const ChatbotView: React.FC = () => {
     // 底部提示信息 abort 后自动消失 (含计时器)
     setNotice('');
     if (noticeTimer.current) { clearTimeout(noticeTimer.current); noticeTimer.current = null; }
-    // 暂停排队自动续发 (排队项保留在 dock): 下次任意发送解除暂停, 逐条补送
-    if ((queueBySessionRef.current[target] || []).length) setQueuePaused(target, true);
     // 乐观复位为 idle; 服务端随后会发真实终态 (若停在 retry 循环上, abort 打断后发 idle)
     setStatusBySession((prev) => ({ ...prev, [target]: { type: 'idle' } }));
     setInteractions((prev) => {
@@ -1637,12 +1491,7 @@ export const ChatbotView: React.FC = () => {
     void loadMessages(sid);
     // 切换后对账 busy (事件流可能有遗漏); 若该会话已空闲且有排队消息, loadMessages 定稿后续发
     void (async () => {
-      const map = await refreshSessionStatuses();
-      // 切换可能在请求返回前再次发生: 确认仍是该会话才 flush
-      if (sessionIDRef.current !== sid) return;
-      if (map && isBusyStatus(map[sid])) return;
-      await new Promise((r) => setTimeout(r, 0));
-      flushQueueRef.current(sid, !(map && map[sid]));
+      await refreshSessionStatuses();
     })();
     // 切完会话回 input, 继续输入 (双 rAF 避开 React 提交 + Portal 卸载)
     requestAnimationFrame(() => requestAnimationFrame(() => taRef.current?.focus()));
@@ -1740,14 +1589,6 @@ export const ChatbotView: React.FC = () => {
       deleteSession: async (sid) => {
         try {
           await aiDeleteSession(sid);
-          // 清掉该会话排队残留 (dock + 暂停标记)
-          pausedQueueRef.current.delete(sid);
-          if (queueBySessionRef.current[sid]) {
-            const nq = { ...queueBySessionRef.current };
-            delete nq[sid];
-            queueBySessionRef.current = nq;
-            setQueueBySession(nq);
-          }
           if (sessionIDRef.current === sid) {
             // 删的是当前会话: 不创建新草稿, 直接清空 chatbot UI
             sessionIDRef.current = '';
@@ -1998,12 +1839,17 @@ export const ChatbotView: React.FC = () => {
         }
         case 'compact': {
           if (!sessionID) { setError('当前没有选中会话'); return; }
+          if (!currentModel) { showNotice('请先选择模型再压缩上下文'); return; }
           try {
-            await aiCompactSession(sessionID);
+            // TUI /compact 同款: v1 session.summarize (需要当前模型), 服务端执行压缩后刷新消息
+            await aiCompactSession(sessionID, {
+              providerID: currentProvider || '',
+              modelID: currentModel,
+            });
             showNotice('已发起压缩, 完成后会刷新消息');
             await loadMessages(sessionID);
-          } catch {
-            showNotice('当前服务暂不支持压缩上下文');
+          } catch (e) {
+            showNotice(`压缩失败: ${String((e as any)?.message || e)}`);
           }
           break;
         }
@@ -2028,7 +1874,7 @@ export const ChatbotView: React.FC = () => {
         default: setError(`未知客户端命令: /${cmd}`);
       }
     } catch (e) { setError(`/${cmd} 失败: ${String((e as any)?.message || e)}`); }
-  }, [sessionID, client, loadMessages, showNotice, onNewSession, setShowSkills, setShowModels, setShowAgents, setShowCommands, setModelPickerView]);
+  }, [sessionID, client, loadMessages, showNotice, onNewSession, setShowSkills, setShowModels, setShowAgents, setShowCommands, setModelPickerView, currentModel, currentProvider]);
 
   const applyCommand = useCallback(async (c: { cmd: string; name: string; hint?: string; source: 'client-cmd' | 'server-cmd' }) => {
     setShowCommands(false);
@@ -2558,16 +2404,6 @@ export const ChatbotView: React.FC = () => {
               }}
             />
           )}
-          {/* 官方顺序: Question → Permission → Followup → 输入区 */}
-          <FollowupDock
-            items={(queueBySession[sessionID] || []).map((q) => ({ id: q.id, text: q.displayText }))}
-            paused={!!pausedSessions[sessionID]}
-            busy={busy}
-            sendingId={sendingQueued[sessionID]}
-            failedId={failedQueued[sessionID]}
-            onSend={sendQueuedNow}
-            onEdit={(id) => editQueuedPrompt(sessionID, id)}
-          />
           {showCommands && (
             <div className="chat__cmd-pop" ref={cmdPopRef}>
               <div className="chat__cmd-list">
@@ -2988,28 +2824,6 @@ export const ChatbotView: React.FC = () => {
                               <span className="chat__modal-item-desc">重载 agents / skills / tools / 配置</span>
                             </span>
                           </button>
-                          {/* follow-up 行为 (对齐官方 App settings.general.followup; 默认 steer) */}
-                          <div className="chat__modal-item chat__modal-item--row" style={{ cursor: 'default' }}>
-                            <span className="chat__modal-item-icon">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-                            </span>
-                            <span className="chat__modal-item-body">
-                              <span className="chat__modal-item-name">跟进消息行为</span>
-                              <span className="chat__modal-item-desc">回复生成中再发消息: 立即发送 (steer) 或排队等回复完成 (queue)</span>
-                            </span>
-                            <span className="chat__seg">
-                              <button
-                                type="button"
-                                className={followupMode === 'steer' ? 'is-active' : ''}
-                                onClick={() => setFollowupModePersist('steer')}
-                              >立即</button>
-                              <button
-                                type="button"
-                                className={followupMode === 'queue' ? 'is-active' : ''}
-                                onClick={() => setFollowupModePersist('queue')}
-                              >排队</button>
-                            </span>
-                          </div>
                           {/* 工具卡默认展开 (对齐官方 shellToolPartsExpanded / editToolPartsExpanded; 默认折叠) */}
                           <div className="chat__modal-item chat__modal-item--row" style={{ cursor: 'default' }}>
                             <span className="chat__modal-item-icon">

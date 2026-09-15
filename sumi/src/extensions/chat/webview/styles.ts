@@ -181,75 +181,6 @@ export const styles = `
 .chat__todo-item.is-in_progress .chat__todo-check { color: var(--ai-warning); }
 .chat__todo-item.is-completed .chat__todo-check { color: var(--ai-success); }
 
-/* ========== Followup dock (busy 时排队消息, 输入框上方) ========== */
-.chat__followup-dock {
-  margin: 8px 8px 0;
-  background: var(--ai-glass-bg);
-  -webkit-backdrop-filter: var(--ai-glass-blur);
-  backdrop-filter: var(--ai-glass-blur);
-  border-radius: 10px;
-  flex-shrink: 0;
-  overflow: hidden;
-  box-shadow: 0 1px 0 var(--ai-metal-edge) inset, 0 2px 8px color-mix(in srgb, #000 18%, transparent);
-}
-.chat__followup-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 12px;
-  cursor: pointer; user-select: none;
-}
-.chat__followup-label {
-  flex-shrink: 0;
-  font-size: 12.5px; font-weight: 600; color: var(--ai-fg);
-}
-.chat__followup-label.is-paused { color: var(--ai-warning); }
-.chat__followup-preview {
-  flex: 1; min-width: 0;
-  font-size: 12.5px; color: var(--ai-fg-muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.chat__followup-caret {
-  margin-left: auto; flex-shrink: 0;
-  width: 22px; height: 22px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: none; border-radius: 5px;
-  color: var(--ai-fg-muted); font-size: 10px; cursor: pointer;
-}
-.chat__followup-caret:hover { background: var(--ai-hover); color: var(--ai-fg); }
-.chat__followup-list {
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 0 12px 10px;
-  max-height: 168px; overflow-y: auto;
-}
-.chat__followup-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 3px 0; min-width: 0;
-}
-.chat__followup-text {
-  flex: 1; min-width: 0;
-  font-size: 12.5px; color: var(--ai-fg);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  user-select: text;
-}
-.chat__followup-send {
-  flex-shrink: 0;
-  padding: 3px 10px; border-radius: 6px;
-  background: var(--ai-hover); border: none;
-  color: var(--ai-fg); font-size: 11.5px; font-family: inherit;
-  cursor: pointer;
-  transition: background .12s;
-}
-.chat__followup-send:hover:not(:disabled) { background: var(--ai-active); }
-.chat__followup-send:disabled { opacity: 0.5; cursor: default; }
-.chat__followup-x {
-  flex-shrink: 0;
-  width: 22px; height: 22px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: transparent; border: none; border-radius: 5px;
-  color: var(--ai-fg-muted); font-size: 11px; cursor: pointer;
-}
-.chat__followup-x:hover:not(:disabled) { background: var(--ai-danger-bg); color: var(--ai-danger); }
-.chat__followup-x:disabled { opacity: 0.5; cursor: default; }
-
 /* Messages area */
 /* 消息区 wrap: 给 JumpToLatest 按钮做 absolute 定位锚点 (跟官方 message-timeline 同款) */
 .chat__messages-wrap {
@@ -2224,39 +2155,6 @@ export const styles = `
 .oc-att-card.is-uploading { opacity: .75; }
 .oc-att-card__progress { position: absolute; left: 6px; right: 6px; bottom: 4px; height: 3px; border-radius: 2px; background: var(--ai-hairline); overflow: hidden; }
 .oc-att-card__progress-bar { display: block; height: 100%; background: var(--ai-accent); }
-
-/* ---------- Followup dock ---------- */
-.oc-followup {
-  margin-bottom: 8px; border: .5px solid var(--ai-hairline);
-  border-radius: var(--ai-radius-dock); background: var(--ai-bg-elev);
-  overflow: hidden;
-}
-.oc-followup__tray {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 8px 12px; background: none; border: none; cursor: pointer;
-  color: var(--ai-fg-muted); font-family: inherit; font-size: 12.5px; text-align: left;
-}
-.oc-followup__tray:hover { background: var(--ai-hover); }
-.oc-followup__count { font-weight: 600; color: var(--ai-fg); white-space: nowrap; }
-.oc-followup__preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.oc-followup__chevron { transition: transform .15s ease; flex-shrink: 0; }
-.oc-followup.is-open .oc-followup__chevron { transform: rotate(180deg); }
-.oc-followup__items { display: flex; flex-direction: column; gap: 4px; padding: 2px 8px 8px; }
-.oc-followup__item {
-  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
-  border-radius: 8px; background: var(--ai-surface-1); min-width: 0;
-}
-.oc-followup__item.is-paused { opacity: .7; }
-.oc-followup__item.is-failed { border: .5px solid var(--ai-danger, #e5484d); }
-.oc-followup__failed { flex-shrink: 0; font-size: 11px; color: var(--ai-danger, #e5484d); white-space: nowrap; }
-.oc-followup__item-text { flex: 1; min-width: 0; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.oc-followup__send, .oc-followup__x, .oc-followup__edit {
-  flex-shrink: 0; border: none; background: none; cursor: pointer;
-  color: var(--ai-fg-muted); border-radius: 6px; padding: 3px; display: inline-flex;
-}
-.oc-followup__edit { font-family: inherit; font-size: 12px; padding: 3px 6px; }
-.oc-followup__send:hover:not(:disabled), .oc-followup__x:hover, .oc-followup__edit:hover:not(:disabled) { color: var(--ai-fg); background: var(--ai-hover); }
-.oc-followup__send:disabled, .oc-followup__edit:disabled { opacity: .4; cursor: default; }
 
 /* ---------- Question dock (输入框上方) — 官方 DockPrompt: DockShell + DockTray ---------- */
 .oc-qd {
