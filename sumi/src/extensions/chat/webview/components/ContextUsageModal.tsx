@@ -60,6 +60,10 @@ interface ContextUsage {
   mainTokens: number;
   /** 主会话墙钟 (time.updated - time.created; 开销分项用) */
   mainDuration: number;
+  /** 主会话 token 分项累计 (输入/输出/缓存读) */
+  mainInput: number;
+  mainOutput: number;
+  mainCacheRead: number;
 }
 
 // ===== 5 段颜色 (跟官方 BREAKDOWN_COLOR 一致, 适配 numas CSS 变量) =====
@@ -248,6 +252,14 @@ function fmtTok(n: number): string {
   return `${(n || 0).toLocaleString()} tok`;
 }
 
+/** token 数字缩写 (K/M, 无单位; 会话统计用 — 用户要求 tok 单位不显示) */
+function fmtTokShort(n: number): string {
+  const v = n || 0;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}K`;
+  return String(v);
+}
+
 /** 时间戳 → 本地化时间字符串 (创建时间 / 最后活动行用) */
 function fmtTime(ts: number): string {
   if (!ts) return '—';
@@ -267,7 +279,7 @@ export const ContextUsageModal: React.FC<{
   modelID?: string;
   currentAgent?: string;
   /** 子代理开销 (父组件 BFS 统计; 主/子分项展示用) */
-  subagentStats?: { count: number; tokens: number; cost: number; durationMs: number };
+  subagentStats?: { count: number; tokens: number; cost: number; durationMs: number; input: number; output: number; cacheRead: number };
 }> = ({ visible, onClose, sessionID, providerID, modelID, currentAgent, subagentStats }) => {
   const commandService = useInjectable<CommandService>(CommandService);
   const [data, setData] = useState<ContextUsage | null>(null);
@@ -301,13 +313,20 @@ export const ContextUsageModal: React.FC<{
       ? computeBreakdown(arr, input, systemPrompt)
       : [];
     const time = session?.time || {};
-    // 主会话累计 (跟 stats bar sumMessagesStats 同源): 成本 + 累计 token (input+output+reasoning)
+    // 主会话累计 (跟 stats bar sumMessagesStats 同源): 成本 + token 分项 (输入/输出/缓存读) + 合计
     let cumCost = 0;
     let mainTokens = 0;
+    let mainInput = 0;
+    let mainOutput = 0;
+    let mainCacheRead = 0;
     for (const m of arr) {
       const cst = m?.info?.cost;
       if (typeof cst === 'number' && Number.isFinite(cst)) cumCost += cst;
       const tk = m?.info?.tokens || {};
+      const cache = tk.cache || {};
+      mainInput += tk.input || 0;
+      mainOutput += tk.output || 0;
+      mainCacheRead += cache.read || 0;
       mainTokens += (tk.input || 0) + (tk.output || 0) + (tk.reasoning || 0);
     }
     // 时间口径 (用户要求): 主会话所有消息耗时累计 (每条 time.completed - time.created)
@@ -320,7 +339,7 @@ export const ContextUsageModal: React.FC<{
       timeUpdated: time.updated || 0,
       cost: cumCost,
       limit, usage: limit > 0 ? Math.round((total / limit) * 100) : null,
-      mainTokens, mainDuration,
+      mainTokens, mainDuration, mainInput, mainOutput, mainCacheRead,
     });
   }, [sessionID, providerID, modelID, currentAgent]);
 
@@ -497,16 +516,23 @@ export const ContextUsageModal: React.FC<{
                 </div>
                 {/* 用摘要区 item 样式 (跟"上下文限制"同级, 非子 item) */}
                 <div className="chat__context-summary">
+                  {/* 主/子会话各自 3 种 tok (输入/输出/缓存); 耗时单独一行 (总耗时 = 主+子) */}
                   <div className="chat__context-summary-row">
                     <span className="chat__context-summary-key">主会话</span>
                     <span className="chat__context-summary-val">
-                      {fmtTok(data.mainTokens)} · {fmtHMS(data.mainDuration)}
+                      输入 {fmtTokShort(data.mainInput)} / 输出 {fmtTokShort(data.mainOutput)} / 缓存 {fmtTokShort(data.mainCacheRead)}
                     </span>
                   </div>
                   <div className="chat__context-summary-row">
                     <span className="chat__context-summary-key">子会话</span>
                     <span className="chat__context-summary-val">
-                      {fmtTok(subagentStats?.tokens || 0)} · {fmtHMS(subagentStats?.durationMs || 0)}
+                      输入 {fmtTokShort(subagentStats?.input || 0)} / 输出 {fmtTokShort(subagentStats?.output || 0)} / 缓存 {fmtTokShort(subagentStats?.cacheRead || 0)}
+                    </span>
+                  </div>
+                  <div className="chat__context-summary-row">
+                    <span className="chat__context-summary-key">总耗时</span>
+                    <span className="chat__context-summary-val">
+                      {fmtHMS(data.mainDuration + (subagentStats?.durationMs || 0))}
                     </span>
                   </div>
                   <div className="chat__context-summary-row">

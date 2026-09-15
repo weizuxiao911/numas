@@ -260,8 +260,12 @@ export const ChatbotView: React.FC = () => {
   const [currentTitle, setCurrentTitle] = useState<string>('');
   /** 当前会话累计统计 (会话列表 / session.updated 事件回填): { cost, tokens, durationMs } */
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
-  /** 子代理开销 (当前会话所有后代会话: token/成本/墙钟 累计; 跟主会话区分展示) */
-  const [subagentStats, setSubagentStats] = useState<{ count: number; tokens: number; cost: number; durationMs: number }>({ count: 0, tokens: 0, cost: 0, durationMs: 0 });
+  /** 子代理开销 (当前会话所有后代会话: token/成本/墙钟 累计; 跟主会话区分展示)
+   *  token 分项: input/output/cacheRead (累计, 跟主会话同口径) */
+  const [subagentStats, setSubagentStats] = useState<{
+    count: number; tokens: number; cost: number; durationMs: number;
+    input: number; output: number; cacheRead: number;
+  }>({ count: 0, tokens: 0, cost: 0, durationMs: 0, input: 0, output: 0, cacheRead: 0 });
   /** 会话墙钟时间 (session.time: created/updated) — 耗时 = updated - created */
   const [sessionTimes, setSessionTimes] = useState<{ created: number; updated: number }>({ created: 0, updated: 0 });
   /** 耗时实时刷新节流 (message.part.updated 流式中频繁触发, 最多 1s 同步一次) */
@@ -765,6 +769,9 @@ export const ChatbotView: React.FC = () => {
       let tokens = 0;
       let cost = 0;
       let durationMs = 0;
+      let input = 0;
+      let output = 0;
+      let cacheRead = 0;
       for (const child of descendants) {
         try {
           const msgs = await aiListMessages(child.id);
@@ -773,9 +780,13 @@ export const ChatbotView: React.FC = () => {
           cost += st.cost;
           // 时间口径 (用户要求): 子会话所有消息耗时累计 (每条 time.completed - time.created)
           durationMs += st.durationMs;
-        } catch { /* 单子会话失败不阻断 */ }
+          // token 分项累计 (输入/输出/缓存读)
+          input += st.input;
+          output += st.output;
+          cacheRead += st.cacheRead;
+        } catch { /* 子会话失败不阻断 */ }
       }
-      setSubagentStats({ count: descendants.length, tokens, cost, durationMs });
+      setSubagentStats({ count: descendants.length, tokens, cost, durationMs, input, output, cacheRead });
     } catch { /* ignore */ }
   }, []);
 
