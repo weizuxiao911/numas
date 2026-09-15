@@ -2712,7 +2712,7 @@ export const ChatbotView: React.FC = () => {
               onChange={onInput}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
-              placeholder="嗨,buddy, @ 可以唤起上下文, / 可以查看指令"
+              placeholder="嗨，buddy，很高兴认识你，@ 可以唤起上下文，/ 可以查看指令"
               rows={1}
             />
             <div className="chat__input-bar">
