@@ -260,6 +260,8 @@ export const ChatbotView: React.FC = () => {
   const [currentTitle, setCurrentTitle] = useState<string>('');
   /** 当前会话累计统计 (会话列表 / session.updated 事件回填): { cost, tokens, durationMs } */
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  /** 子代理开销 (当前会话所有后代会话: token/成本/墙钟 累计; 跟主会话区分展示) */
+  const [subagentStats, setSubagentStats] = useState<{ count: number; tokens: number; cost: number; durationMs: number }>({ count: 0, tokens: 0, cost: 0, durationMs: 0 });
   /** 会话墙钟时间 (session.time: created/updated) — 耗时 = updated - created */
   const [sessionTimes, setSessionTimes] = useState<{ created: number; updated: number }>({ created: 0, updated: 0 });
   /** 耗时实时刷新节流 (message.part.updated 流式中频繁触发, 最多 1s 同步一次) */
@@ -729,8 +731,61 @@ export const ChatbotView: React.FC = () => {
     setSessionStats(rows.length ? sumMessagesStats(rows) : null);
   }, [rows]);
 
+  // 子代理开销统计: BFS 当前会话的所有后代会话 (parentID 链, 含深层),
+  // token/cost 从各子会话消息累计 (sumMessagesStats), 墙钟从子会话 time.updated-created.
+  // 数据源: aiListAllSessions (GET /session 全量, 含 subagent) + aiListMessages (GET /session/{id}/message).
+  const refreshSubagentStats = useCallback(async () => {
+    const rootSid = sessionIDRef.current;
+    if (!rootSid) {
+      setSubagentStats({ count: 0, tokens: 0, cost: 0, durationMs: 0 });
+      return;
+    }
+    try {
+      const all = await aiListAllSessions();
+      const byParent = new Map<string, any[]>();
+      for (const s of all || []) {
+        const p = s?.parentID;
+        if (!p) continue;
+        if (!byParent.has(p)) byParent.set(p, []);
+        byParent.get(p)!.push(s);
+      }
+      // BFS 所有后代 (防环: seen)
+      const descendants: any[] = [];
+      const seen = new Set<string>([rootSid]);
+      const queue: string[] = [rootSid];
+      while (queue.length) {
+        const cur = queue.shift()!;
+        for (const child of byParent.get(cur) || []) {
+          if (!child?.id || seen.has(child.id)) continue;
+          seen.add(child.id);
+          descendants.push(child);
+          queue.push(child.id);
+        }
+      }
+      let tokens = 0;
+      let cost = 0;
+      let durationMs = 0;
+      for (const child of descendants) {
+        try {
+          const msgs = await aiListMessages(child.id);
+          const st = sumMessagesStats(msgs || []);
+          tokens += st.input + st.output + st.reasoning;
+          cost += st.cost;
+        } catch { /* 单子会话失败不阻断 */ }
+        const t = child.time || {};
+        if (t.created && t.updated && t.updated > t.created) durationMs += t.updated - t.created;
+      }
+      setSubagentStats({ count: descendants.length, tokens, cost, durationMs });
+    } catch { /* ignore */ }
+  }, []);
+
+  // 子代理开销刷新 (切会话 + rows 行数变化; 行数变化不频繁, 流式不触发)
+  useEffect(() => {
+    void refreshSubagentStats();
+  }, [sessionID, rows.length, refreshSubagentStats]);
+
   // 当前上下文 token (官方口径: 最后一条 assistant 消息的 tokenTotal 含 cache.read/write).
-  // stats bar "消耗" 用它 — 跟上下文 modal 的 "总 token" 完全同值 (对齐官方 SessionContextUsage).
+  // 上下文 modal 的 "总 token" 用它 — 跟官方 SessionContextUsage 对齐.
   const contextTokens = useMemo(() => {
     for (let i = rows.length - 1; i >= 0; i--) {
       const r: any = rows[i];
@@ -742,6 +797,26 @@ export const ChatbotView: React.FC = () => {
     }
     return 0;
   }, [rows]);
+
+  /** stats bar 汇总: 主会话累计 + 子代理累计 (用户要求开销含 subagent; 区分明细在上下文 modal).
+   *  token = 主/子各消息 input+output+reasoning 累计; 耗时 = 主墙钟 + 各子会话墙钟累加. */
+  const totalStats = useMemo(() => {
+    const mainTokens = sessionStats ? sessionStats.input + sessionStats.output + sessionStats.reasoning : 0;
+    const mainCost = sessionStats?.cost || 0;
+    const mainDuration = sessionTimes.created > 0 && sessionTimes.updated > sessionTimes.created
+      ? sessionTimes.updated - sessionTimes.created : 0;
+    const subTokens = subagentStats.tokens || 0;
+    const subCost = subagentStats.cost || 0;
+    const subDuration = subagentStats.durationMs || 0;
+    return {
+      mainTokens, mainCost, mainDuration,
+      subTokens, subCost, subDuration,
+      subCount: subagentStats.count || 0,
+      tokens: mainTokens + subTokens,
+      cost: mainCost + subCost,
+      durationMs: mainDuration + subDuration,
+    };
+  }, [sessionStats, sessionTimes, subagentStats]);
 
   // 启动恢复 (session 级): 有持久化的 sessionID 才加载该会话; 没有则不加载, 保持空态 (打字机问候).
   // 会话已被删除 → 清掉持久化, 保持空态. (历史行为: 默认恢复最新非空会话 — 已按需求移除)
@@ -3033,12 +3108,12 @@ export const ChatbotView: React.FC = () => {
                 <span className="chat__session-stats-notice" title={notice}>{notice}</span>
                 <button type="button" className="chat__session-stats-x" title="关闭提醒" onClick={() => setNotice('')}>×</button>
               </>
-            ) : (contextTokens > 0 || sessionStats) ? (
+            ) : (totalStats.tokens > 0 || totalStats.cost > 0 || totalStats.durationMs > 0 || sessionStats) ? (
               // 整行可点 → 弹上下文 modal (跟官方 SessionContextUsage 触发一致: 任何 segment 都触发)
-              // 3 维度: 耗时 / 消耗 / 成本 (成本有才显示; 跟上下文 modal 完全同口径)
-              //  - 耗时 = 最后活动 - 创建时间 (session 墙钟)
-              //  - 消耗 = 当前上下文 token (最后一条 assistant 的 tokenTotal 含 cache; 官方 SessionContextUsage 同款)
-              //  - 成本 = 会话累计 (session.cost / 消息累加)
+              // 3 维度 (含子代理; 明细区分在上下文 modal):
+              //  - 耗时 = 主会话墙钟 + 各子会话墙钟累加
+              //  - 消耗 = 主会话累计 + 子代理累计 (input+output+reasoning)
+              //  - 成本 = 主 + 子 (有才显示)
               <button
                 type="button"
                 className="chat__session-stats-items"
@@ -3046,15 +3121,15 @@ export const ChatbotView: React.FC = () => {
                 onClick={() => setShowContextUsage(true)}
               >
                 {/* 左: 耗时; 右: 消耗 + 成本 (space-between) */}
-                {sessionTimes.created > 0 && sessionTimes.updated > sessionTimes.created && (
-                  <span className="chat__session-stats-item">耗时 {formatDurationHMS(sessionTimes.updated - sessionTimes.created)}</span>
+                {totalStats.durationMs > 0 && (
+                  <span className="chat__session-stats-item">耗时 {formatDurationHMS(totalStats.durationMs)}</span>
                 )}
                 <span className="chat__session-stats-right">
-                  {contextTokens > 0 && (
-                    <span className="chat__session-stats-item">消耗 {contextTokens.toLocaleString()} tok</span>
+                  {totalStats.tokens > 0 && (
+                    <span className="chat__session-stats-item">消耗 {totalStats.tokens.toLocaleString()} tok</span>
                   )}
-                  {sessionStats && formatCost(sessionStats.cost) && (
-                    <span className="chat__session-stats-item">成本 {formatCost(sessionStats.cost)}</span>
+                  {formatCost(totalStats.cost) && (
+                    <span className="chat__session-stats-item">成本 {formatCost(totalStats.cost)}</span>
                   )}
                 </span>
               </button>
@@ -3071,6 +3146,8 @@ export const ChatbotView: React.FC = () => {
           sessionID={sessionID}
           providerID={currentProvider}
           modelID={currentModel}
+          currentAgent={currentAgent}
+          subagentStats={subagentStats}
         />
       )}
 

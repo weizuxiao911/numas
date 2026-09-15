@@ -19,7 +19,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 import { onEventType } from '@/service/event/eventBus';
-import { formatCost } from '../helpers';
+import { formatCost, formatDurationHMS } from '../helpers';
 
 interface BreakdownSegment {
   key: 'system' | 'user' | 'assistant' | 'tool' | 'other';
@@ -56,6 +56,10 @@ interface ContextUsage {
   limit: number;
   /** 百分比 (0-100), 拿不到 limit 时为 null (跟官方 usage 一致) */
   usage: number | null;
+  /** 主会话累计 token (所有消息 input+output+reasoning 求和; 开销分项用) */
+  mainTokens: number;
+  /** 主会话墙钟 (time.updated - time.created; 开销分项用) */
+  mainDuration: number;
 }
 
 // ===== 5 段颜色 (跟官方 BREAKDOWN_COLOR 一致, 适配 numas CSS 变量) =====
@@ -250,6 +254,11 @@ function fmtTime(ts: number): string {
   return new Date(ts).toLocaleString();
 }
 
+/** 耗时格式化 (跟 stats bar 同款 "x时x分x秒"; 0 → '0秒') */
+function fmtHMS(ms: number): string {
+  return ms > 0 ? formatDurationHMS(ms) : '0秒';
+}
+
 export const ContextUsageModal: React.FC<{
   visible: boolean;
   onClose: () => void;
@@ -257,7 +266,9 @@ export const ContextUsageModal: React.FC<{
   providerID?: string;
   modelID?: string;
   currentAgent?: string;
-}> = ({ visible, onClose, sessionID, providerID, modelID, currentAgent }) => {
+  /** 子代理开销 (父组件 BFS 统计; 主/子分项展示用) */
+  subagentStats?: { count: number; tokens: number; cost: number; durationMs: number };
+}> = ({ visible, onClose, sessionID, providerID, modelID, currentAgent, subagentStats }) => {
   const commandService = useInjectable<CommandService>(CommandService);
   const [data, setData] = useState<ContextUsage | null>(null);
   const [loading, setLoading] = useState(false);
@@ -288,12 +299,16 @@ export const ContextUsageModal: React.FC<{
       ? computeBreakdown(arr, input, systemPrompt)
       : [];
     const time = session?.time || {};
-    // 会话累计成本 (跟 stats bar sumMessagesStats 同源; 不依赖 session.cost)
+    // 主会话累计 (跟 stats bar sumMessagesStats 同源): 成本 + 累计 token (input+output+reasoning)
     let cumCost = 0;
+    let mainTokens = 0;
     for (const m of arr) {
       const cst = m?.info?.cost;
       if (typeof cst === 'number' && Number.isFinite(cst)) cumCost += cst;
+      const tk = m?.info?.tokens || {};
+      mainTokens += (tk.input || 0) + (tk.output || 0) + (tk.reasoning || 0);
     }
+    const mainDuration = time.created > 0 && time.updated > time.created ? time.updated - time.created : 0;
     setData({
       total, input, output, reasoning, cacheRead, cacheWrite,
       breakdown, userMsgCount, assistantMsgCount,
@@ -302,6 +317,7 @@ export const ContextUsageModal: React.FC<{
       timeUpdated: time.updated || 0,
       cost: cumCost,
       limit, usage: limit > 0 ? Math.round((total / limit) * 100) : null,
+      mainTokens, mainDuration,
     });
   }, [sessionID, providerID, modelID, currentAgent]);
 
@@ -418,6 +434,33 @@ export const ContextUsageModal: React.FC<{
                     <span className="chat__context-detail-val">{formatCost(data.cost) || '$0.00'}</span>
                   </div>
                 )}
+              </div>
+
+              {/* 开销分项 (含子代理; 用户要求主/子区分展示): 累计 token + 墙钟 */}
+              <div className="chat__context-section">
+                <div className="chat__context-section-title">开销 (含子代理)</div>
+                <div className="chat__context-details">
+                  <div className="chat__context-detail-row">
+                    <span className="chat__context-detail-key">主会话</span>
+                    <span className="chat__context-detail-val">
+                      {fmtTok(data.mainTokens)} · {fmtHMS(data.mainDuration)}
+                    </span>
+                  </div>
+                  <div className="chat__context-detail-row">
+                    <span className="chat__context-detail-key">
+                      子代理{(subagentStats?.count || 0) > 0 ? ` (${subagentStats!.count})` : ''}
+                    </span>
+                    <span className="chat__context-detail-val">
+                      {fmtTok(subagentStats?.tokens || 0)} · {fmtHMS(subagentStats?.durationMs || 0)}
+                    </span>
+                  </div>
+                  <div className="chat__context-detail-row">
+                    <span className="chat__context-detail-key">合计</span>
+                    <span className="chat__context-detail-val">
+                      {fmtTok(data.mainTokens + (subagentStats?.tokens || 0))} · {fmtHMS(data.mainDuration + (subagentStats?.durationMs || 0))}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* 上下文细分 (5 段堆叠进度条 + legend, 跟官方 session-context-tab 一致) */}
