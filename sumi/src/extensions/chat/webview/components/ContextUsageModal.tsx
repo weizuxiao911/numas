@@ -19,7 +19,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 import { onEventType } from '@/service/event/eventBus';
-import { formatTokens, formatCost, formatDurationHMS } from '../helpers';
+import { formatCost } from '../helpers';
 
 interface BreakdownSegment {
   key: 'system' | 'user' | 'assistant' | 'tool' | 'other';
@@ -50,12 +50,8 @@ interface ContextUsage {
   timeCreated: number;
   /** 会话最后活动时间 (session.info.time.updated, ms epoch) — 跟官方 app "最后活动" 字段一致 */
   timeUpdated: number;
-  /** 会话总成本 (USD, session.info.cost; numas sumMessagesStats 也累加) — 跟官方 app "总成本" 字段一致 */
+  /** 会话总成本 (USD, 消息累加) — 跟官方 app "总成本" 字段一致 */
   cost: number;
-  /** 累计消息处理时间 (ms, 每条 message.time.completed - time.created 累加; 跟 stats bar durationMs 同源) */
-  durationMs: number;
-  /** token 总数 (跟 stats bar 一样: input + output + reasoning, 不含 cache) */
-  tokens: number;
   /** context window limit (server-known, 拿不到 → 0) */
   limit: number;
   /** 百分比 (0-100), 拿不到 limit 时为 null (跟官方 usage 一致) */
@@ -246,15 +242,6 @@ async function fetchSystemPrompt(baseUrl: string, currentAgent: string): Promise
 /** token 数字格式化: 跟 stats bar 完全一致 (千分位 + " tok" 后缀, 不缩写) */
 const fmtTok = (n: number): string => `${(n || 0).toLocaleString()} tok`;
 
-/** 耗时主值: {累计消息时长} 优先; 拿不到用 lastUpdated - created (session 总时长). 都 0 → 0ms */
-const durationMsOf = (durationMs: number, timeCreated: number, timeUpdated: number): number => {
-  if (durationMs > 0) return durationMs;
-  if (timeCreated > 0 && timeUpdated > 0 && timeUpdated > timeCreated) return timeUpdated - timeCreated;
-  return 0;
-};
-/** 耗时格式化: 直接用 helpers.formatDurationHMS (跟 stats bar 同款 "x时x分x秒") */
-const fmtHMS = (ms: number): string => (ms > 0 ? formatDurationHMS(ms) : '0秒');
-
 /** 时间戳 → 本地化时间字符串 (创建时间 / 最后活动行用) */
 const fmtTime = (ts: number): string => {
   if (!ts) return '—';
@@ -299,21 +286,9 @@ export const ContextUsageModal: React.FC<{
       ? computeBreakdown(arr, input, systemPrompt)
       : [];
     const time = session?.time || {};
-    // 累计消息处理时间 + 累计消耗/成本 (跟 chat helpers sumMessagesStats 完全同源, 保证 stats bar 跟 modal 数字对齐)
-    let durationMs = 0;
-    let cumInput = 0;
-    let cumOutput = 0;
-    let cumReasoning = 0;
+    // 会话累计成本 (跟 stats bar sumMessagesStats 同源; 不依赖 session.cost)
     let cumCost = 0;
     for (const m of arr) {
-      const mt = m?.info?.time || m?.time || {};
-      if (mt.created && mt.completed && mt.completed >= mt.created) {
-        durationMs += mt.completed - mt.created;
-      }
-      const tk = m?.info?.tokens || {};
-      cumInput += tk.input || 0;
-      cumOutput += tk.output || 0;
-      cumReasoning += tk.reasoning || 0;
       const cst = m?.info?.cost;
       if (typeof cst === 'number' && Number.isFinite(cst)) cumCost += cst;
     }
@@ -323,9 +298,7 @@ export const ContextUsageModal: React.FC<{
       systemPrompt, messageCount: arr.length,
       timeCreated: time.created || 0,
       timeUpdated: time.updated || 0,
-      cost: cumCost, // 累计成本 (跟 stats bar sumMessagesStats 同源; 不依赖 session.cost)
-      durationMs,
-      tokens: cumInput + cumOutput + cumReasoning, // 累计消耗 (跟 stats bar 完全同源, 不含 cache)
+      cost: cumCost,
       limit, usage: limit > 0 ? Math.round((total / limit) * 100) : null,
     });
   }, [sessionID, providerID, modelID, currentAgent]);
@@ -436,16 +409,6 @@ export const ContextUsageModal: React.FC<{
                 <div className="chat__context-detail-row">
                   <span className="chat__context-detail-key">最后活动</span>
                   <span className="chat__context-detail-val">{fmtTime(data.timeUpdated)}</span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">耗时</span>
-                  <span className="chat__context-detail-val">
-                    {fmtHMS(durationMsOf(data.durationMs, data.timeCreated, data.timeUpdated))}
-                  </span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">消耗</span>
-                  <span className="chat__context-detail-val">{fmtTok(data.tokens)}</span>
                 </div>
                 {data.cost > 0 && (
                   <div className="chat__context-detail-row">

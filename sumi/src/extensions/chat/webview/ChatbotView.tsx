@@ -243,6 +243,8 @@ export const ChatbotView: React.FC = () => {
   const [currentTitle, setCurrentTitle] = useState<string>('');
   /** 当前会话累计统计 (会话列表 / session.updated 事件回填): { cost, tokens, durationMs } */
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  /** 会话墙钟时间 (session.time: created/updated) — 耗时 = updated - created */
+  const [sessionTimes, setSessionTimes] = useState<{ created: number; updated: number }>({ created: 0, updated: 0 });
   const [showAgents, setShowAgents] = useState(false);
   const [agentQuery, setAgentQuery] = useState('');
   const [agentActiveIndex, setAgentActiveIndex] = useState(0);
@@ -644,6 +646,20 @@ export const ChatbotView: React.FC = () => {
   // 会话累计统计: 由当前 rows 逐条求和 (cost/tokens/耗时); rows 随流式/加载实时变化
   useEffect(() => {
     setSessionStats(rows.length ? sumMessagesStats(rows) : null);
+  }, [rows]);
+
+  // 当前上下文 token (官方口径: 最后一条 assistant 消息的 tokenTotal 含 cache.read/write).
+  // stats bar "消耗" 用它 — 跟上下文 modal 的 "总 token" 完全同值 (对齐官方 SessionContextUsage).
+  const contextTokens = useMemo(() => {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r: any = rows[i];
+      if (r?.role !== 'assistant') continue;
+      const t = r.tokens || {};
+      const c = t.cache || {};
+      const total = (t.input || 0) + (t.output || 0) + (t.reasoning || 0) + (c.read || 0) + (c.write || 0);
+      if (total > 0) return total;
+    }
+    return 0;
   }, [rows]);
 
   // 启动恢复 (session 级): 有持久化的 sessionID 才加载该会话; 没有则不加载, 保持空态 (打字机问候).
@@ -1048,6 +1064,9 @@ export const ChatbotView: React.FC = () => {
     if (session.agent) setCurrentAgent(session.agent);
     if (session.model?.id) setCurrentModel(session.model.id);
     if (session.model?.providerID) setCurrentProvider(session.model.providerID);
+    if (session.time) {
+      setSessionTimes({ created: session.time.created || 0, updated: session.time.updated || 0 });
+    }
     // 占位标题 (opencode 默认 "New session - <ts>") 不显示, 用 "新会话"
     const t = session.title || '';
     setCurrentTitle(!t || /^New session\b/i.test(t) ? '新会话' : t);
@@ -2732,9 +2751,12 @@ export const ChatbotView: React.FC = () => {
                 <span className="chat__session-stats-notice" title={notice}>{notice}</span>
                 <button type="button" className="chat__session-stats-x" title="关闭提醒" onClick={() => setNotice('')}>×</button>
               </>
-            ) : sessionStats ? (
+            ) : (contextTokens > 0 || sessionStats) ? (
               // 整行可点 → 弹上下文 modal (跟官方 SessionContextUsage 触发一致: 任何 segment 都触发)
-              // 3 维度: 耗时 / 消耗 / 成本 (成本有才显示, 跟官方 app session-context-tab stats 一致)
+              // 3 维度: 耗时 / 消耗 / 成本 (成本有才显示; 跟上下文 modal 完全同口径)
+              //  - 耗时 = 最后活动 - 创建时间 (session 墙钟)
+              //  - 消耗 = 当前上下文 token (最后一条 assistant 的 tokenTotal 含 cache; 官方 SessionContextUsage 同款)
+              //  - 成本 = 会话累计 (session.cost / 消息累加)
               <button
                 type="button"
                 className="chat__session-stats-items"
@@ -2742,14 +2764,14 @@ export const ChatbotView: React.FC = () => {
                 onClick={() => setShowContextUsage(true)}
               >
                 {/* 左: 耗时; 右: 消耗 + 成本 (space-between) */}
-                {sessionStats.durationMs > 0 && (
-                  <span className="chat__session-stats-item">耗时 {formatDurationHMS(sessionStats.durationMs)}</span>
+                {sessionTimes.created > 0 && sessionTimes.updated > sessionTimes.created && (
+                  <span className="chat__session-stats-item">耗时 {formatDurationHMS(sessionTimes.updated - sessionTimes.created)}</span>
                 )}
                 <span className="chat__session-stats-right">
-                  {sessionStats.input + sessionStats.output + sessionStats.reasoning > 0 && (
-                    <span className="chat__session-stats-item">消耗 {formatTokens({ input: sessionStats.input, output: sessionStats.reasoning })}</span>
+                  {contextTokens > 0 && (
+                    <span className="chat__session-stats-item">消耗 {contextTokens.toLocaleString()} tok</span>
                   )}
-                  {formatCost(sessionStats.cost) && (
+                  {sessionStats && formatCost(sessionStats.cost) && (
                     <span className="chat__session-stats-item">成本 {formatCost(sessionStats.cost)}</span>
                   )}
                 </span>
