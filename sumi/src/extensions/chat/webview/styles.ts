@@ -589,7 +589,7 @@ export const styles = `
    固定占位: 无数据也保留高度 (min-height), 单行不换行 + 等宽数字 + 各段固定槽宽 (更新不位移) */
 .chat__session-stats {
   display: flex; align-items: center; flex-wrap: nowrap; gap: 12px;
-  padding: 10px 4px 0;
+  padding: 5px 4px 0;
   min-height: 25px;
   font-size: 11px; line-height: 1.4; color: var(--ai-fg-muted);
   font-variant-numeric: tabular-nums;
@@ -664,12 +664,22 @@ export const styles = `
   border-bottom: 1px solid color-mix(in srgb, var(--ai-fg) 6%, transparent);
 }
 .chat__context-detail-row {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
   padding: 6px 18px;
   font-size: 12px;
 }
-.chat__context-detail-key { color: var(--ai-fg-muted); }
-.chat__context-detail-val { color: var(--ai-fg); font-variant-numeric: tabular-nums; }
+.chat__context-detail-key { flex: 0 0 auto; color: var(--ai-fg-muted); }
+/* val 右对齐 + 不换行 (跟其他行保持左右布局, 长值省略号) */
+.chat__context-detail-val {
+  flex: 1 1 auto; min-width: 0;
+  text-align: right;
+  color: var(--ai-fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* 耗时行的时间范围部分 (次要信息弱化) */
+.chat__context-detail-val-dim { color: var(--ai-fg-muted); font-size: 11px; }
 
 .chat__context-section-title {
   padding: 12px 18px 6px;

@@ -255,9 +255,12 @@ const fmtCost = (n: number): string => {
   return `US$${n.toFixed(2)}`;
 };
 
-/** 耗时格式化: {累计消息时长} ({创建时间}-{最后活动时间}).
-   累计消息时长优先, 拿不到用 lastUpdated - created (session 总时长).
-   跟用户要求的 "耗时: {累计消息时长}({创建时间}-{最后活动时间})" 格式一致. */
+/** 耗时主值: {累计消息时长} 优先; 拿不到用 lastUpdated - created (session 总时长). 都 0 → 0ms */
+const durationMsOf = (durationMs: number, timeCreated: number, timeUpdated: number): number => {
+  if (durationMs > 0) return durationMs;
+  if (timeCreated > 0 && timeUpdated > 0 && timeUpdated > timeCreated) return timeUpdated - timeCreated;
+  return 0;
+};
 const fmtHMS = (ms: number): string => {
   if (!ms || ms < 0) return '0s';
   const s = Math.floor(ms / 1000);
@@ -267,13 +270,6 @@ const fmtHMS = (ms: number): string => {
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
   if (m > 0) return `${m}:${String(sec).padStart(2, '0')}`;
   return `${sec}s`;
-};
-const fmtDuration = (durationMs: number, timeCreated: number, timeUpdated: number): string => {
-  const dur = durationMs > 0 ? durationMs : (timeCreated > 0 && timeUpdated > 0 && timeUpdated > timeCreated ? timeUpdated - timeCreated : 0);
-  if (dur <= 0) return '—';
-  const t1 = timeCreated ? new Date(timeCreated).toLocaleString() : '?';
-  const t2 = timeUpdated ? new Date(timeUpdated).toLocaleString() : '?';
-  return `${fmtHMS(dur)} (${t1} - ${t2})`;
 };
 
 /** 时间戳 → 本地化时间字符串 (RawMessageList 也要用) */
@@ -450,7 +446,14 @@ export const ContextUsageModal: React.FC<{
                 </div>
                 <div className="chat__context-detail-row">
                   <span className="chat__context-detail-key">耗时</span>
-                  <span className="chat__context-detail-val">{fmtDuration(data.durationMs, data.timeCreated, data.timeUpdated)}</span>
+                  <span className="chat__context-detail-val">
+                    {fmtHMS(durationMsOf(data.durationMs, data.timeCreated, data.timeUpdated))}
+                    {data.timeCreated > 0 && data.timeUpdated > 0 && (
+                      <span className="chat__context-detail-val-dim">
+                        {' '}({fmtTime(data.timeCreated)} - {fmtTime(data.timeUpdated)})
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <div className="chat__context-detail-row">
                   <span className="chat__context-detail-key">消耗</span>
