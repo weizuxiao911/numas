@@ -290,3 +290,18 @@
 - **解决方案**: Alt+Enter 需**手动插换行** — `e.preventDefault()` 后在光标处插 `\n` (`input.slice(0,start) + '\n' + input.slice(end)`), setInput 后 rAF 里 `setSelectionRange(start+1, start+1)` 恢复光标 (受控 textarea); Shift+Enter 保持放行默认即可.
 - **验证**: Playwright 在输入框按 `Alt+Enter` / `Shift+Enter` 后断言 `inputValue()` 含 `\n`.
 - **适用**: 任何「Enter 发送 + 多行输入」的聊天框 (macOS Option 即 Alt).
+
+#### 78. 模块顶层 `const` 工具函数遇循环引用 → `ReferenceError: xxx is not defined` (TDZ)
+
+- **问题描述**: `ContextUsageModal.tsx` 顶层 `const fmtTime = (ts) => ...` + 组件内使用; 运行时报 `ReferenceError: fmtTime is not defined` (页面加载时, 非点击时). 同文件 `const fmtTok` 同类.
+- **根因**: webpack 模块图存在循环引用时, 模块 A 的代码可能在模块 B 初始化完成前执行 → 顶层 `const` 处于 **TDZ (暂时性死区)** → 引用抛 ReferenceError. `function` 声明有提升 (hoisting) 不受影响.
+- **解决方案**: 模块顶层**工具函数一律用 `function` 声明** (不用 `const xxx = () =>`). 已改 `fmtTime`/`fmtTok` 为 function.
+- **排查方法**: `ReferenceError: xxx is not defined` 但文件内明明有定义 → 检查定义方式 (const arrow vs function declaration) + 是否有循环引用. `grep -rn "import.*<当前文件>"` 找循环.
+- **适用**: 所有跨模块引用的工具函数 (helpers / format 函数).
+
+#### 79. 重构时误删 state 声明 → 组件整体崩溃 (白屏/不渲染)
+
+- **问题描述**: 调整 `ChatbotView.tsx` 的 `configLoaded` state 位置时误删 `const [configLoaded, setConfigLoaded] = useState(false)` 声明, 只留使用点 (`setConfigLoaded(true)` / `if (configLoaded)`) → 运行时 `ReferenceError: configLoaded is not defined` → **整个 chat 组件不渲染** (hasChat: false), 全局 loading 因等不到就绪而卡死.
+- **根因**: 移动/清理代码时只删了声明没删使用 (或反之); React 组件 render 抛错 → 子树卸载.
+- **解决方案**: 重构后 `grep -n "<变量名>" <文件>` 确认声明与使用配对; 组件崩溃优先看 console 的 ReferenceError.
+- **排查方法**: 页面某区域整块不渲染 + console 有 ReferenceError → 查该组件依赖的变量声明是否完整.
