@@ -30,6 +30,9 @@ const markedWithShiki = marked.use(
   markedShiki({
     highlight(code: string, lang: string) {
       const language = String(lang || 'text').replace(/[^a-zA-Z0-9#+._-]/g, '') || 'text';
+      // shiki 不支持的语言 (e.g. 'gitignore', 'env', 'dockerignore' 跟文件名同名但不是 shiki 内置 lang)
+      // 会抛 'Language X is not included in this bundle', catch 后降级到 'text' 高亮.
+      // 不影响其他内置语言; 避免 console unhandledrejection 噪音 + 渲染回退路径被触发.
       return loadShiki()
         .then(({ codeToHtml }) => codeToHtml(code, {
           lang: language,
@@ -39,9 +42,16 @@ const markedWithShiki = marked.use(
           },
         }))
         .then((html) => (
-          // 注入 data-lang: CSS 在 macOS 窗口风标题栏里展示语言标签 (text 不标)
           language === 'text' ? html : html.replace('<pre ', `<pre data-lang="${language}" `)
-        ));
+        ))
+        .catch((err) => {
+          if (language === 'text') throw err;
+          // 降级: 用 text lang 重试, 至少能渲染出基本 <pre><code>
+          return loadShiki().then(({ codeToHtml }) => codeToHtml(code, {
+            lang: 'text',
+            themes: { light: 'github-light', dark: 'github-dark' },
+          }));
+        });
     },
   }),
 );

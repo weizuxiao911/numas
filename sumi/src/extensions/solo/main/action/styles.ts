@@ -164,4 +164,108 @@ export const styles = `
   background: var(--ai-hover);
   color: var(--ai-fg);
 }
+
+/* ─────────────── sidebar 折叠态 topbar 扩展: 历史会话 modal + 新建会话 ───────────────
+ * 样式命名沿用 IdeRightTopbar 的 app-ide__hist-*, 保持 IDE / SOLO 两种模式下
+ * chat 历史会话视觉一致; 实际样式是另一份 (这里 CSS 也会注入, 跟 IdeRightTopbar
+ * 注入的同名 class 规则一致, 单模式生效时只一份实际起作用). */
+
+/* 历史会话 / 新建会话 icon 按钮: 28x28 (跟 IdeRightTopbar 同款) */
+.app-action__chat-btn {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: none; cursor: pointer;
+  color: var(--descriptionForeground, #8f8f8f);
+  border-radius: 8px;
+  transition: background .12s, color .12s;
+}
+.app-action__chat-btn:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  color: var(--editor-foreground, var(--ai-fg));
+}
+
+/* 历史会话 modal — 自绘 createPortal (跟 IdeRightTopbar 同款, 玻璃卡/无边框/圆角 16/弹层阴影).
+   命名沿用 app-ide__hist-*: SOLO 折叠态 topbar 复用 IDE 的视觉/交互. */
+.app-ide__hist-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: var(--vscode-overlay-background, rgba(0,0,0,0.45));
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.app-ide__hist-modal {
+  width: 560px; max-width: 100%;
+  max-height: min(calc(100vh - 72px), 600px);
+  background: color-mix(in srgb, var(--editorWidget-background, #fff) 96%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px color-mix(in srgb, #000 55%, transparent), 0 0 0 1px var(--panel-border, rgba(255,255,255,0.08)) inset;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  color: var(--editor-foreground, #1f2328);
+  font-size: 13px;
+}
+.app-ide__hist-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.app-ide__hist-search {
+  display: flex; align-items: center; gap: 10px;
+  margin: 16px 16px 4px; padding: 9px 14px;
+  background: color-mix(in srgb, var(--editor-foreground, #1f2328) 5%, var(--editorWidget-background, #fff));
+  border: 1px solid var(--panel-border, rgba(0,0,0,.12));
+  border-radius: 10px;
+  color: var(--descriptionForeground, #8f8f8f);
+}
+.app-ide__hist-search:focus-within {
+  border-color: var(--button-background, #6366f1);
+}
+.app-ide__hist-search input {
+  flex: 1; min-width: 0;
+  background: transparent; border: none; outline: none;
+  color: var(--editor-foreground, #1f2328);
+  font-family: inherit; font-size: 13px;
+}
+.app-ide__hist-search input::placeholder { color: var(--descriptionForeground, #8f8f8f); }
+.app-ide__hist-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 12px 16px; }
+.app-ide__hist-group-title {
+  padding: 14px 14px 8px; margin-top: 8px;
+  font-size: 11.5px; font-weight: 600; color: var(--descriptionForeground, #8f8f8f);
+  text-transform: uppercase; letter-spacing: 0.5px; user-select: none;
+}
+.app-ide__hist-item {
+  width: 100%; display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; border-radius: 8px; cursor: pointer;
+  transition: background .1s;
+}
+.app-ide__hist-item:hover { background: var(--list-hoverBackground, rgba(0,0,0,.06)); }
+.app-ide__hist-item.is-active { background: var(--list-activeSelectionBackground, rgba(99,102,241,.18)); }
+.app-ide__hist-item.is-highlighted { background: var(--list-hoverBackground, rgba(0,0,0,.06)); }
+.app-ide__hist-name { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-ide__hist-time { flex: 0 0 auto; font-size: 11px; color: var(--descriptionForeground, #8f8f8f); }
+.app-ide__hist-del {
+  flex: 0 0 auto; width: 24px; height: 24px; visibility: hidden;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  border: none; background: none; cursor: pointer; border-radius: 6px;
+  color: var(--descriptionForeground, #8f8f8f);
+}
+.app-ide__hist-item:hover .app-ide__hist-del,
+.app-ide__hist-del:focus-visible { visibility: visible; }
+.app-ide__hist-del:hover { color: #e5484d; background: color-mix(in srgb, #e5484d 12%, transparent); }
+.app-ide__hist-empty { padding: 28px 12px; text-align: center; color: var(--descriptionForeground, #8f8f8f); }
+
+/* 新建会话按钮: 28x28 icon 跟历史按钮同款 (跟 IdeRightTopbar 一致) */
+.app-action__new {
+  flex: 0 0 auto;
+  width: 28px; height: 28px;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  border: none; background: none; cursor: pointer;
+  color: var(--descriptionForeground, #8f8f8f);
+  border-radius: 8px;
+  transition: background .12s, color .12s;
+}
+.app-action__new:hover {
+  background: color-mix(in srgb, var(--button-background, #6366f1) 18%, transparent);
+  color: var(--button-background, #6366f1);
+}
 `;
