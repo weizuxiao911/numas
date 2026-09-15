@@ -360,8 +360,8 @@ export const ChatbotView: React.FC = () => {
   const showNotice = useCallback((msg: string) => {
     setNotice(msg);
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    // 每个提示最多显示 10s, 到点自动关闭 (也可手动点 ×)
-    noticeTimer.current = setTimeout(() => setNotice(''), 10000);
+    // 每个提示最多显示 5s, 到点自动关闭 (也可手动点 ×)
+    noticeTimer.current = setTimeout(() => setNotice(''), 5000);
   }, []);
   const setApiError = useCallback((e: any, ctx?: string) => {
     const tag = e?.data?._tag || e?.name || '';
@@ -1103,6 +1103,39 @@ export const ChatbotView: React.FC = () => {
     isAtBottomRef.current = true;
     setIsAtBottom(true);
   }, []);
+
+  /** 上下条消息导航 (官方 navigateMessageByOffset 同款; mod+alt+[ / ] 触发).
+   *  offset=-1 上一条, +1 下一条; 越过最后一条 → 跳到底 (官方 resumeScroll). */
+  const navigateMessage = useCallback((offset: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nodes = Array.from(el.querySelectorAll('.oc-msg.is-user')) as HTMLElement[];
+    if (nodes.length === 0) return;
+    // 当前视口顶部对应的 user 消息 (第一个 top >= 容器顶)
+    const containerTop = el.getBoundingClientRect().top;
+    const found = nodes.findIndex((n) => n.getBoundingClientRect().top >= containerTop - 8);
+    const base = found < 0 ? nodes.length : found;
+    const targetIndex = base + offset;
+    if (targetIndex < 0 || targetIndex > nodes.length) return;
+    if (targetIndex === nodes.length) {
+      jumpToLatest();
+      return;
+    }
+    isAtBottomRef.current = false;
+    setIsAtBottom(false);
+    nodes[targetIndex].scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [jumpToLatest]);
+
+  // 消息导航快捷键: mod(⌘/Ctrl)+alt+[ / ] (官方 keybind 同款)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.altKey) return;
+      if (e.key === '[') { e.preventDefault(); navigateMessage(-1); }
+      else if (e.key === ']') { e.preventDefault(); navigateMessage(1); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navigateMessage]);
 
   // 从 opencode session 同步 agent/model/title 到本地 UI state
   const applySessionToUI = useCallback((session: any) => {
