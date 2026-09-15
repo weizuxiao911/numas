@@ -615,13 +615,18 @@ export const styles = `
    任何 segment 点击都开 context tab). */
 .chat__session-stats-items {
   flex: 1 1 auto;
-  display: flex; align-items: center; flex-wrap: nowrap; gap: 12px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 12px;
   min-height: 25px; padding: 0;
   border: 0; background: transparent; text-align: left;
   color: inherit; font: inherit; font-size: 11px; line-height: 1.4;
   font-variant-numeric: tabular-nums;
   cursor: pointer; border-radius: 6px;
   transition: background .12s;
+}
+/* 右侧组: 消耗 + 成本 (margin-left auto 推最右, 跟左侧耗时两端对齐) */
+.chat__session-stats-right {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 12px;
 }
 .chat__session-stats-items:hover {
   background: color-mix(in srgb, var(--ai-fg) 6%, transparent);

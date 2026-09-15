@@ -2741,15 +2741,18 @@ export const ChatbotView: React.FC = () => {
                 title="点击查看上下文用量 (含子代理开销)"
                 onClick={() => setShowContextUsage(true)}
               >
+                {/* 左: 耗时; 右: 消耗 + 成本 (space-between) */}
                 {sessionStats.durationMs > 0 && (
                   <span className="chat__session-stats-item">耗时 {formatDurationHMS(sessionStats.durationMs)}</span>
                 )}
-                {sessionStats.input + sessionStats.output + sessionStats.reasoning > 0 && (
-                  <span className="chat__session-stats-item">消耗 {formatTokens({ input: sessionStats.input, output: sessionStats.reasoning })}</span>
-                )}
-                {formatCost(sessionStats.cost) && (
-                  <span className="chat__session-stats-item">成本 {formatCost(sessionStats.cost)}</span>
-                )}
+                <span className="chat__session-stats-right">
+                  {sessionStats.input + sessionStats.output + sessionStats.reasoning > 0 && (
+                    <span className="chat__session-stats-item">消耗 {formatTokens({ input: sessionStats.input, output: sessionStats.reasoning })}</span>
+                  )}
+                  {formatCost(sessionStats.cost) && (
+                    <span className="chat__session-stats-item">成本 {formatCost(sessionStats.cost)}</span>
+                  )}
+                </span>
               </button>
             ) : null}
           </div>
