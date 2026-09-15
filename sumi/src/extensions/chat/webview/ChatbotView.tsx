@@ -380,6 +380,9 @@ export const ChatbotView: React.FC = () => {
   }, [showNotice]);
   const [ready, setReady] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** 消息区是否在底部 (JumpToLatest 显隐 + 自动滚动保护) */
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const isAtBottomRef = useRef(true);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const modelSearchRef = useRef<HTMLInputElement>(null);
 
@@ -1062,8 +1065,25 @@ export const ChatbotView: React.FC = () => {
     return () => clearInterval(t);
   }, [refreshSessionStatuses]);
 
+  // 滚动位置跟踪 (JumpToLatest 按钮显隐 + 自动滚动保护):
+  // 用户在底部 (40px 容差) 才自动跟随新消息; 上滚阅读时不打扰.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+      isAtBottomRef.current = atBottom;
+      setIsAtBottom(atBottom);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [ready]);
+
+  // 自动滚到底 (只在用户已在底部时; 跟官方 createAutoScroll working/stick-to-bottom 同款语义)
   useEffect(() => {
     if (!scrollRef.current) return;
+    if (!isAtBottomRef.current) return; // 用户上滚了 → 不强制拉回
     const el = scrollRef.current;
     // 等 DOM 把消息 render 完, 再滚到底; React render 是异步的, 用 rAF + setTimeout
     // 双保险, 否则大消息列表 (1100+ 条) 时 scrollHeight 还没长好
@@ -1074,6 +1094,15 @@ export const ChatbotView: React.FC = () => {
       setTimeout(scrollToBottom, 100);
     });
   }, [rows, busy]);
+
+  /** 跳转到最新 (JumpToLatest 按钮; 滚到底 + 恢复自动跟随) */
+  const jumpToLatest = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    isAtBottomRef.current = true;
+    setIsAtBottom(true);
+  }, []);
 
   // 从 opencode session 同步 agent/model/title 到本地 UI state
   const applySessionToUI = useCallback((session: any) => {
@@ -2201,6 +2230,7 @@ export const ChatbotView: React.FC = () => {
         </Portal>
       )}
 
+      <div className="chat__messages-wrap">
       <div className="chat__messages" ref={scrollRef}>
         {!ready ? (
           <ConnectingView user={globalUser} />
@@ -2232,6 +2262,22 @@ export const ChatbotView: React.FC = () => {
             );
           })
         )}
+      </div>
+
+      {/* 跳转到最新 (跟官方 message-timeline JumpToLatest 同款: 用户上滚后显示, 底部居中) */}
+      {!isAtBottom && rows.length > 0 && (
+        <button
+          type="button"
+          className="chat__jump-latest"
+          title="跳转到最新"
+          aria-label="跳转到最新"
+          onClick={jumpToLatest}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 5v14M5 12l7 7 7-7" />
+          </svg>
+        </button>
+      )}
       </div>
 
       {error && (

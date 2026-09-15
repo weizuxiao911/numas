@@ -250,6 +250,13 @@ export const styles = `
 .chat__followup-x:disabled { opacity: 0.5; cursor: default; }
 
 /* Messages area */
+/* 消息区 wrap: 给 JumpToLatest 按钮做 absolute 定位锚点 (跟官方 message-timeline 同款) */
+.chat__messages-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0; min-width: 0;
+  display: flex; flex-direction: column;
+}
 .chat__messages {
   flex: 1; overflow-y: auto; overflow-x: hidden; min-width: 0;
   padding: 16px 20px 40px;
@@ -257,6 +264,27 @@ export const styles = `
   /* 保留滚动能力, 隐藏滚动条视觉 */
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+/* 跳转到最新: 底部居中 (官方 bottom-6 + left-1/2), 上滚时出现 */
+.chat__jump-latest {
+  position: absolute;
+  bottom: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 60;
+  width: 32px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--app-panel-bg, #fff) 92%, transparent);
+  color: var(--ai-fg);
+  border: 1px solid var(--ai-border, var(--panel-border, rgba(0,0,0,.12)));
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.14);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  transition: color .12s, border-color .12s;
+}
+.chat__jump-latest:hover {
+  color: var(--ai-accent, var(--button-background));
+  border-color: var(--ai-accent, var(--button-background));
 }
 .chat__messages::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .chat__msg { margin: 12px 0; display: flex; min-width: 0; max-width: 100%; }
