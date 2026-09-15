@@ -8,6 +8,7 @@ import { StateToken, type IStateService } from '@/service/state';
 import {
   aiListAgents,
   aiListSkills,
+  aiListCommands,
   aiSwitchAgent,
   aiCompactSession,
   aiReplyQuestion,
@@ -275,6 +276,8 @@ export const ChatbotView: React.FC = () => {
   const [showContextUsage, setShowContextUsage] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [skills, setSkills] = useState<Array<{ name: string; description?: string; location?: string }>>([]);
+  /** 服务端命令 (GET /command: /init /review /undo /share /export /fork 等; 官方 `/` 列表同源) */
+  const [serverCommands, setServerCommands] = useState<Array<{ name: string; description?: string; source?: string }>>([]);
   const [questionRev, setQuestionRev] = useState(0);
   // 交互状态按会话管理: sid → { question?, permission? }; 渲染时按当前会话树取, 切换天然跟随
   const [interactions, setInteractions] = useState<Record<string, { question?: { requestID: string; questions: any[] }; permission?: any }>>({});
@@ -545,6 +548,8 @@ export const ChatbotView: React.FC = () => {
     } catch (e) { console.warn('[ai] load models failed', e); }
     try { setProviders(await aiListProviders() || []); } catch (e) { console.warn('[ai] load providers failed', e); }
     try { setSkills(await aiListSkills() || []); } catch (e) { console.warn('[ai] load skills failed', e); }
+    // 服务端命令 (/init /review /undo /share /export /fork 等; 跟官方 `/` 列表同源)
+    try { setServerCommands(await aiListCommands() || []); } catch (e) { console.warn('[ai] load commands failed', e); }
   }, [ready, currentAgent]);
   // 事件回调里经 ref 调 loadConfig, 避免 currentAgent 变化导致 SSE 订阅重挂
   const loadConfigRef = useRef<() => Promise<void>>(async () => {});
@@ -1619,14 +1624,22 @@ export const ChatbotView: React.FC = () => {
 
   const commandList = useMemo(() => {
     const seen = new Set<string>();
-    const list: Array<{ cmd: string; name: string; hint?: string; source: 'client-cmd' }> = [];
+    const list: Array<{ cmd: string; name: string; hint?: string; source: 'client-cmd' | 'server-cmd' }> = [];
+    // 客户端命令优先 (numas 本地实现的 /models /connect /compact /new /skills /agents)
     for (const c of loadClientCmds()) {
       if (seen.has(c.cmd)) continue;
       seen.add(c.cmd);
       list.push({ cmd: c.cmd, name: c.name, hint: c.hint, source: 'client-cmd' });
     }
+    // 服务端命令 (GET /command: /init /review /undo /share /export /fork 等; 跟官方 `/` 列表同源)
+    for (const c of serverCommands) {
+      const name = String(c.name || '').replace(/^\//, '');
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      list.push({ cmd: name, name: c.description || name, hint: c.description || '', source: 'server-cmd' });
+    }
     return list;
-  }, []);
+  }, [serverCommands]);
 
   const visibleAgents = useMemo(
     () => agents.filter((a: any) => {
@@ -1864,11 +1877,26 @@ export const ChatbotView: React.FC = () => {
     } catch (e) { setError(`/${cmd} 失败: ${String((e as any)?.message || e)}`); }
   }, [sessionID, client, loadMessages, showNotice, onNewSession, setShowSkills, setShowModels, setShowAgents, setShowCommands, setModelPickerView]);
 
-  const applyCommand = useCallback(async (c: { cmd: string; name: string; hint?: string; source: 'client-cmd' }) => {
+  const applyCommand = useCallback(async (c: { cmd: string; name: string; hint?: string; source: 'client-cmd' | 'server-cmd' }) => {
     setShowCommands(false);
     setInput('');
+    if (c.source === 'server-cmd') {
+      // 服务端命令: 走 POST /session/{id}/command (官方 submit.ts:521 同款; /init /review /undo /share /export /fork 等)
+      const sid = sessionIDRef.current;
+      if (!sid) { showNotice('请先创建会话再使用该命令'); return; }
+      if (!client) { showNotice('SDK 未就绪, 请稍后重试'); return; }
+      try {
+        setStatusBySession((prev) => ({ ...prev, [sid]: { type: 'busy' } }));
+        setSessionErrors((prev) => (prev[sid] ? { ...prev, [sid]: undefined as any } : prev));
+        await (client as any).session.command({ sessionID: sid, command: c.cmd, arguments: '' });
+      } catch (e) {
+        setStatusBySession((prev) => ({ ...prev, [sid]: { type: 'idle' } }));
+        setApiError(e, `/${c.cmd}`);
+      }
+      return;
+    }
     await runClientCmd(c.cmd);
-  }, [runClientCmd]);
+  }, [runClientCmd, client, showNotice, setApiError]);
 
   /** 选中 popover item 后, 替换 input + 聚焦 + 光标移到末尾.
    *  一次写完, 避免 setTimeout 0 在 Portal 点击后失效. */
