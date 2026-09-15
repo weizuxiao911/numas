@@ -6,7 +6,7 @@ import '@codeblitzjs/ide-core/bundle/codeblitz.css';
 import '@codeblitzjs/ide-core/languages';
 
 import { getBuiltinModules } from './config/modules';
-import { isBootReady, resolveBoot } from './infra/url';
+import { appBaseUrl, isBootReady, resolveBoot } from './infra/url';
 import { preferences } from './config/preferences';
 import { getPreloadedMetadata, preloadExtensionMetadata } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
@@ -132,6 +132,26 @@ export const App: React.FC = () => {
     return () => { alive = false; };
   }, [wsReady]);
 
+  // opencode server 健康探测 (5s): 挂了 → codeblitz 全局 loading 覆盖 (阻止一切操作);
+  // 恢复 → 自动解除 (不需要 reload; 各组件按需自行重拉).
+  const [opencodeDown, setOpencodeDown] = React.useState(false);
+  React.useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      const base = appBaseUrl();
+      if (!base) return;
+      try {
+        const r = await fetch(`${base}/health`, { method: 'GET', cache: 'no-store' });
+        if (!cancelled) setOpencodeDown(!r.ok);
+      } catch {
+        if (!cancelled) setOpencodeDown(true);
+      }
+    };
+    const t = window.setInterval(check, 5000);
+    check();
+    return () => { cancelled = true; window.clearInterval(t); };
+  }, []);
+
   const cfg = MODES[mode];
   const Layout = LAYOUTS[mode];
 
@@ -188,14 +208,28 @@ export const App: React.FC = () => {
   }
 
   return (
-    <AppRenderer
-      // key=mode: 模式切换时卸载旧 ClientApp (cleanup → app.destroy()) 并重建 —
-      // createApp 只在挂载时执行一次, 换 key 才能让新 mode 的 layoutComponent/layoutConfig
-      // 生效, 无需整页 reload.
-      key={mode}
-      appConfig={appConfig}
-      runtimeConfig={(runtimeConfig ?? {}) as any}
-      onLoad={verifyExtensionOnLoad}
-    />
+    <>
+      <AppRenderer
+        // key=mode: 模式切换时卸载旧 ClientApp (cleanup → app.destroy()) 并重建 —
+        // createApp 只在挂载时执行一次, 换 key 才能让新 mode 的 layoutComponent/layoutConfig
+        // 生效, 无需整页 reload.
+        key={mode}
+        appConfig={appConfig}
+        runtimeConfig={(runtimeConfig ?? {}) as any}
+        onLoad={verifyExtensionOnLoad}
+      />
+      {/* opencode 挂了 → codeblitz 全局 loading 覆盖 (整页锁定, 阻止一切操作; health 恢复后自动解除) */}
+      {opencodeDown && (
+        <div className="app-global-loading" role="status" aria-live="polite">
+          <div className="app-global-loading__box">
+            <div className="app-boot__spinner" aria-hidden />
+            <div className="app-global-loading__text">
+              连接中断, 正在重连
+              <span className="app-global-loading__dots" aria-hidden="true" />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

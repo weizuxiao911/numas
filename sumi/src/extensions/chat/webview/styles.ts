@@ -68,6 +68,7 @@ export const styles = `
   --ai-radius-dock: 12px;
 
   display: flex; flex-direction: column; height: 100%;
+  position: relative; /* 全局 loading 覆盖层 (opencode 挂了) 的定位锚点 */
   /* 会话面板底色: 官方 = 纯白面板 (bg-base); 不取编辑器灰底.
      用 editorWidget-background (浅色主题 = #fff, 深色 = 深弹层色), 明暗自适应 */
   background: var(--editorWidget-background, var(--ai-bg));

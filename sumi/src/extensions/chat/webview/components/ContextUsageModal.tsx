@@ -240,13 +240,15 @@ async function fetchSystemPrompt(baseUrl: string, currentAgent: string): Promise
 }
 
 /** token 数字格式化: 跟 stats bar 完全一致 (千分位 + " tok" 后缀, 不缩写) */
-const fmtTok = (n: number): string => `${(n || 0).toLocaleString()} tok`;
+function fmtTok(n: number): string {
+  return `${(n || 0).toLocaleString()} tok`;
+}
 
 /** 时间戳 → 本地化时间字符串 (创建时间 / 最后活动行用) */
-const fmtTime = (ts: number): string => {
+function fmtTime(ts: number): string {
   if (!ts) return '—';
   return new Date(ts).toLocaleString();
-};
+}
 
 export const ContextUsageModal: React.FC<{
   visible: boolean;

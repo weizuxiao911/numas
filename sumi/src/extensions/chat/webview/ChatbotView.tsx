@@ -68,6 +68,7 @@ function canNavigateHistoryAtCursor(direction: 'up' | 'down', text: string, curs
   return position === text.length;
 }
 import { onEvent } from '@/service/event/eventBus';
+import { appBaseUrl } from '@/infra/url';
 import { PartRenderer } from './parts/PartRenderer';
 import { ProviderDefs, ProviderIcon } from './parts/ProviderIcon';
 import { PermissionModal } from './parts/PermissionModal';
@@ -470,6 +471,34 @@ export const ChatbotView: React.FC = () => {
     const t = setTimeout(() => taRef.current?.focus(), 200);
     return () => clearTimeout(t);
   }, [ready]);
+
+  // opencode server 健康探测 (5s): 恢复后重拉配置 + 当前会话消息
+  // (全局 loading 覆盖由 App.tsx 处理 — 整页锁定, 阻止一切操作)
+  useEffect(() => {
+    let cancelled = false;
+    let wasDown = false;
+    const check = async () => {
+      const base = appBaseUrl();
+      if (!base) return;
+      try {
+        const r = await fetch(`${base}/health`, { method: 'GET', cache: 'no-store' });
+        const down = !r.ok;
+        if (cancelled) return;
+        if (wasDown && !down) {
+          // 恢复: 重新拉配置 (agents/skills/models) + 重载当前会话消息
+          wasDown = false;
+          void loadConfigRef.current();
+          if (sessionIDRef.current) void loadMessages(sessionIDRef.current);
+        }
+        wasDown = down;
+      } catch {
+        if (!cancelled) wasDown = true;
+      }
+    };
+    const t = window.setInterval(check, 5000);
+    check();
+    return () => { cancelled = true; window.clearInterval(t); };
+  }, []);
 
   // 草稿会话管理: 切换/删除/卸载时清理未发过消息的空草稿, 避免污染历史
   const draftRef = useRef<{ sid: string; used: boolean } | null>(null);
@@ -1880,7 +1909,7 @@ export const ChatbotView: React.FC = () => {
             showNotice('已发起压缩, 完成后会刷新消息');
             await loadMessages(sessionID);
           } catch {
-            showNotice('服务端暂未支持压缩 (session.compact 在 opencode 1.18.18 尚未上线)');
+            showNotice('当前服务暂不支持压缩上下文');
           }
           break;
         }
