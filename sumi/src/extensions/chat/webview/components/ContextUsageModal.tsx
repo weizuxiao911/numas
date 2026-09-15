@@ -19,6 +19,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 import { onEventType } from '@/service/event/eventBus';
+import { formatTokens, formatCost, formatDurationHMS } from '../helpers';
 
 interface BreakdownSegment {
   key: 'system' | 'user' | 'assistant' | 'tool' | 'other';
@@ -43,7 +44,7 @@ interface ContextUsage {
   assistantMsgCount: number;
   /** system prompt 字符串 (从 agent prompt 拼, numas 端点拿不到 V2 user.system) */
   systemPrompt: string;
-  /** 消息数 (显示原始消息列表用) */
+  /** 消息数 */
   messageCount: number;
   /** 会话创建时间 (session.info.time.created, ms epoch) — 跟官方 app "创建时间" 字段一致 */
   timeCreated: number;
@@ -242,18 +243,8 @@ async function fetchSystemPrompt(baseUrl: string, currentAgent: string): Promise
   return '';
 }
 
-const fmtTok = (n: number): string => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return `${n.toLocaleString()}`;
-};
-
-/** 总成本格式化 (跟 chat helpers.formatCost 同款, USD 格式; 跟官方 app "总成本" 字段一致) */
-const fmtCost = (n: number): string => {
-  if (!n || !Number.isFinite(n) || n <= 0) return 'US$0.00';
-  if (n < 0.01) return `US$${n.toFixed(4)}`;
-  return `US$${n.toFixed(2)}`;
-};
+/** token 数字格式化: 跟 stats bar 完全一致 (千分位 + " tok" 后缀, 不缩写) */
+const fmtTok = (n: number): string => `${(n || 0).toLocaleString()} tok`;
 
 /** 耗时主值: {累计消息时长} 优先; 拿不到用 lastUpdated - created (session 总时长). 都 0 → 0ms */
 const durationMsOf = (durationMs: number, timeCreated: number, timeUpdated: number): number => {
@@ -261,18 +252,10 @@ const durationMsOf = (durationMs: number, timeCreated: number, timeUpdated: numb
   if (timeCreated > 0 && timeUpdated > 0 && timeUpdated > timeCreated) return timeUpdated - timeCreated;
   return 0;
 };
-const fmtHMS = (ms: number): string => {
-  if (!ms || ms < 0) return '0s';
-  const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  if (m > 0) return `${m}:${String(sec).padStart(2, '0')}`;
-  return `${sec}s`;
-};
+/** 耗时格式化: 直接用 helpers.formatDurationHMS (跟 stats bar 同款 "x时x分x秒") */
+const fmtHMS = (ms: number): string => (ms > 0 ? formatDurationHMS(ms) : '0秒');
 
-/** 时间戳 → 本地化时间字符串 (RawMessageList 也要用) */
+/** 时间戳 → 本地化时间字符串 (创建时间 / 最后活动行用) */
 const fmtTime = (ts: number): string => {
   if (!ts) return '—';
   return new Date(ts).toLocaleString();
@@ -316,13 +299,23 @@ export const ContextUsageModal: React.FC<{
       ? computeBreakdown(arr, input, systemPrompt)
       : [];
     const time = session?.time || {};
-    // 累计消息处理时间 (跟 chat helpers sumMessagesStats 同款: 每条 time.completed - time.created 累加)
+    // 累计消息处理时间 + 累计消耗/成本 (跟 chat helpers sumMessagesStats 完全同源, 保证 stats bar 跟 modal 数字对齐)
     let durationMs = 0;
+    let cumInput = 0;
+    let cumOutput = 0;
+    let cumReasoning = 0;
+    let cumCost = 0;
     for (const m of arr) {
-      const t = m?.info?.time || m?.time || {};
-      if (t.created && t.completed && t.completed >= t.created) {
-        durationMs += t.completed - t.created;
+      const mt = m?.info?.time || m?.time || {};
+      if (mt.created && mt.completed && mt.completed >= mt.created) {
+        durationMs += mt.completed - mt.created;
       }
+      const tk = m?.info?.tokens || {};
+      cumInput += tk.input || 0;
+      cumOutput += tk.output || 0;
+      cumReasoning += tk.reasoning || 0;
+      const cst = m?.info?.cost;
+      if (typeof cst === 'number' && Number.isFinite(cst)) cumCost += cst;
     }
     setData({
       total, input, output, reasoning, cacheRead, cacheWrite,
@@ -330,9 +323,9 @@ export const ContextUsageModal: React.FC<{
       systemPrompt, messageCount: arr.length,
       timeCreated: time.created || 0,
       timeUpdated: time.updated || 0,
-      cost: session?.cost || 0,
+      cost: cumCost, // 累计成本 (跟 stats bar sumMessagesStats 同源; 不依赖 session.cost)
       durationMs,
-      tokens: input + output + reasoning, // 跟 stats bar 字段一致 (不含 cache)
+      tokens: cumInput + cumOutput + cumReasoning, // 累计消耗 (跟 stats bar 完全同源, 不含 cache)
       limit, usage: limit > 0 ? Math.round((total / limit) * 100) : null,
     });
   }, [sessionID, providerID, modelID, currentAgent]);
@@ -448,11 +441,6 @@ export const ContextUsageModal: React.FC<{
                   <span className="chat__context-detail-key">耗时</span>
                   <span className="chat__context-detail-val">
                     {fmtHMS(durationMsOf(data.durationMs, data.timeCreated, data.timeUpdated))}
-                    {data.timeCreated > 0 && data.timeUpdated > 0 && (
-                      <span className="chat__context-detail-val-dim">
-                        {' '}({fmtTime(data.timeCreated)} - {fmtTime(data.timeUpdated)})
-                      </span>
-                    )}
                   </span>
                 </div>
                 <div className="chat__context-detail-row">
@@ -462,7 +450,7 @@ export const ContextUsageModal: React.FC<{
                 {data.cost > 0 && (
                   <div className="chat__context-detail-row">
                     <span className="chat__context-detail-key">成本</span>
-                    <span className="chat__context-detail-val">{fmtCost(data.cost)}</span>
+                    <span className="chat__context-detail-val">{formatCost(data.cost) || '$0.00'}</span>
                   </div>
                 )}
               </div>
@@ -496,21 +484,6 @@ export const ContextUsageModal: React.FC<{
                 </div>
               )}
 
-              {/* 系统提示词 (官方 session-context-tab 有, 折叠显示 markdown) */}
-              {data.systemPrompt && (
-                <details className="chat__context-sysprompt">
-                  <summary className="chat__context-section-title">系统提示词</summary>
-                  <pre className="chat__context-sysprompt-body">{data.systemPrompt}</pre>
-                </details>
-              )}
-
-              {/* 原始消息数 (官方有导出/列表入口; numas 简化为消息数 + part 类型概览) */}
-              <details className="chat__context-raw">
-                <summary className="chat__context-section-title">
-                  原始消息 ({data.messageCount} 条)
-                </summary>
-                <RawMessageList sessionID={sessionID} />
-              </details>
             </>
           ) : (
             <div className="chat__modal-empty">暂无数据</div>
@@ -521,46 +494,4 @@ export const ContextUsageModal: React.FC<{
   );
 };
 
-/** 原始消息折叠列表: 显示 message id + role + part 类型概览 */
-const RawMessageList: React.FC<{ sessionID: string }> = ({ sessionID }) => {
-  const [messages, setMessages] = useState<any[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    const baseUrl = (window as any).__APP_OPENCODE_RUNTIME__?.baseUrl || '';
-    fetch(`${baseUrl}/session/${encodeURIComponent(sessionID)}/message`, {
-      headers: { 'x-opencode-directory': encodeURI(window.__APP_OPENCODE_RUNTIME__?.cwd || '') },
-    })
-      .then((r) => r.ok ? r.json() : null)
-      .then((arr) => { if (!cancelled) setMessages(Array.isArray(arr) ? arr : []); })
-      .catch(() => { if (!cancelled) setMessages([]); });
-    return () => { cancelled = true; };
-  }, [sessionID]);
-  if (!messages) return <div className="chat__context-raw-loading">加载中…</div>;
-  if (messages.length === 0) return <div className="chat__context-raw-empty">无消息</div>;
-  return (
-    <ol className="chat__context-raw-list">
-      {messages.map((m, i) => {
-        const role = m?.info?.role || m?.role || '?';
-        const id = m?.info?.id || m?.id || `?${i}`;
-        const parts = m?.parts || [];
-        const types = Array.from(new Set(parts.map((p: any) => p?.type).filter(Boolean)));
-        const time = m?.info?.time?.created ? new Date(m.info.time.created).toLocaleString() : '';
-        return (
-          <li key={id} className="chat__context-raw-item">
-            <div className="chat__context-raw-head">
-              <span className={`chat__context-raw-role chat__context-raw-role--${role}`}>{role}</span>
-              <span className="chat__context-raw-id">{id.slice(0, 20)}</span>
-              {time && <span className="chat__context-raw-time">{time}</span>}
-            </div>
-            <div className="chat__context-raw-types">
-              {types.map((t: any) => (
-                <span key={String(t)} className="chat__context-raw-type">{String(t)}</span>
-              ))}
-              <span className="chat__context-raw-count">{parts.length} part</span>
-            </div>
-          </li>
-        );
-      })}
-    </ol>
-  );
-};
+

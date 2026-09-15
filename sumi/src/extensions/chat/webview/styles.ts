@@ -683,8 +683,7 @@ export const styles = `
   font-variant-numeric: tabular-nums;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* 耗时行的时间范围部分 (次要信息弱化) */
-.chat__context-detail-val-dim { color: var(--ai-fg-muted); font-size: 11px; }
+
 
 .chat__context-section-title {
   padding: 12px 18px 6px;
