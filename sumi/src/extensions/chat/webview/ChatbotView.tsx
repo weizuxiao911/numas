@@ -771,9 +771,9 @@ export const ChatbotView: React.FC = () => {
           const st = sumMessagesStats(msgs || []);
           tokens += st.input + st.output + st.reasoning;
           cost += st.cost;
+          // 时间口径 (用户要求): 子会话所有消息耗时累计 (每条 time.completed - time.created)
+          durationMs += st.durationMs;
         } catch { /* 单子会话失败不阻断 */ }
-        const t = child.time || {};
-        if (t.created && t.updated && t.updated > t.created) durationMs += t.updated - t.created;
       }
       setSubagentStats({ count: descendants.length, tokens, cost, durationMs });
     } catch { /* ignore */ }
@@ -799,12 +799,12 @@ export const ChatbotView: React.FC = () => {
   }, [rows]);
 
   /** stats bar 汇总: 主会话累计 + 子代理累计 (用户要求开销含 subagent; 区分明细在上下文 modal).
-   *  token = 主/子各消息 input+output+reasoning 累计; 耗时 = 主墙钟 + 各子会话墙钟累加. */
+   *  token = 主/子各消息 input+output+reasoning 累计;
+   *  耗时 = 主/子所有消息处理耗时累计 (每条 time.completed - time.created, 不含空闲等待). */
   const totalStats = useMemo(() => {
     const mainTokens = sessionStats ? sessionStats.input + sessionStats.output + sessionStats.reasoning : 0;
     const mainCost = sessionStats?.cost || 0;
-    const mainDuration = sessionTimes.created > 0 && sessionTimes.updated > sessionTimes.created
-      ? sessionTimes.updated - sessionTimes.created : 0;
+    const mainDuration = sessionStats?.durationMs || 0;
     const subTokens = subagentStats.tokens || 0;
     const subCost = subagentStats.cost || 0;
     const subDuration = subagentStats.durationMs || 0;

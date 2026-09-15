@@ -194,7 +194,8 @@ const MessageRowInner: React.FC<{
   const modelName = (resolveModelName ? resolveModelName(modelID, row.providerID) : '') || modelID;
   const tokenLabel = formatTokens(row.tokens);
   const costLabel = formatCost(row.cost);
-  const metaText = [agentLabel, modelName, duration, tokenLabel, costLabel].filter(Boolean).join(' · ');
+  // 尾部时间戳 (HH:MM) 跟 user 消息 meta 对称 (用户要求: 消息列表 meta 显示消息时间)
+  const metaText = [agentLabel, modelName, duration, tokenLabel, costLabel, fmtClock(row.time?.created)].filter(Boolean).join(' · ');
 
   return (
     <div className="oc-msg is-assistant">

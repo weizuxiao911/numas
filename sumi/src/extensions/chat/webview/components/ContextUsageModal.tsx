@@ -19,7 +19,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 import { onEventType } from '@/service/event/eventBus';
-import { formatCost, formatDurationHMS } from '../helpers';
+import { formatCost, formatDurationHMS, sumMessagesStats } from '../helpers';
 
 interface BreakdownSegment {
   key: 'system' | 'user' | 'assistant' | 'tool' | 'other';
@@ -308,7 +308,8 @@ export const ContextUsageModal: React.FC<{
       const tk = m?.info?.tokens || {};
       mainTokens += (tk.input || 0) + (tk.output || 0) + (tk.reasoning || 0);
     }
-    const mainDuration = time.created > 0 && time.updated > time.created ? time.updated - time.created : 0;
+    // 时间口径 (用户要求): 主会话所有消息耗时累计 (每条 time.completed - time.created)
+    const mainDuration = sumMessagesStats(arr).durationMs;
     setData({
       total, input, output, reasoning, cacheRead, cacheWrite,
       breakdown, userMsgCount, assistantMsgCount,
