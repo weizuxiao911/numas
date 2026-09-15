@@ -691,13 +691,35 @@ export const styles = `
 }
 .chat__context-summary-row {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 8px 18px;
+  padding: 10px 22px;
   border-bottom: 1px solid color-mix(in srgb, var(--ai-fg) 6%, transparent);
   font-size: 12.5px;
 }
 .chat__context-summary-row:last-child { border-bottom: 0; }
 .chat__context-summary-key { color: var(--ai-fg-muted); }
 .chat__context-summary-val { color: var(--ai-fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+/* 可点击的摘要行 (token 明细折叠入口 = 使用率) */
+.chat__context-summary-row--clickable {
+  cursor: pointer;
+  transition: background .12s;
+}
+.chat__context-summary-row--clickable:hover {
+  background: color-mix(in srgb, var(--ai-fg) 5%, transparent);
+}
+.chat__context-summary-row--clickable:focus-visible {
+  outline: 1px solid var(--ai-accent, var(--button-background));
+  outline-offset: -1px;
+}
+/* 折叠指示 chevron (展开时旋转 180°) */
+.chat__context-chevron {
+  margin-left: 6px;
+  color: var(--ai-fg-muted);
+  vertical-align: -2px;
+  transition: transform .18s ease-out;
+}
+.chat__context-chevron.is-open {
+  transform: rotate(180deg);
+}
 
 .chat__context-details {
   display: flex; flex-direction: column;
@@ -709,7 +731,7 @@ export const styles = `
 .chat__context-detail-row {
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 12px;
-  padding: 6px 18px;
+  padding: 8px 22px;
   font-size: 12px;
 }
 .chat__context-detail-key { flex: 0 0 auto; color: var(--ai-fg-muted); }
@@ -723,17 +745,30 @@ export const styles = `
 }
 
 
+/* 分组标题: 字号/字重/颜色跟 modal 标题 (.chat__modal-title "上下文") 一致 */
 .chat__context-section-title {
-  padding: 12px 18px 6px;
-  font-size: 11px; font-weight: 700;
+  padding: 14px 22px 8px;
+  font-size: 14px; font-weight: 600;
+  color: var(--ai-fg);
+  display: flex; align-items: center;
+}
+/* 概念解释 ? 图标 (hover 显示 title tooltip; 区分"上下文"vs"会话统计") */
+.chat__context-help {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; margin-left: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ai-fg) 10%, transparent);
   color: var(--ai-fg-muted);
-  text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 10px; font-weight: 700;
+  cursor: help;
+  vertical-align: middle;
+  user-select: none;
 }
 
 /* 多色进度条: 5 段堆叠 (相对 limit) */
 .chat__context-bar {
   display: flex; align-items: stretch; gap: 1px;
-  height: 6px; margin: 0 18px 8px;
+  height: 6px; margin: 0 22px 10px;
   background: color-mix(in srgb, var(--ai-fg) 8%, transparent);
   border-radius: 999px; overflow: hidden;
 }
@@ -745,7 +780,7 @@ export const styles = `
 .chat__context-bar-seg:hover { filter: brightness(1.15); }
 
 .chat__context-legend {
-  list-style: none; padding: 0 18px 14px; margin: 0;
+  list-style: none; padding: 0 22px 16px; margin: 0;
   display: flex; flex-wrap: wrap; gap: 4px 12px;
   font-size: 11.5px; color: var(--ai-fg-muted);
   font-variant-numeric: tabular-nums;

@@ -272,6 +272,8 @@ export const ContextUsageModal: React.FC<{
   const commandService = useInjectable<CommandService>(CommandService);
   const [data, setData] = useState<ContextUsage | null>(null);
   const [loading, setLoading] = useState(false);
+  /** token 明细折叠/展开 (入口 = 摘要区"使用率"行) */
+  const [showDetails, setShowDetails] = useState(false);
 
   // 实时刷新: 跟官方 app SessionContextTab 同款 (SolidJS store 自动响应), numas React 手动订阅事件
   // numas fork 的 /global/event SSE 已支持: session.updated / message.updated / message.part.updated / session.diff
@@ -368,7 +370,13 @@ export const ContextUsageModal: React.FC<{
         style={{ width: 560 }}
       >
         <div className="chat__modal-header chat__modal-header--page">
-          <div className="chat__modal-title">上下文</div>
+          <div className="chat__modal-title">
+            上下文
+            <span
+              className="chat__context-help"
+              title="当前对话窗口的占用: 最后一次 LLM 调用看到的 token (输入+输出+推理+缓存) 与模型上限之比。反映「窗口还剩多少可用」。注意与底部「会话统计」的区别: 本项是当前快照, 会话统计是多轮累计开销 (每轮 input 都含历史, 故累计值更大)。"
+            >?</span>
+          </div>
         </div>
         <div className="chat__modal-body chat__modal-body--context">
           {loading && !data ? (
@@ -383,84 +391,69 @@ export const ContextUsageModal: React.FC<{
                     {data.limit > 0 ? fmtTok(data.limit) : '—'}
                   </span>
                 </div>
-                <div className="chat__context-summary-row">
+                {/* 总 token = token 明细折叠/展开入口 (点击切换; 默认折叠) */}
+                <div
+                  className="chat__context-summary-row chat__context-summary-row--clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setShowDetails((v) => !v)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDetails((v) => !v); } }}
+                  title={showDetails ? '收起 token 明细' : '展开 token 明细'}
+                >
                   <span className="chat__context-summary-key">总 token</span>
-                  <span className="chat__context-summary-val">{fmtTok(data.total)}</span>
+                  <span className="chat__context-summary-val">
+                    {fmtTok(data.total)}
+                    <svg
+                      className={`chat__context-chevron${showDetails ? ' is-open' : ''}`}
+                      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </span>
                 </div>
+
+                {/* token 明细 (折叠/展开; 紧跟"总 token"行) */}
+                {showDetails && (
+                  <div className="chat__context-details">
+                    <div className="chat__context-detail-row">
+                      <span className="chat__context-detail-key">输入 token</span>
+                      <span className="chat__context-detail-val">{fmtTok(data.input)}</span>
+                    </div>
+                    <div className="chat__context-detail-row">
+                      <span className="chat__context-detail-key">输出 token</span>
+                      <span className="chat__context-detail-val">{fmtTok(data.output)}</span>
+                    </div>
+                    <div className="chat__context-detail-row">
+                      <span className="chat__context-detail-key">推理 token</span>
+                      <span className="chat__context-detail-val">{fmtTok(data.reasoning)}</span>
+                    </div>
+                    <div className="chat__context-detail-row">
+                      <span className="chat__context-detail-key">缓存 token (读/写)</span>
+                      <span className="chat__context-detail-val">{fmtTok(data.cacheRead)} / {fmtTok(data.cacheWrite)}</span>
+                    </div>
+                    <div className="chat__context-detail-row">
+                      <span className="chat__context-detail-key">用户消息</span>
+                      <span className="chat__context-detail-val">{data.userMsgCount}</span>
+                    </div>
+                    <div className="chat__context-detail-row">
+                      <span className="chat__context-detail-key">助手消息</span>
+                      <span className="chat__context-detail-val">{data.assistantMsgCount}</span>
+                    </div>
+                    {data.cost > 0 && (
+                      <div className="chat__context-detail-row">
+                        <span className="chat__context-detail-key">成本</span>
+                        <span className="chat__context-detail-val">{formatCost(data.cost) || '$0.00'}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="chat__context-summary-row">
                   <span className="chat__context-summary-key">使用率</span>
                   <span className="chat__context-summary-val">
                     {data.usage != null ? `${data.usage}%` : '—'}
                   </span>
-                </div>
-              </div>
-
-              {/* token 细分 (input/output/reasoning/cache/消息数) */}
-              <div className="chat__context-details">
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">输入 token</span>
-                  <span className="chat__context-detail-val">{fmtTok(data.input)}</span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">输出 token</span>
-                  <span className="chat__context-detail-val">{fmtTok(data.output)}</span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">推理 token</span>
-                  <span className="chat__context-detail-val">{fmtTok(data.reasoning)}</span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">缓存 token (读/写)</span>
-                  <span className="chat__context-detail-val">{fmtTok(data.cacheRead)} / {fmtTok(data.cacheWrite)}</span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">用户消息</span>
-                  <span className="chat__context-detail-val">{data.userMsgCount}</span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">助手消息</span>
-                  <span className="chat__context-detail-val">{data.assistantMsgCount}</span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">创建时间</span>
-                  <span className="chat__context-detail-val">{fmtTime(data.timeCreated)}</span>
-                </div>
-                <div className="chat__context-detail-row">
-                  <span className="chat__context-detail-key">最后活动</span>
-                  <span className="chat__context-detail-val">{fmtTime(data.timeUpdated)}</span>
-                </div>
-                {data.cost > 0 && (
-                  <div className="chat__context-detail-row">
-                    <span className="chat__context-detail-key">成本</span>
-                    <span className="chat__context-detail-val">{formatCost(data.cost) || '$0.00'}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* 开销分项 (含子代理; 用户要求主/子区分展示): 累计 token + 墙钟 */}
-              <div className="chat__context-section">
-                <div className="chat__context-section-title">开销 (含子代理)</div>
-                <div className="chat__context-details">
-                  <div className="chat__context-detail-row">
-                    <span className="chat__context-detail-key">主会话</span>
-                    <span className="chat__context-detail-val">
-                      {fmtTok(data.mainTokens)} · {fmtHMS(data.mainDuration)}
-                    </span>
-                  </div>
-                  <div className="chat__context-detail-row">
-                    <span className="chat__context-detail-key">
-                      子代理{(subagentStats?.count || 0) > 0 ? ` (${subagentStats!.count})` : ''}
-                    </span>
-                    <span className="chat__context-detail-val">
-                      {fmtTok(subagentStats?.tokens || 0)} · {fmtHMS(subagentStats?.durationMs || 0)}
-                    </span>
-                  </div>
-                  <div className="chat__context-detail-row">
-                    <span className="chat__context-detail-key">合计</span>
-                    <span className="chat__context-detail-val">
-                      {fmtTok(data.mainTokens + (subagentStats?.tokens || 0))} · {fmtHMS(data.mainDuration + (subagentStats?.durationMs || 0))}
-                    </span>
-                  </div>
                 </div>
               </div>
 
@@ -492,6 +485,47 @@ export const ContextUsageModal: React.FC<{
                   </ul>
                 </div>
               )}
+
+              {/* 会话统计 (累计开销, 含子会话; 放最后 — 与上方"上下文"是不同概念, ? 解释) */}
+              <div className="chat__context-section">
+                <div className="chat__context-section-title">
+                  会话统计
+                  <span
+                    className="chat__context-help"
+                    title="整个会话的累计开销 (含子会话): 主/子会话所有 LLM 调用的 token 累加 + 费用。与顶部「上下文」的区别: 上下文 = 当前窗口占用快照 (最后一次调用); 本项 = 多轮调用累计 (每轮 input 都含历史, 故数值更大)。"
+                  >?</span>
+                </div>
+                {/* 用摘要区 item 样式 (跟"上下文限制"同级, 非子 item) */}
+                <div className="chat__context-summary">
+                  <div className="chat__context-summary-row">
+                    <span className="chat__context-summary-key">主会话</span>
+                    <span className="chat__context-summary-val">
+                      {fmtTok(data.mainTokens)} · {fmtHMS(data.mainDuration)}
+                    </span>
+                  </div>
+                  <div className="chat__context-summary-row">
+                    <span className="chat__context-summary-key">子会话</span>
+                    <span className="chat__context-summary-val">
+                      {fmtTok(subagentStats?.tokens || 0)} · {fmtHMS(subagentStats?.durationMs || 0)}
+                    </span>
+                  </div>
+                  <div className="chat__context-summary-row">
+                    <span className="chat__context-summary-key">总成本</span>
+                    <span className="chat__context-summary-val">
+                      {formatCost((data.cost || 0) + (subagentStats?.cost || 0)) || '$0.00'}
+                    </span>
+                  </div>
+                  {/* 创建时间 / 最后活动 (会话级时间信息, 归入会话统计) */}
+                  <div className="chat__context-summary-row">
+                    <span className="chat__context-summary-key">创建时间</span>
+                    <span className="chat__context-summary-val">{fmtTime(data.timeCreated)}</span>
+                  </div>
+                  <div className="chat__context-summary-row">
+                    <span className="chat__context-summary-key">最后活动</span>
+                    <span className="chat__context-summary-val">{fmtTime(data.timeUpdated)}</span>
+                  </div>
+                </div>
+              </div>
 
             </>
           ) : (
