@@ -40,10 +40,18 @@ function getPipeline(): Promise<import('marked').Marked> {
       markedShiki({
         highlight(code: string, lang: string) {
           const language = String(lang || 'text').replace(/[^a-zA-Z0-9#+._-]/g, '') || 'text';
+          // shiki 不支持的语言 (e.g. 'gitignore', 'env', 'dockerignore' 跟文件名同名但不是 shiki 内置 lang)
+          // 会抛 'Language X is not included in this bundle', catch 后降级到 'text' lang 重试.
+          // 不影响其他内置语言; 避免整条 markdown 渲染回退 (MarkdownPreview 会被迫显示 "渲染失败")
           return codeToHtml(code, {
             lang: language,
             themes: { light: 'github-light', dark: 'github-dark' },
-          }).then((html) => (language === 'text' ? html : html.replace('<pre ', `<pre data-lang="${language}" `)));
+          })
+            .then((html) => (language === 'text' ? html : html.replace('<pre ', `<pre data-lang="${language}" `)))
+            .catch(() => codeToHtml(code, {
+              lang: 'text',
+              themes: { light: 'github-light', dark: 'github-dark' },
+            }));
         },
       }),
     );
