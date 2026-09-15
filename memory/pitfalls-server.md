@@ -267,8 +267,14 @@
   - `/api/fs/read/.codeblitz/launch.json` 404
   - chat 工具卡标红 is-error, 文件树空, 资源管理器读不出
 - **根因**: numas 把 opencode server 启动时恢复的"最近项目"直接当 active project, 没校验目录存在性. opencode `~/.config/opencode/opencode.json` 里无该项目记录, 说明残留来自 numas 自家 InstanceStore (项目切换时存的 last directory) 或之前会话的 workspace state. 项目被用户删除/重命名后, 启动时仍加载旧路径, opencode server 把它当 fallback workspace.
-- **解决方案** (待拍板):
-  - 启动时 `fs.stat` 校验当前项目目录存在, 不存在则清空 workspace (走 empty home 页) 或提示用户重选
-  - 或 dev.js `--cwd` 默认值取自 `git rev-parse --show-toplevel` 之类 (工作目录根), 不沿用 opencode 旧 project
-  - 或加「项目不存在提示」组件, 给「切换到其他项目」按钮
-- **排查方法**: console error 出现 `500 /api/fs/watch?directory=...` 或 `404 /api/fs/stat?path=.` + bash 工具 `NotFound: FileSystem.access` → 立即验证 `ls <project-path>` 是否存在. 不存在就是 #72. 验证方法: dev.js 重启前 `find . -name 'lastProject*' -o -name 'workspace.json' 2>/dev/null` 看 state service 持久化的项目路径.
+- **修复方案** (已上, 2026-09): `sumi/src/infra/url.ts:212 resolveBoot()` 加 `GET /api/fs/stat?path=.` 探活 (带 `x-opencode-directory: encodeURI(_workdir)` header), `!res.ok` → `setWorkdir('')` 清空 + 删 localStorage. 与 `resolveFallback()` 并行 (`Promise.all`), 启动开销 ~0. network 错不处理 (server 启不来 ≠ workdir 错).
+- **排查方法**: console error 出现 `500 /api/fs/watch?directory=...` 或 `404 /api/fs/stat?path=.` + bash 工具 `NotFound: FileSystem.access` → 立即验证 `ls <project-path>` 是否存在. 不存在就是 #72. 验证方法: dev.js 重启前 `find . -name 'lastProject*' -o -name 'workspace.json' 2>/dev/null` 看 state service 持久化的项目路径. **回归测试**: playwright `localStorage.setItem('NUMAS_WORKDIR', '<不存在的路径>')` → reload → 验证 `localStorage.getItem('NUMAS_WORKDIR')` 为 `null` + UI 走空态.
+
+#### 73. dev.js `--fast` 跳过 build → 改 sumi 源码后只 kill opencode serve 不生效
+
+- **问题描述**: dev.js 启动时加 `--fast` 跳过 sumi + opencode build, 跑旧 dist. 后续改了 `sumi/src/**/*.tsx` 后, 只 `kill <opencode-pid>` 不会触发新 build, opencode serve 重新 spawn 时仍用旧 dist, 改了的代码看不到.
+- **解决方案**:
+  - 改 sumi 源码后要重启 dev.js (不带 `--fast`), 触发完整 build + 启 opencode serve.
+  - **整个 dev.js 进程组** (dev.js pid + opencode 子进程) 都要 kill (`kill -9 <dev-pid> <opencode-pid>`, 或 dev.js 自身会响应 SIGINT 清理子进程). 只 kill opencode 不会自动重启, dev.js 是单进程不 watch.
+  - 简单: `kill -9 <dev-pid>` + `nohup node dev.js > .tmp/dev-restart.log 2>&1 &` 重启. sumi build 增量 (几秒) + opencode build 增量 (几秒) + opencode serve 启 (0.4s).
+- **排查方法**: 改 sumi 源码后 UI 没变化 → 检查 `lsof -ti :24096` 进程的启动时间 (晚于源码 mtime = 新 build, 早于 = 旧 build). 也可直接 `stat -f "%Sm" sumi/dist/main.*.js | sort -rn` 看 dist 是否新.

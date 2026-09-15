@@ -210,11 +210,22 @@ export function isBootReady(): boolean {
 let _bootReady = false;
 
 /** 启动就绪解析: 消费 URL ?directory= (已在 getWorkdir 首次调用时完成) + 探一次 /path.
- *  /path 的 directory 只作技术兜底, 不成为已选项目. */
+ *  /path 的 directory 只作技术兜底, 不成为已选项目.
+ *  启动探活: 若已选 workdir 在 server 端不存在 (目录被删/重命名残留), 清空 + 删 localStorage.
+ *  探活失败 (network/5xx) 保留 workdir — 短暂不可用不视为路径删除. */
 export function resolveBoot(): Promise<void> {
   return (async () => {
     getWorkdir(); // 触发 URL ?directory= 一次性消费 + localStorage 初始化
-    await resolveFallback();
+    const dir = getWorkdir();
+    const base = appBaseUrl();
+    const probe = (dir && base)
+      ? fetch(`${base.replace(/\/+$/, '')}/api/fs/stat?path=${encodeURIComponent('.')}`, {
+          headers: { 'x-opencode-directory': encodeURI(dir) },
+        }).then((res) => {
+          if (!res.ok) setWorkdir(''); // 路径不存在 → 清空 (触发 workdir:changed → UI 空态)
+        }).catch(() => { /* network 错保留 */ })
+      : Promise.resolve();
+    await Promise.all([resolveFallback(), probe]);
     _bootReady = true;
   })();
 }
