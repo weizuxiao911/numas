@@ -83,10 +83,11 @@ function useCopyNotifier() {
   return { copied, notify };
 }
 
-function fmtClock(ts?: number): string {
+/** 消息 meta 时间: 完整本地化显示 (如 2026/9/15 18:10:31, 跟 modal 创建时间同款) */
+function fmtMsgTime(ts?: number): string {
   if (typeof ts !== 'number') return '';
   const d = new Date(ts < 1e12 ? ts * 1000 : ts);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return d.toLocaleString();
 }
 
 function cap(s: string): string {
@@ -129,7 +130,7 @@ const MessageRowInner: React.FC<{
     const text = rawText.replace(/\n*\[已上传文件\]\n(?:- .*(?:\n|$))*/g, '').trimEnd();
     // 官方用户 meta: "Agent · 模型 · HH:MM" (tail 时间), 整行 hover 浮现
     const modelLabel = (resolveModelName && turnModel ? resolveModelName(turnModel) : '') || turnModel || '';
-    const metaItems = [cap(turnAgent || ''), modelLabel, fmtClock(row.time?.created)].filter(Boolean);
+    const metaItems = [cap(turnAgent || ''), modelLabel, fmtMsgTime(row.time?.created)].filter(Boolean);
     return (
       <div className="oc-msg is-user">
         <div className="oc-msg__user-col">
@@ -194,7 +195,8 @@ const MessageRowInner: React.FC<{
   const modelName = (resolveModelName ? resolveModelName(modelID, row.providerID) : '') || modelID;
   const tokenLabel = formatTokens(row.tokens);
   const costLabel = formatCost(row.cost);
-  const metaText = [agentLabel, modelName, duration, tokenLabel, costLabel].filter(Boolean).join(' · ');
+  // 尾部时间戳 (HH:MM) 跟 user 消息 meta 对称 (用户要求: 消息列表 meta 显示消息时间)
+  const metaText = [agentLabel, modelName, duration, tokenLabel, costLabel, fmtMsgTime(row.time?.created)].filter(Boolean).join(' · ');
 
   return (
     <div className="oc-msg is-assistant">

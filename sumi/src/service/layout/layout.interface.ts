@@ -20,8 +20,8 @@ export interface SidebarState {
   width: number;
 }
 
-/** aside 中间区视图 (asidetopbar 胶囊切换): 查看 | 终端 | 浏览器 ('browser' 暂下线, 内置浏览器重置中) */
-export type AsideView = 'view' | 'terminal' | 'browser';
+/** aside 中间区视图 (asidetopbar 胶囊切换): 文件系统 | 浏览器 ('browser' 暂下线, 内置浏览器重置中) */
+export type AsideView = 'view' | 'browser';
 
 export interface AsideState {
   /** 当前是否打开 */

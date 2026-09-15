@@ -34,30 +34,35 @@ export const AsideTopbar: React.FC = () => {
     setExplorerCollapsed(s.aside.explorerCollapsed);
   }), [layout]);
 
-  /** 确保终端实例存在 (无则新建; 有则聚焦) — 终端全关后重开也走这里 */
+  /** 确保终端实例存在 (无则新建; 有则聚焦). 只在用户进入查看视图时调用 —
+   *  用户主动关闭全部终端后保持关闭, 不自动重建 (与 IDE 行为一致). */
   const ensureTerminal = () => {
     const t = terminals as any;
     const size = t?.clients?.size ?? 0;
     if (size === 0) {
       try {
-        void (t?.createTerminal ? t.createTerminal({}) : commandService.executeCommand('terminal.add'));
+        t?.createTerminal ? t.createTerminal({}) : commandService.executeCommand('terminal.add');
       } catch { /* ignore */ }
       return;
     }
     try { t?.activeClient?.focus?.(); } catch { /* ignore */ }
   };
 
-  // 终端已并入「查看」视图底部 (SoloLayout 内常驻渲染 bottom slot).
-  // 这里确保存在终端实例 + 保活 (全关自动重建), 保证随时有终端可用.
+  // 终端已并入「查看」视图底部 (SoloLayout 内渲染 bottom slot).
+  // 首次进入查看视图 (含冷启动默认 view) 时确保存在终端实例;
+  // 等 terminals.ready (恢复完成后) 再判断, 避免恢复窗口期误建.
   useEffect(() => {
-    if (view === 'browser') return;
-    ensureTerminal();
-    // 保活: 终端全部关闭 → 自动重建 (确保随时有终端可用)
-    const timer = setInterval(() => {
-      const t = terminals as any;
-      if ((t?.clients?.size ?? 0) === 0) ensureTerminal();
-    }, 1500);
-    return () => clearInterval(timer);
+    if (view !== 'view') return;
+    const t = terminals as any;
+    const readyP = t?.ready?.promise;
+    const start = () => ensureTerminal();
+    if (readyP) {
+      readyP.then(start).catch(start);
+    } else {
+      // ready 不可得 (类型兜底): 延迟到恢复窗口后再建, 避免与恢复竞争
+      const t0 = window.setTimeout(start, 3000);
+      return () => window.clearTimeout(t0);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, terminals, commandService]);
 

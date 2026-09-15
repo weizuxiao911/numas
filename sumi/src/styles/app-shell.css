@@ -147,7 +147,7 @@
   position: relative;
 }
 .app-solo__aside-sidebar {
-  flex: 0 0 280px; width: 280px; min-width: 0;
+  flex: 0 0 268px; width: 268px; min-width: 0;
   display: flex; flex-direction: column;
   /* 右缘分隔线由拖拽条 (.app-solo__aside-resizer--inner) 的 ::before 提供, 不再用 border */
 }
@@ -167,6 +167,12 @@
   display: inline-block !important;
 }
 .app-solo__aside-container { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+/* 浏览器视图常驻渲染 wrapper: 铺满 middle (position:absolute 的包含块), 显隐由 style.display 控制 */
+.app-solo__aside-browser {
+  position: absolute; inset: 0;
+  overflow: hidden;
+}
+.app-solo__aside-browser .app-browser { position: absolute; inset: 0; }
 /* 终端模式: 隐藏底部模块 tab 条 (仅终端一个模块, 冗余; 保留终端面板自身 zsh 标题栏) */
 .app-solo__aside-container .bottom-slot .next_bottom_bar { display: none; }
 /* 查看模式: 隐藏编辑器 tab 栏右侧 actions 区 (design 主题下 .kt-icon::before 被全局 display:none,
@@ -231,6 +237,65 @@
 }
 .app-boot__text { opacity: 0.8; letter-spacing: 0.02em; }
 @keyframes app-boot-spin { to { transform: rotate(360deg); } }
+
+/* ===== opencode 挂了 → codeblitz 全局 loading 覆盖 (整页锁定, 阻止一切操作) ===== */
+.app-global-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 99999; /* 盖过 codeblitz 全部 UI (弹层 z-index 均 < 10w) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--editor-background, #fff) 82%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  cursor: wait;
+  user-select: none;
+}
+.app-global-loading__box {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  background: var(--app-panel-bg, var(--editorWidget-background, #fff));
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  color: var(--editor-foreground, #1f2328);
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  font-size: 13px;
+}
+/* 文字流光 (shimmer) */
+.app-global-loading__text {
+  background: linear-gradient(
+    90deg,
+    var(--descriptionForeground, #8f8f8f) 0%,
+    var(--descriptionForeground, #8f8f8f) 40%,
+    var(--editor-foreground, #1f2328) 50%,
+    var(--descriptionForeground, #8f8f8f) 60%,
+    var(--descriptionForeground, #8f8f8f) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: app-global-shimmer 1.8s linear infinite;
+}
+@keyframes app-global-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+/* 省略号循环: '' → '.' → '..' → '...' */
+.app-global-loading__dots::after {
+  content: '';
+  animation: app-global-dots 1.4s steps(4, end) infinite;
+}
+@keyframes app-global-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
 
 /* ===== 全局隐藏滚动条 (保留滚动能力) ===== */
 * {

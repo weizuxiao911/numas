@@ -79,3 +79,19 @@
 - **根因**: vsix 内 `dist/webview.js` 以同版本 URL 提供, 浏览器按缓存策略命中旧文件; 页面刷新只重载拓展壳, 不保证重新拉取 webview bundle.
 - **解决方案**: 每次重打包后 **bump 版本** (`package.json` version +1) 再 package, 新版本 URL 天然破缓存; 验证时确认 market metadata 已显示新版本 (如 `pdf: ['0.1.3']`). 参考 #11 (镜像没重建的"改了没修复"假象) 同类问题.
 - **排查方法**: 「代码改了、构建成功、刷新后行为没变」→ 先查 market metadata 版本号与当前 vsix 文件是否一致; 再在页面 console 找旧逻辑的日志/错误路径佐证.
+
+#### 70. 外部 --registry 双源带不适配浏览器环境的扩展 → 页面崩溃假象 (错误代码 5 / webview 激活失败)
+
+- **问题描述**: dev.js 默认指向外部市场 (gateway-test) + 内置 /extensions 双源时, 页面加载/操作报 `process is not defined`、`instanceof` 契约 TypeError、`Tab close updated received for index 0 which does not exist`, 或浏览器「错误代码: 5」连接中断; server health 200 但 CPU 瞬时飙高 (前端持续拉扩展 + 端口扫描).
+- **根因**: 外部市场里的扩展面向**桌面 Node 环境**, 在浏览器 webview (worker-host) 加载不适配 — yunyan.* 系列直接用 Node `process` 激活即挂, show-docx 等契约与 codeblitz 浏览器宿主不符抛未捕获异常 → 前端连带 tab 竞态报错, 表现成"崩溃".
+- **解决方案**: 默认**单源内置** (`--registry /extensions` + `--extensions-dir registry/vsix`), 外部市场需自行筛选浏览器兼容扩展再用 `--registry <url>` 显式接入; 排查时对比 `GET <registry>/metadata.json` 与内置 vsix 列表, 外部源多出的 publisher (如 yunyan/showdocx) 即疑点.
+- **排查方法**: 页面报错先看 console 错误来自哪个扩展 (`worker-host.js ... failed to activate <publisher>.<name>`); 再查该扩展是否来自外部市场 metadata; 单源后对比扩展列表确认不兼容项消失.
+- **2026-09 复测 (dev.js 默认双源 gateway-test)**: 页面不再硬崩 (renderer 存活, heap 正常, 双源合并 10 条 / 同拓展取最新正常), 但 `yunyan.yunyan-vscode-text-editor` 激活报 `command 'sumi-edu.login.get-session' not found` 并重复刷错误日志; 外部扩展在浏览器宿主下仍不完全可用, 使用双源默认时需接受这些报错或筛选源内容.
+
+#### 76. 同拓展多版本共存: 前端按 name 去重先到先得 → 旧版本生效 (非最新)
+
+- **问题描述**: registry/vsix 同时存在同拓展多版本 (docx 1.2.4+1.2.5, pdf 0.1.5+0.1.6), 页面实际加载旧版 (实测 pdf 0.1.5), 新打包的 0.1.6 不生效; 内置 `metadata.json` 同时返回两个版本 (无排序保证).
+- **根因**: 服务端内置控制器 (`extensions-route.ts`) 目录里每个 .vsix 都进 metadata, 无排序/无版本比较; 前端多源合并 (`extension.service.ts` `listMetadata`) 只按 `extension.name` 去重, 先到先得 → 生效版本取决于 metadata 条目顺序 (服务端扫描枚举顺序, 与本机 Node readdir 顺序都不同, 不可依赖).
+- **解决方案 (2026-09 修)**: sumi `listMetadata` 去重改为「同 name 只保留版本号最大者」— `compareVersion` 数值段逐级比较 (1.2.10 > 1.2.9, 缺位补 0), 版本相同保留靠前源 (内置 /extensions 优先); `sourceByExtId` 来源记录跟随胜出版本.
+- **验证**: `window.__APP_REGISTRY_METADATA__` 每 name 仅 1 条且为最新; 网络里扩展宿主加载 `/extensions/numas.pdf-0.1.6/dist/extension.js`.
+- **排查方法**: 页面跑的扩展版本与 vsix 目录最新版不一致 → 先查 `GET /extensions/metadata.json` 是否多版本共存, 再看前端去重是否比较版本.

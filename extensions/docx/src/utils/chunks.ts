@@ -1,4 +1,4 @@
-export const DEFAULT_CHUNK_SIZE = 1024 * 1024;
+export const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
 
 export function splitIntoChunks(
   data: Uint8Array,

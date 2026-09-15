@@ -32,7 +32,7 @@ const SIDEBAR_DEFAULT_W = 300;
 
 /** 布局状态持久化 key (全量: sidebar 折叠/宽 + aside 开合/宽/视图/explorer 折叠 + 手动宽度标记) */
 const STORAGE_KEY = 'NUMAS_SOLO_LAYOUT_V1';
-const VALID_VIEWS: AsideView[] = ['view', 'terminal', 'browser'];
+const VALID_VIEWS: AsideView[] = ['view', 'browser'];
 
 function viewportRatioWidth(ratio: number = ASIDE_RATIO): number {
   return Math.round(window.innerWidth * ratio);
@@ -190,7 +190,7 @@ export class LayoutServiceImpl implements ILayoutService {
     this.emit();
   }
 
-  /** 切换 aside 中间区视图 (查看 | 终端 | 浏览器) */
+  /** 切换 aside 中间区视图 (文件系统 | 浏览器) */
   setAsideView(view: AsideView): void {
     if (this._state.aside.view === view) return;
     this._state.aside = { ...this._state.aside, view };

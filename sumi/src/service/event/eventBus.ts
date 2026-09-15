@@ -35,8 +35,35 @@ export interface NormalizedEvent {
 type Listener = (ev: NormalizedEvent) => void;
 type Unsub = () => void;
 
+/** SSE 连接状态: connecting=建连中, open=已连通, error=断开重连中(浏览器自动), closed=已关闭(需手动重建) */
+export type BusStatus = 'connecting' | 'open' | 'error' | 'closed';
+let _status: BusStatus = 'closed';
+const statusListeners = new Set<(s: BusStatus) => void>();
+
+function setStatus(s: BusStatus): void {
+  if (_status === s) return;
+  _status = s;
+  statusListeners.forEach((l) => {
+    try { l(s); } catch { /* ignore */ }
+  });
+}
+
+/** 当前 SSE 连接状态 */
+export function getBusStatus(): BusStatus {
+  return _status;
+}
+
+/** 订阅 SSE 连接状态 (opencode 挂/断线恢复的 UI 反馈用); 立即回调当前值. */
+export function subscribeBusStatus(cb: (s: BusStatus) => void): Unsub {
+  statusListeners.add(cb);
+  try { cb(_status); } catch { /* ignore */ }
+  return () => { statusListeners.delete(cb); };
+}
+
 const listeners = new Set<Listener>();
 let es: EventSource | null = null;
+/** 手动重连定时器 (EventSource CLOSED 后浏览器不再自动重连, 需自己重建) */
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 归一化一帧 SSE 数据; 无效帧返回 null. */
 function normalize(msgData: string): NormalizedEvent | null {
@@ -66,11 +93,14 @@ function normalize(msgData: string): NormalizedEvent | null {
 function connect(): void {
   if (es) return;
   const base = appBaseUrl();
-  if (!base) return; // opencode 未起; 下次订阅时再尝试建连
+  if (!base) { setStatus('closed'); return; } // opencode 未起; 下次订阅时再尝试建连
+  setStatus('connecting');
   try {
     const source = new EventSource(secureUrl(`${base.replace(/\/+$/, '')}/global/event`), { withCredentials: false });
     es = source;
+    source.onopen = () => setStatus('open');
     source.onmessage = (msg) => {
+      setStatus('open'); // 收到帧 = 连接活跃 (防御性: onopen 偶发缺失)
       const ev = normalize(msg.data);
       if (!ev) return;
       listeners.forEach((l) => {
@@ -81,12 +111,32 @@ function connect(): void {
         }
       });
     };
-    // 浏览器自动重连, 不手写重连定时器
-    source.onerror = () => {};
+    source.onerror = () => {
+      // readyState: 0=CONNECTING (浏览器自动重连中), 2=CLOSED (不再自动重连, 需手动重建)
+      if (source.readyState === EventSource.CLOSED) {
+        setStatus('closed');
+        es = null;
+        scheduleReconnect();
+      } else {
+        setStatus('error'); // 浏览器自动重连中
+      }
+    };
   } catch (e) {
     console.warn('[eventBus] SSE start failed:', e);
     es = null;
+    setStatus('closed');
+    scheduleReconnect();
   }
+}
+
+/** EventSource CLOSED 后浏览器不再自动重连 → 2s 后手动重建 (仍有订阅者时). */
+function scheduleReconnect(): void {
+  if (reconnectTimer) return;
+  if (listeners.size === 0) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (listeners.size > 0 && !es) connect();
+  }, 2000);
 }
 
 /** 引用计数 -1; 归 0 时关闭 SSE. */
@@ -94,6 +144,8 @@ function disconnect(): void {
   if (listeners.size > 0) return;
   try { es?.close(); } catch { /* ignore */ }
   es = null;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  setStatus('closed');
 }
 
 /** 全量订阅: 每一帧都回调. */

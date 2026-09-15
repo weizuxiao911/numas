@@ -6,7 +6,7 @@ import '@codeblitzjs/ide-core/bundle/codeblitz.css';
 import '@codeblitzjs/ide-core/languages';
 
 import { getBuiltinModules } from './config/modules';
-import { isBootReady, resolveBoot } from './infra/url';
+import { appBaseUrl, isBootReady, resolveBoot } from './infra/url';
 import { preferences } from './config/preferences';
 import { getPreloadedMetadata, preloadExtensionMetadata } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
@@ -61,7 +61,9 @@ const layout = {
   [SlotLocation.extra]: { modules: [] },
 };
 
-/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开左列/中列各段 */
+/** SOLO 模式 — 自定义 slot (config/slots.ts), panels 冷启动展开左列/中列各段.
+ *  bottom 不强制激活: 终端面板开合/关闭/刷新状态全交给框架 layoutState 持久化,
+ *  与 IDE 模式行为一致 (用户关闭终端 tab 后刷新不复活). */
 const SOLO_MODE = {
   layout,
   panels: {
@@ -130,6 +132,26 @@ export const App: React.FC = () => {
     return () => { alive = false; };
   }, [wsReady]);
 
+  // opencode server 健康探测 (5s): 挂了 → codeblitz 全局 loading 覆盖 (阻止一切操作);
+  // 恢复 → 自动解除 (不需要 reload; 各组件按需自行重拉).
+  const [opencodeDown, setOpencodeDown] = React.useState(false);
+  React.useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      const base = appBaseUrl();
+      if (!base) return;
+      try {
+        const r = await fetch(`${base}/health`, { method: 'GET', cache: 'no-store' });
+        if (!cancelled) setOpencodeDown(!r.ok);
+      } catch {
+        if (!cancelled) setOpencodeDown(true);
+      }
+    };
+    const t = window.setInterval(check, 5000);
+    check();
+    return () => { cancelled = true; window.clearInterval(t); };
+  }, []);
+
   const cfg = MODES[mode];
   const Layout = LAYOUTS[mode];
 
@@ -142,7 +164,7 @@ export const App: React.FC = () => {
     // 未配置时 main-layout 的 panel.view 兜底 panelSize=335 → left 总宽 = 335+48 = 383.
     // 拖拽下限在 IdeLayout.tsx 的 SlotRenderer minResize.
     panelSizes: {
-      [SlotLocation.left]: 278,   // explorer
+      [SlotLocation.left]: 268,   // explorer
       [SlotLocation.right]: 498,  // AI 对话 (自绘右栏, 见 IdeLayout .app-ide__right)
     },
     componentCDNType: 'jsdelivr',
@@ -186,14 +208,28 @@ export const App: React.FC = () => {
   }
 
   return (
-    <AppRenderer
-      // key=mode: 模式切换时卸载旧 ClientApp (cleanup → app.destroy()) 并重建 —
-      // createApp 只在挂载时执行一次, 换 key 才能让新 mode 的 layoutComponent/layoutConfig
-      // 生效, 无需整页 reload.
-      key={mode}
-      appConfig={appConfig}
-      runtimeConfig={(runtimeConfig ?? {}) as any}
-      onLoad={verifyExtensionOnLoad}
-    />
+    <>
+      <AppRenderer
+        // key=mode: 模式切换时卸载旧 ClientApp (cleanup → app.destroy()) 并重建 —
+        // createApp 只在挂载时执行一次, 换 key 才能让新 mode 的 layoutComponent/layoutConfig
+        // 生效, 无需整页 reload.
+        key={mode}
+        appConfig={appConfig}
+        runtimeConfig={(runtimeConfig ?? {}) as any}
+        onLoad={verifyExtensionOnLoad}
+      />
+      {/* opencode 挂了 → codeblitz 全局 loading 覆盖 (整页锁定, 阻止一切操作; health 恢复后自动解除) */}
+      {opencodeDown && (
+        <div className="app-global-loading" role="status" aria-live="polite">
+          <div className="app-global-loading__box">
+            <div className="app-boot__spinner" aria-hidden />
+            <div className="app-global-loading__text">
+              连接中断, 正在重连
+              <span className="app-global-loading__dots" aria-hidden="true" />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

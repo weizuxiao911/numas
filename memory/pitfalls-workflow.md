@@ -47,3 +47,10 @@
 - **问题描述**: 改动后一直在 opencode 服务端口 (如 :24096, `--web-ui sumi/dist` 读磁盘旧产物) 的页面测试, 看不到 webpack dev (:7788 HMR) 的新 UI, 误判「改了没生效」; 还反复重启 24096 / 重编 7788, 打断用户环境.
 - **根因**: 双进程分工 — webpack dev (:7788) 提供最新 HMR UI, opencode (:24096) 提供后台 API/vsix 市场; 24096 的 `sumi/dist` 是磁盘静态产物, 不随 HMR 更新.
 - **解决方案**: 浏览器测试/验收统一走 **:7788** (新 UI, 自动 proxy API 到 :24096); :24096 后台常驻勿重启 (vsix 更新只需页面刷新重载拓展); 不要手动重编 7788. 用户明确说过: 「24096 后台运行, 7788 HMR 都不要重新 build 运行, 刷新重载拓展就行」.
+
+#### 68. Playwright `page.route()` 拦截污染后续测试: reload 不清, 消息被静默回滚
+
+- **问题描述**: 测 optimistic 失败回滚时用 `page.route('**/prompt_async*', route => route.fulfill({ status: 500 }))` 模拟发送失败. 测试完**未 unroute**, 后续验证「发消息后用户消息显示」时全部被拦截回滚 (rows 空, welcomeVisible: true), 误判为「虚拟列表 bug / 消息不显示」, 浪费排查时间.
+- **根因**: `page.route()` 注册的拦截在 **page 生命周期内持续生效** (reload 不清理); 拦截返回 500 → 前端 optimistic 回滚 (符合预期) → 表现为「消息没显示」.
+- **解决方案**: 用 `page.route()` 做模拟后**必须** `await page.unrouteAll({ behavior: 'ignoreErrors' })` 清理 (测试完/切场景时). 排查「消息不显示/请求异常」时先检查是否有遗留 route 拦截 (`browser_network_requests` 看请求是否真发出 + console 看 500 错误).
+- **排查方法**: 请求行为诡异 (静默失败/固定 500) → 检查 playwright 是否有 active route; `run_code_unsafe` 里 `page.unrouteAll()` 清理后重测.

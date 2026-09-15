@@ -40,10 +40,18 @@ function getPipeline(): Promise<import('marked').Marked> {
       markedShiki({
         highlight(code: string, lang: string) {
           const language = String(lang || 'text').replace(/[^a-zA-Z0-9#+._-]/g, '') || 'text';
+          // shiki 不支持的语言 (e.g. 'gitignore', 'env', 'dockerignore' 跟文件名同名但不是 shiki 内置 lang)
+          // 会抛 'Language X is not included in this bundle', catch 后降级到 'text' lang 重试.
+          // 不影响其他内置语言; 避免整条 markdown 渲染回退 (MarkdownPreview 会被迫显示 "渲染失败")
           return codeToHtml(code, {
             lang: language,
             themes: { light: 'github-light', dark: 'github-dark' },
-          }).then((html) => (language === 'text' ? html : html.replace('<pre ', `<pre data-lang="${language}" `)));
+          })
+            .then((html) => (language === 'text' ? html : html.replace('<pre ', `<pre data-lang="${language}" `)))
+            .catch(() => codeToHtml(code, {
+              lang: 'text',
+              themes: { light: 'github-light', dark: 'github-dark' },
+            }));
         },
       }),
     );
@@ -72,7 +80,14 @@ export async function renderMermaidBlocks(container: HTMLElement, dark: boolean)
     for (const pre of blocks) pre.textContent = `mermaid 加载失败: ${e?.message || e}`;
     return;
   }
-  mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: dark ? 'dark' : 'default' });
+  // suppressErrorRendering: 语法解析失败时清理 mermaid 临时容器 + 抛错 (否则 mermaid 会
+  // 在 body 残留 id="dmd-<id>" 的错误图 DOM → 破坏整个页面布局; 见 mermaid renderDiagram 源码).
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'loose',
+    suppressErrorRendering: true,
+    theme: dark ? 'dark' : 'default',
+  });
   for (const pre of blocks) {
     const src = pre.textContent || '';
     if (!src.trim()) continue;
@@ -83,6 +98,12 @@ export async function renderMermaidBlocks(container: HTMLElement, dark: boolean)
       holder.innerHTML = svg;
     } catch (e: any) {
       holder.innerHTML = `<pre class="md-preview__mermaid-error">mermaid 渲染失败: ${escapeHtml(String(e?.message || e))}</pre>`;
+      // 防御性兜底: 清理 mermaid 可能残留的临时容器 (id 以 dmd- 开头, 挂在 body 上)
+      try {
+        document.querySelectorAll('[id^="dmd-"]').forEach((el) => {
+          if (!holder.contains(el)) el.remove();
+        });
+      } catch { /* ignore */ }
     }
     pre.replaceWith(holder);
   }

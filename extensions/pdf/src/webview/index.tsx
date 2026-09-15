@@ -65,16 +65,27 @@ if (typeof document !== 'undefined' && !document.getElementById('pdf-anno-styles
   document.head.appendChild(annoStyleEl);
 }
 
-/* ===== pdf.js 加载 (module script → window.pdfjsLib; worker 走 blob 规避跨域) ===== */
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.type = 'module';
-    s.src = src;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error(`script load fail: ${src}`));
-    document.head.appendChild(s);
-  });
+/* ===== pdf.js 加载 =====
+ * 网关市场静态资源 Content-Type 是 application/octet-stream, 浏览器对
+ * <script type="module"> 有严格 MIME 校验 (需 text/javascript) → 直连必 "script load fail".
+ * 主库/worker 统一走 fetch → Blob → objectURL 加载, 不依赖网关 MIME 类型. */
+function loadScriptViaBlob(src: string): Promise<void> {
+  return fetch(src)
+    .then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${src}`);
+      return r.arrayBuffer();
+    })
+    .then((buf) => {
+      const blobUrl = URL.createObjectURL(new Blob([buf], { type: 'text/javascript' }));
+      return new Promise<void>((resolve, reject) => {
+        const s = document.createElement('script');
+        s.type = 'module';
+        s.src = blobUrl;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error(`script load fail: ${src}`));
+        document.head.appendChild(s);
+      });
+    });
 }
 
 let pdfjsPromise: Promise<any> | null = null;
@@ -82,7 +93,7 @@ function loadPdfJs(): Promise<any> {
   if (pdfjsPromise) return pdfjsPromise;
   pdfjsPromise = (async () => {
     const w = window as any;
-    if (!w.pdfjsLib) await loadScript(`${PDFJS_BASE}/pdf.min.mjs`);
+    if (!w.pdfjsLib) await loadScriptViaBlob(`${PDFJS_BASE}/pdf.min.mjs`);
     if (!w.pdfjsLib) throw new Error(`pdf.js 主库加载失败: ${PDFJS_BASE}/pdf.min.mjs`);
     if (!w.pdfjsLib.GlobalWorkerOptions.workerSrc) {
       const r = await fetch(`${PDFJS_BASE}/pdf.worker.min.mjs`);

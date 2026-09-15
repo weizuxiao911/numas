@@ -268,3 +268,72 @@
 
 - **问题描述**: 标注蒙层放滚动容器外层用视口坐标定位, 滚动时 rAF 节流重绘追不上, 视觉上蒙层「漂移」.
 - **解决方案**: 覆盖层直接作为**滚动内容元素的子元素** (页 div 内), 坐标用**页内百分比** (`left: x*100%` 等) — 与内容同一坐标系, 滚动/缩放天然跟随, 零坐标换算零漂移. 交互命中判定仍用 `getBoundingClientRect` (视觉坐标) + 归一化, 与存储格式一致.
+
+#### 75. SplitPanel `PanelContext.hidePanel` 每次渲染换新闭包 → 放进 effect deps 变无限重渲染 (renderer OOM crash)
+
+- **现象**: 打开 SOLO 工作台 60-90 秒后整页 crash (页面变 about:blank / "Aw Snap"); heap 以 ~60MB/s 线性涨到 ~3.5GB; 与打开的 tab 内容无关 (关掉 PDF tab 也涨); 伴随 ce-patch `__paperTryMount/__paperHide` 每 ~8ms 刷屏 (下游症状).
+- **根因**: `AsideExplorer` (`SoloLayout.tsx`) 的 `useEffect(() => hidePanel(!collapsed), [collapsed, hidePanel])`. SplitPanel 每次渲染都重建 PanelContext value — `hidePanel: hidePanelHandle(index)` 是新闭包 (`split-panel.js:151`); 且 `hidePanel` 内部无条件 `setHides(新数组)` (值没变也是新引用) → effect 每次渲染后重跑 → setState → 再渲染 → 无限循环; 循环里 `fireResizeEvent` 又触发编辑器事件风暴 → ce-patch 反复 mount/hide webview, 放大分配.
+- **复现路径**: 任意工作区打开 SOLO 布局 (aside 常驻渲染, 不受折叠影响) → 必崩; CDP `Performance.getMetrics` 看 `JSHeapUsedSize` 线性上涨, `HeapProfiler` 采样分配栈全在 `SplitPanel/ResizeHandleHorizontal` 的 React 渲染路径.
+- **解决方案**: 用 ref 持最新 hidePanel, effect 只依赖业务状态:
+  ```tsx
+  const hidePanelRef = React.useRef(hidePanel);
+  React.useEffect(() => { hidePanelRef.current = hidePanel; });
+  React.useEffect(() => { hidePanelRef.current(!collapsed); }, [collapsed]);
+  ```
+  验证: 修复后 heap 稳定在 ~150-190MB (60s+), 不再崩; 临时对照实验可只改编译产物 (dist) 的 deps 数组快速验证.
+- **排查方法**: 页面 OOM 先用 HeapProfiler 采样分配栈定位「哪个组件在循环渲染」; 再查该组件 effect deps 是否含「每次渲染都换新」的值 (context value/内联闭包); 上游框架 context value 不可 memo 时一律用 ref 隔离. 注意上游 `resizeDelegates.current.push(delegate)` (`resize.js`) 也是每渲染泄一个 delegate, 循环存在时是助燃剂.
+
+#### 77. textarea 对 Option(Alt)+Enter 无默认换行行为 (Shift+Enter 有)
+
+- **问题描述**: 给聊天输入框加「Option/Shift+Enter 换行」时, 只把 Enter 发送分支加上 `!e.altKey` 放行默认行为 — Shift+Enter 换行生效, Alt+Enter 无任何反应 (不换行也不发送).
+- **根因**: 浏览器 (Chrome) 对 textarea 的 Enter 默认动作只覆盖无修饰/Shift 组合; `Alt+Enter` 无默认插入换行行为, 不拦截也等于丢弃按键.
+- **解决方案**: Alt+Enter 需**手动插换行** — `e.preventDefault()` 后在光标处插 `\n` (`input.slice(0,start) + '\n' + input.slice(end)`), setInput 后 rAF 里 `setSelectionRange(start+1, start+1)` 恢复光标 (受控 textarea); Shift+Enter 保持放行默认即可.
+- **验证**: Playwright 在输入框按 `Alt+Enter` / `Shift+Enter` 后断言 `inputValue()` 含 `\n`.
+- **适用**: 任何「Enter 发送 + 多行输入」的聊天框 (macOS Option 即 Alt).
+
+#### 78. 模块顶层 `const` 工具函数遇循环引用 → `ReferenceError: xxx is not defined` (TDZ)
+
+- **问题描述**: `ContextUsageModal.tsx` 顶层 `const fmtTime = (ts) => ...` + 组件内使用; 运行时报 `ReferenceError: fmtTime is not defined` (页面加载时, 非点击时). 同文件 `const fmtTok` 同类.
+- **根因**: webpack 模块图存在循环引用时, 模块 A 的代码可能在模块 B 初始化完成前执行 → 顶层 `const` 处于 **TDZ (暂时性死区)** → 引用抛 ReferenceError. `function` 声明有提升 (hoisting) 不受影响.
+- **解决方案**: 模块顶层**工具函数一律用 `function` 声明** (不用 `const xxx = () =>`). 已改 `fmtTime`/`fmtTok` 为 function.
+- **排查方法**: `ReferenceError: xxx is not defined` 但文件内明明有定义 → 检查定义方式 (const arrow vs function declaration) + 是否有循环引用. `grep -rn "import.*<当前文件>"` 找循环.
+- **适用**: 所有跨模块引用的工具函数 (helpers / format 函数).
+
+#### 79. 重构时误删 state 声明 → 组件整体崩溃 (白屏/不渲染)
+
+- **问题描述**: 调整 `ChatbotView.tsx` 的 `configLoaded` state 位置时误删 `const [configLoaded, setConfigLoaded] = useState(false)` 声明, 只留使用点 (`setConfigLoaded(true)` / `if (configLoaded)`) → 运行时 `ReferenceError: configLoaded is not defined` → **整个 chat 组件不渲染** (hasChat: false), 全局 loading 因等不到就绪而卡死.
+- **根因**: 移动/清理代码时只删了声明没删使用 (或反之); React 组件 render 抛错 → 子树卸载.
+- **解决方案**: 重构后 `grep -n "<变量名>" <文件>` 确认声明与使用配对; 组件崩溃优先看 console 的 ReferenceError.
+- **排查方法**: 页面某区域整块不渲染 + console 有 ReferenceError → 查该组件依赖的变量声明是否完整.
+
+#### 80. macOS 截图粘贴进 chat 输入框重复 (剪贴板同图多格式 png + tiff)
+
+- **现象**: macOS 截图 (Cmd+Shift+4) 后粘贴到 chat 输入框, 一次粘贴出现两个附件 (`image.png` + `image.tiff`, 同一张图).
+- **根因**: macOS 截图进剪贴板时同一张图以**两种格式**存在 (public.png + public.tiff) → 浏览器 `clipboardData.items` 含**两个 `kind:'file'` 项** → `onPaste` (ChatbotView.tsx) 逐个 `getAsFile()` 上传 → 两张重复附件. 代码无"同图多格式"去重逻辑.
+- **解决方案 (已修)**: paste 同步阶段检测 `fileItems.some(it => it.type === 'image/png')` → 有 png 则 `filter(it => it.type !== 'image/tiff')` 丢掉 tiff; 多张不同图 (都 png) 不受影响.
+- **复现/验证**: Playwright 构造 `new DataTransfer()` + 加 png/tiff 两个 File → `textarea.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt }))` → 断言附件名 (修前 png+tiff 两个, 修后仅 png); 再用两张不同 png 验证不误伤 (仍两个).
+- **适用**: 任何接收剪贴板文件粘贴的输入框 (macOS 截图/复制的图片都会带 png+tiff 双格式).
+
+#### 81. 发送带图消息后消息列表 1 图变 2 图 (本地乐观 part 与 server part 合并未去重)
+
+- **现象**: 粘贴截图发送后, user 消息气泡里同一张图渲染两次 (2 个 `oc-att__img` 同 dataUrl); **刷新页面后恢复正常** (server 数据只有 1 个 file part).
+- **根因**: `ChatbotView.tsx` `message.part.updated` 处理里, 本地乐观 part (无 id) 与 server part 的匹配规则是 `!p.id && p.type === part.type && part.text != null && p.text === part.text` — **只比对 text**. file part **没有 text 字段** → 规则失效 → 走 `[...parts, part]` 追加 → 本地 1 个 + server 1 个 = 2 个. text part 因有 text 可比不重复.
+- **解决方案 (最终)**: **url 匹配不可用** — server 端会对 dataUrl **重编码** (实测同一张 3.6MB 截图: 本地乐观 423010 字符 vs server 返回 430546 字符, 内容不同) → url 永不相等. 正解: 本地乐观 file part 打 **`__local: true`** 标记 (只加在 `localParts`, 不发给 server) → `message.part.updated` 匹配规则改为 `(part.type === 'file' && (p.__local === true || (!!p.url && p.url === part.url)))` → 无标记的 server file part 替换带标记的本地占位.
+- **复现/验证**: ① paste (png+tiff) → Enter 发送 → 数 `.oc-msg.is-user` 里 `img` 数量; ② **必须用大图** (canvas 生成 1200x900 噪点 PNG ~3.6MB) — 小图 server 可能不重编码/恰好相等, 复现不出 (首次小图测试 1 图, 误以为已修); ③ 对比两个 img 的 `src.length` 是否不同 (不同 = server 重编码, url 匹配方案失效); ④ reload 页面验证历史消息渲染 (server 数据本就 1 part).
+- **适用**: 任何「本地乐观行 + server 事件流合并」的渲染 — 乐观 part 与 server part 的匹配字段必须覆盖**所有** part 类型 (text 比 text, file 比 url, tool 比 callID 等).
+
+#### 82. `/compact` 报 "Session compact is not available yet" — v2.compact 未开放, 应走 v1 session.summarize
+
+- **现象**: chat 输入 `/compact` → 提示"当前服务暂不支持压缩上下文".
+- **根因**: numas `aiCompactSession` 调的 `client.v2.session.compact` — 服务端 (`packages/server/src/handlers/session.ts:187`) 直接返回 `Session compact is not available yet` (v2 该能力未实现, 官方测试 `httpapi-session.test.ts:651` 也断言此错误). 官方 app 连同一 server 同样不可用.
+- **解决方案 (已修)**: 改走 **v1 `session.summarize`** (TUI `/compact` 同款, `packages/tui/src/routes/session/index.tsx:575`): 需传 `providerID + modelID` (当前模型). 服务端链路: revert cleanup → compact.create → prompt loop. 实测 6.3s 返回 true, 会话出现 "Compaction · ..." 消息 + 摘要.
+- **排查方法**: 判断"不支持"先看错误来源 — `client.v2.session.compact` 抛的 message 直接 grep 服务端源码即可定位; 然后查 TUI 同功能走什么 API (TUI 常保留 v1 可用路径).
+- **适用**: 任何 v2 端点 "not available yet" 的功能, 优先查 TUI/官方 app 是否有 v1 等价实现.
+
+#### 83. 本地队列 (followup queue) 在 SSE 断线/发送失败后永久卡住 — 最终对齐官方删除队列
+
+- **现象**: queue 模式下排队消息在 AI 回复完成后不自动发出; 卡住后手动点发送才能继续.
+- **根因链** (多因叠加): ① 客户端队列续发依赖 SSE `session.status`/`session.idle` 事件 → 断线重连期间事件丢失, 5s 对账轮询只更新状态不触发 flush; ② 自动续发尝试时若 `promptAsync` 失败 (server 重启中) → 项标 failed → 后续 flush 被 "failed 队首不自动重试" 守卫永久挡住; ③ 官方当前版本已禁用 queue 入口 (settings 读写降级 steer), TUI 更是完全没有队列 (busy 时直接发 + `QUEUED` 视觉标记, 服务端在下个 step 边界拾取 pending 输入).
+- **解决方案 (已修)**: **删除整个客户端队列机制** (queueBySession/FollowupDock/flushQueue/paused/failed/sending/followupMode 设置 + styles), busy 时直接 `firePrompt` (steer, 服务端拾取) — 与官方 TUI 行为完全一致, 卡队列问题从根上消失.
+- **教训**: ① 自建"自动续发"复杂度极高 (事件丢失/失败重试/暂停语义的组合爆炸), 官方用 steer + 服务端边界拾取解决了同一问题; ② 遇到"官方怎么做"时直接找官方实例 (用户可提供 4096 端口实例) 看真实行为, 比读源码猜更快.
+- **适用**: 任何"客户端自己实现排队/重试"的场景 — 先确认服务端是否已有等价语义 (steer/queue delivery).
