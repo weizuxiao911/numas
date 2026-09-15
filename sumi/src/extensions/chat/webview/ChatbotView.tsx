@@ -261,6 +261,8 @@ export const ChatbotView: React.FC = () => {
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   /** 会话墙钟时间 (session.time: created/updated) — 耗时 = updated - created */
   const [sessionTimes, setSessionTimes] = useState<{ created: number; updated: number }>({ created: 0, updated: 0 });
+  /** 耗时实时刷新节流 (message.part.updated 流式中频繁触发, 最多 1s 同步一次) */
+  const lastTimeSyncRef = useRef(0);
   const [showAgents, setShowAgents] = useState(false);
   const [agentQuery, setAgentQuery] = useState('');
   const [agentActiveIndex, setAgentActiveIndex] = useState(0);
@@ -938,6 +940,14 @@ export const ChatbotView: React.FC = () => {
               // 按 part.id upsert 任意类型 part (text/reasoning/tool/step-start 等), 不丢非 text part
               const part = properties.part;
               if (!part?.messageID) break;
+              // 耗时实时刷新: 流式 part 更新 → 最后活动时间推进 (1s 节流, 避免每 token setState)
+              {
+                const now = Date.now();
+                if (now - lastTimeSyncRef.current > 1000) {
+                  lastTimeSyncRef.current = now;
+                  setSessionTimes((prev) => (prev.updated < now ? { ...prev, updated: now } : prev));
+                }
+              }
               // step-finish = 该步 LLM 输出结束: 启动 idle 兜底; 其它 part 活动撤销兜底
               if (part.type === 'step-finish') armStepIdle(String(part.messageID));
               else disarmStepIdle();
@@ -995,6 +1005,11 @@ export const ChatbotView: React.FC = () => {
               // 刷新才更新". parts 非空才覆盖, 避免清空流式文本.
               const info = properties.info;
               if (!info?.id || !info.role) break;
+              // 耗时实时刷新: 用 server 报的消息时间 (completed 优先, 流式中只有 created)
+              {
+                const t = info.time?.completed || info.time?.created;
+                if (t) setSessionTimes((prev) => (prev.updated < t ? { ...prev, updated: t } : prev));
+              }
               if (info.parts?.length) disarmStepIdle();
               if (info.role === 'user') {
                 // 本地占位行 → 换真实 id + 用真实 parts (若有); 避免本地占位 part 与服务端 part 叠加重复
@@ -1039,6 +1054,10 @@ export const ChatbotView: React.FC = () => {
               if (info?.id && info.id === sessionIDRef.current) {
                 const t = info.title || '';
                 setCurrentTitle(!t || /^New session\b/i.test(t) ? '新会话' : t);
+                // 耗时实时刷新: session.time.updated 推进 (server 权威值)
+                if (info.time) {
+                  setSessionTimes({ created: info.time.created || 0, updated: info.time.updated || 0 });
+                }
               }
               break;
             }
