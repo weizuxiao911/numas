@@ -321,3 +321,19 @@
 - **解决方案 (最终)**: **url 匹配不可用** — server 端会对 dataUrl **重编码** (实测同一张 3.6MB 截图: 本地乐观 423010 字符 vs server 返回 430546 字符, 内容不同) → url 永不相等. 正解: 本地乐观 file part 打 **`__local: true`** 标记 (只加在 `localParts`, 不发给 server) → `message.part.updated` 匹配规则改为 `(part.type === 'file' && (p.__local === true || (!!p.url && p.url === part.url)))` → 无标记的 server file part 替换带标记的本地占位.
 - **复现/验证**: ① paste (png+tiff) → Enter 发送 → 数 `.oc-msg.is-user` 里 `img` 数量; ② **必须用大图** (canvas 生成 1200x900 噪点 PNG ~3.6MB) — 小图 server 可能不重编码/恰好相等, 复现不出 (首次小图测试 1 图, 误以为已修); ③ 对比两个 img 的 `src.length` 是否不同 (不同 = server 重编码, url 匹配方案失效); ④ reload 页面验证历史消息渲染 (server 数据本就 1 part).
 - **适用**: 任何「本地乐观行 + server 事件流合并」的渲染 — 乐观 part 与 server part 的匹配字段必须覆盖**所有** part 类型 (text 比 text, file 比 url, tool 比 callID 等).
+
+#### 82. `/compact` 报 "Session compact is not available yet" — v2.compact 未开放, 应走 v1 session.summarize
+
+- **现象**: chat 输入 `/compact` → 提示"当前服务暂不支持压缩上下文".
+- **根因**: numas `aiCompactSession` 调的 `client.v2.session.compact` — 服务端 (`packages/server/src/handlers/session.ts:187`) 直接返回 `Session compact is not available yet` (v2 该能力未实现, 官方测试 `httpapi-session.test.ts:651` 也断言此错误). 官方 app 连同一 server 同样不可用.
+- **解决方案 (已修)**: 改走 **v1 `session.summarize`** (TUI `/compact` 同款, `packages/tui/src/routes/session/index.tsx:575`): 需传 `providerID + modelID` (当前模型). 服务端链路: revert cleanup → compact.create → prompt loop. 实测 6.3s 返回 true, 会话出现 "Compaction · ..." 消息 + 摘要.
+- **排查方法**: 判断"不支持"先看错误来源 — `client.v2.session.compact` 抛的 message 直接 grep 服务端源码即可定位; 然后查 TUI 同功能走什么 API (TUI 常保留 v1 可用路径).
+- **适用**: 任何 v2 端点 "not available yet" 的功能, 优先查 TUI/官方 app 是否有 v1 等价实现.
+
+#### 83. 本地队列 (followup queue) 在 SSE 断线/发送失败后永久卡住 — 最终对齐官方删除队列
+
+- **现象**: queue 模式下排队消息在 AI 回复完成后不自动发出; 卡住后手动点发送才能继续.
+- **根因链** (多因叠加): ① 客户端队列续发依赖 SSE `session.status`/`session.idle` 事件 → 断线重连期间事件丢失, 5s 对账轮询只更新状态不触发 flush; ② 自动续发尝试时若 `promptAsync` 失败 (server 重启中) → 项标 failed → 后续 flush 被 "failed 队首不自动重试" 守卫永久挡住; ③ 官方当前版本已禁用 queue 入口 (settings 读写降级 steer), TUI 更是完全没有队列 (busy 时直接发 + `QUEUED` 视觉标记, 服务端在下个 step 边界拾取 pending 输入).
+- **解决方案 (已修)**: **删除整个客户端队列机制** (queueBySession/FollowupDock/flushQueue/paused/failed/sending/followupMode 设置 + styles), busy 时直接 `firePrompt` (steer, 服务端拾取) — 与官方 TUI 行为完全一致, 卡队列问题从根上消失.
+- **教训**: ① 自建"自动续发"复杂度极高 (事件丢失/失败重试/暂停语义的组合爆炸), 官方用 steer + 服务端边界拾取解决了同一问题; ② 遇到"官方怎么做"时直接找官方实例 (用户可提供 4096 端口实例) 看真实行为, 比读源码猜更快.
+- **适用**: 任何"客户端自己实现排队/重试"的场景 — 先确认服务端是否已有等价语义 (steer/queue delivery).
