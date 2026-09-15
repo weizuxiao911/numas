@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { CommandService } from '@opensumi/ide-core-common';
 
@@ -400,6 +401,16 @@ export const ChatbotView: React.FC = () => {
   /** 消息区是否在底部 (JumpToLatest 显隐 + 自动滚动保护) */
   const [isAtBottom, setIsAtBottom] = useState(true);
   const isAtBottomRef = useRef(true);
+  /** 虚拟列表 (长对话性能; 官方 @tanstack/solid-virtual 同源库 React 版):
+   *  动态高度 (measureElement ResizeObserver 自动重测), overscan 8 (聊天场景足够).
+   *  rows 少时也走同一套 (react-virtual 对少量项开销可忽略). */
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 140,
+    overscan: 8,
+    getItemKey: (index) => (rows[index] as any)?.id || index,
+  });
   const taRef = useRef<HTMLTextAreaElement>(null);
   const modelSearchRef = useRef<HTMLInputElement>(null);
 
@@ -1124,26 +1135,26 @@ export const ChatbotView: React.FC = () => {
   }, []);
 
   /** 上下条消息导航 (官方 navigateMessageByOffset 同款; mod+alt+[ / ] 触发).
-   *  offset=-1 上一条, +1 下一条; 越过最后一条 → 跳到底 (官方 resumeScroll). */
+   *  offset=-1 上一条, +1 下一条; 越过最后一条 → 跳到底 (官方 resumeScroll).
+   *  虚拟化适配: 用 virtualizer.scrollToIndex (不可视的行没有 DOM 节点). */
   const navigateMessage = useCallback((offset: number) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const nodes = Array.from(el.querySelectorAll('.oc-msg.is-user')) as HTMLElement[];
-    if (nodes.length === 0) return;
-    // 当前视口顶部对应的 user 消息 (第一个 top >= 容器顶)
-    const containerTop = el.getBoundingClientRect().top;
-    const found = nodes.findIndex((n) => n.getBoundingClientRect().top >= containerTop - 8);
-    const base = found < 0 ? nodes.length : found;
-    const targetIndex = base + offset;
-    if (targetIndex < 0 || targetIndex > nodes.length) return;
-    if (targetIndex === nodes.length) {
+    if (rows.length === 0) return;
+    const userIdx = rows.map((r, i) => (r.role === 'user' ? i : -1)).filter((i) => i >= 0);
+    if (userIdx.length === 0) return;
+    // 当前视口第一个 user 行 (虚拟 items 里找; 找不到 = 在最后一条之后)
+    const firstVisibleUser = virtualizer.getVirtualItems().find((vi) => rows[vi.index]?.role === 'user')?.index;
+    const curUserIdx = firstVisibleUser != null ? userIdx.indexOf(firstVisibleUser) : -1;
+    const base = curUserIdx < 0 ? userIdx.length : curUserIdx;
+    const target = base + offset;
+    if (target < 0 || target > userIdx.length) return;
+    if (target === userIdx.length) {
       jumpToLatest();
       return;
     }
     isAtBottomRef.current = false;
     setIsAtBottom(false);
-    nodes[targetIndex].scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }, [jumpToLatest]);
+    virtualizer.scrollToIndex(userIdx[target], { align: 'start' });
+  }, [rows, jumpToLatest, virtualizer]);
 
   // 消息导航快捷键: mod(⌘/Ctrl)+alt+[ / ] (官方 keybind 同款)
   useEffect(() => {
@@ -2314,28 +2325,40 @@ export const ChatbotView: React.FC = () => {
             onPick={(prompt) => { void sendPrompt(prompt); }}
           />
         ) : (
-          rows.map((r, ri) => {
-            // 用户消息所属 turn 的 agent/模型 = 紧随其后的 assistant 消息 (官方用户 meta 语义)
-            const nxt = rows[ri + 1];
-            const nxtAsst = r.role === 'user' && nxt && nxt.role === 'assistant' ? nxt : null;
-            return (
-            // 打字机动画只在真正流式输出时开; retry 退避等待期不假装在出字
-            <MessageRow
-              key={r.id}
-              row={r}
-              streaming={curStatus?.type === 'busy' && r.role === 'assistant' && r.id === rows[rows.length - 1]?.id}
-              done={!busy}
-              sessionID={sessionID}
-              onReplyQuestion={onReplyQuestion}
-              onAbortSession={onAbort}
-              onRevert={onRevertMessage}
-              turnAgent={nxtAsst ? (nxtAsst.agent || nxtAsst.mode || '') : undefined}
-              turnModel={nxtAsst ? nxtAsst.modelID : undefined}
-              resolveModelName={resolveModelName}
-              busy={busy}
-            />
-            );
-          })
+          // 虚拟列表 (长对话性能): 外层撑总高度, 每行 absolute + translateY; measureElement 动态测高
+          <div className="chat__vlist" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+            {virtualizer.getVirtualItems().map((vi) => {
+              const r = rows[vi.index];
+              if (!r) return null;
+              // 用户消息所属 turn 的 agent/模型 = 紧随其后的 assistant 消息 (官方用户 meta 语义)
+              const nxt = rows[vi.index + 1];
+              const nxtAsst = r.role === 'user' && nxt && nxt.role === 'assistant' ? nxt : null;
+              return (
+                <div
+                  key={r.id}
+                  data-index={vi.index}
+                  ref={virtualizer.measureElement}
+                  className="chat__vlist-item"
+                  style={{ transform: `translateY(${vi.start}px)` }}
+                >
+                  {/* 打字机动画只在真正流式输出时开; retry 退避等待期不假装在出字 */}
+                  <MessageRow
+                    row={r}
+                    streaming={curStatus?.type === 'busy' && r.role === 'assistant' && r.id === rows[rows.length - 1]?.id}
+                    done={!busy}
+                    sessionID={sessionID}
+                    onReplyQuestion={onReplyQuestion}
+                    onAbortSession={onAbort}
+                    onRevert={onRevertMessage}
+                    turnAgent={nxtAsst ? (nxtAsst.agent || nxtAsst.mode || '') : undefined}
+                    turnModel={nxtAsst ? nxtAsst.modelID : undefined}
+                    resolveModelName={resolveModelName}
+                    busy={busy}
+                  />
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 

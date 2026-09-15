@@ -265,6 +265,15 @@ export const styles = `
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+/* 虚拟列表 (长对话性能): 外层撑总高度, 每行 absolute + translateY */
+.chat__vlist { position: relative; width: 100%; }
+.chat__vlist-item {
+  position: absolute; top: 0; left: 0; width: 100%;
+  /* 消息间距由 wrapper padding 提供 (虚拟测量需 wrapper 撑高; .chat__msg 自身 margin 会塌陷不计入) */
+  padding: 6px 0;
+}
+.chat__vlist-item .chat__msg { margin: 0; }
+
 /* 跳转到最新: 底部居中 (官方 bottom-6 + left-1/2), 上滚时出现 */
 .chat__jump-latest {
   position: absolute;
