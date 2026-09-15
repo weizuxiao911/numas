@@ -516,17 +516,17 @@ export const ContextUsageModal: React.FC<{
                 </div>
                 {/* 用摘要区 item 样式 (跟"上下文限制"同级, 非子 item) */}
                 <div className="chat__context-summary">
-                  {/* 主/子会话各自 3 种 tok (输入/输出/缓存); 耗时单独一行 (总耗时 = 主+子) */}
+                  {/* 主/子会话: 总 token (英文千分位 + tok) + 输入/输出/缓存 分项 (K/M 无单位) */}
                   <div className="chat__context-summary-row">
                     <span className="chat__context-summary-key">主会话</span>
                     <span className="chat__context-summary-val">
-                      输入 {fmtTokShort(data.mainInput)} / 输出 {fmtTokShort(data.mainOutput)} / 缓存 {fmtTokShort(data.mainCacheRead)}
+                      {fmtTok(data.mainTokens)} (输入 {fmtTokShort(data.mainInput)} / 输出 {fmtTokShort(data.mainOutput)} / 缓存 {fmtTokShort(data.mainCacheRead)})
                     </span>
                   </div>
                   <div className="chat__context-summary-row">
                     <span className="chat__context-summary-key">子会话</span>
                     <span className="chat__context-summary-val">
-                      输入 {fmtTokShort(subagentStats?.input || 0)} / 输出 {fmtTokShort(subagentStats?.output || 0)} / 缓存 {fmtTokShort(subagentStats?.cacheRead || 0)}
+                      {fmtTok(subagentStats?.tokens || 0)} (输入 {fmtTokShort(subagentStats?.input || 0)} / 输出 {fmtTokShort(subagentStats?.output || 0)} / 缓存 {fmtTokShort(subagentStats?.cacheRead || 0)})
                     </span>
                   </div>
                   <div className="chat__context-summary-row">
