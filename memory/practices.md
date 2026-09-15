@@ -80,3 +80,13 @@
 - **工具卡默认展开**: 官方 `packages/session-ui/src/components/part-default-open.ts` — bash/shell 由 `shellToolPartsExpanded` 决定; edit/write/patch/apply_patch 由 `editToolPartsExpanded` 决定 (纯删除 diff 不展开); 其余折叠. 用户点击切换后以用户为准 (`toolOpen ?? defaultOpen`)
   - numas: `chat.toolParts.v1` (设置面板两个开关) + `ToolView.partDefaultOpen`
 - **官方实现定位速查**: 消息列表 `app/src/pages/session/timeline/`; 输入框 `app/src/components/prompt-input/` (submit.ts = 发送/abort); 工具卡 UI `packages/session-ui/src/components/basic-tool.tsx` (Collapsible + trigger); dock 系列 `app/src/pages/session/composer/session-*-dock.tsx`
+
+#### 7. chat 开销统计口径 (token / 成本 / 时间; subagent 记账事实)
+
+- **server 记账事实** (`opencode/packages/opencode/src/session/processor.ts:435-456`):
+  - `ctx.assistantMessage.tokens = usage.tokens` — **赋值** (非累加; 多 step 时只留最后一步 usage)
+  - `ctx.assistantMessage.cost += usage.cost` — **累加**
+  - **subagent 是独立会话**: `tool/task.ts:159` 创建 `parentID=当前会话` 的子会话, 子 agent 的 LLM 调用记在**子会话**消息里, **不回写主会话** → 主会话 tokens 天然**不含** subagent
+- **官方口径** (`app/src/components/session/session-context-metrics.ts`): `getSessionContext(messages)` 只传主会话 messages → 官方"总 token"**不含 subagent** (numas 默认与官方一致)
+- **numas 含子实现** (用户要求"开销含子 + 区分"): `ChatbotView.refreshSubagentStats` — `aiListAllSessions` 建 `parentID → children` map, BFS 找**所有后代** (含深层, 防环 seen) → 逐子会话 `aiListMessages` + `sumMessagesStats` 累计 token/cost, 墙钟取子会话 `time.updated - time.created`; 刷新时机 = 切会话 + `rows.length` 变化 (流式不触发)
+- **口径定义**: 开销 token = 各消息 `input+output+reasoning` **累计** (不含 cache); 时间 = 主会话墙钟 + 各子会话墙钟**累加** (不用 max/全局区间 — 会重复计并行时间或含空闲); stats bar 显示总 (主+子), modal 分"开销 (含子代理)" 分项 (主会话 / 子代理(N) / 合计)
