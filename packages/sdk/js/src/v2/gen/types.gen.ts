@@ -54,6 +54,8 @@ export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
   | EventFileEdited
+  | EventFileRemoved
+  | EventFileRenamed
   | EventReferenceUpdated
   | EventPermissionV2Asked
   | EventPermissionV2Replied
@@ -93,6 +95,7 @@ export type Event =
   | EventWorktreeFailed
   | EventServerConnected
   | EventGlobalDisposed
+  | EventInstanceReloaded
   | EventServerInstanceDisposed
 
 export type QuestionReplied = {
@@ -1248,6 +1251,21 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "file.removed"
+        properties: {
+          file: string
+        }
+      }
+    | {
+        id: string
+        type: "file.renamed"
+        properties: {
+          from: string
+          to: string
+        }
+      }
+    | {
+        id: string
         type: "reference.updated"
         properties: {
           [key: string]: unknown
@@ -1600,6 +1618,13 @@ export type GlobalEvent = {
           [key: string]: unknown
         }
       }
+    | {
+        id: string
+        type: "instance.reloaded"
+        properties: {
+          [key: string]: unknown
+        }
+      }
     | EventServerInstanceDisposed
     | SyncEventSessionCreated
     | SyncEventSessionUpdated
@@ -1703,6 +1728,7 @@ export type AgentConfig = {
    * Hex color code (e.g., #FF5733) or theme color (e.g., primary)
    */
   color?: string | "primary" | "secondary" | "accent" | "success" | "warning" | "error" | "info"
+  icon?: string
   steps?: number
   maxSteps?: number
   permission?: PermissionConfig
@@ -2356,6 +2382,7 @@ export type Agent = {
   topP?: number
   temperature?: number
   color?: string
+  icon?: string
   permission: PermissionRuleset
   model?: {
     modelID: string
@@ -2787,6 +2814,12 @@ export type ProviderNotFoundError = {
   message: string
 }
 
+export type FileNotFoundError = {
+  _tag: "FileNotFoundError"
+  path: string
+  message: string
+}
+
 export type OutputFormat1 =
   | {
       type: "text"
@@ -2902,6 +2935,8 @@ export type V2Event =
   | InstallationUpdated
   | InstallationUpdateAvailable
   | FileEdited
+  | FileRemoved
+  | FileRenamed
   | ReferenceUpdated
   | PermissionV2Asked
   | PermissionV2Replied
@@ -2941,6 +2976,7 @@ export type V2Event =
   | WorktreeFailed
   | ServerConnected
   | GlobalDisposed
+  | InstanceReloaded
 
 export type V2EventStream = string
 
@@ -5002,7 +5038,17 @@ export type PermissionSavedInfo = {
 export type FileSystemEntry = {
   path: string
   type: "file" | "directory"
+  size?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  mtime?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
 }
+
+export type FileSystemWatchEvent = {
+  path: string
+  type: "add" | "change" | "unlink"
+  timestamp: number | "NaN" | "Infinity" | "-Infinity"
+}
+
+export type FileSystemWatchEventStream = string
 
 export type CommandV2Info = {
   name: string
@@ -5413,6 +5459,41 @@ export type FileEdited = {
   location?: LocationRef
   data: {
     file: string
+  }
+}
+
+export type FileRemoved = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "file.removed"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    file: string
+  }
+}
+
+export type FileRenamed = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "file.renamed"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    from: string
+    to: string
   }
 }
 
@@ -6105,6 +6186,23 @@ export type GlobalDisposed = {
   }
 }
 
+export type InstanceReloaded = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "instance.reloaded"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    [key: string]: unknown
+  }
+}
+
 export type QuestionV2Request = {
   id: string
   sessionID: string
@@ -6714,6 +6812,23 @@ export type EventFileEdited = {
   }
 }
 
+export type EventFileRemoved = {
+  id: string
+  type: "file.removed"
+  properties: {
+    file: string
+  }
+}
+
+export type EventFileRenamed = {
+  id: string
+  type: "file.renamed"
+  properties: {
+    from: string
+    to: string
+  }
+}
+
 export type EventReferenceUpdated = {
   id: string
   type: "reference.updated"
@@ -7052,6 +7167,14 @@ export type EventGlobalDisposed = {
   }
 }
 
+export type EventInstanceReloaded = {
+  id: string
+  type: "instance.reloaded"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
 export type CredentialOAuth = {
   type: "oauth"
   methodID: string
@@ -7254,7 +7377,10 @@ export type GlobalHealthResponse = GlobalHealthResponses[keyof GlobalHealthRespo
 export type GlobalEventData = {
   body?: never
   path?: never
-  query?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
   url: "/global/event"
 }
 
@@ -8108,6 +8234,34 @@ export type InstanceDisposeResponses = {
 }
 
 export type InstanceDisposeResponse = InstanceDisposeResponses[keyof InstanceDisposeResponses]
+
+export type InstanceReloadData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    workspace?: string
+  }
+  url: "/instance/reload"
+}
+
+export type InstanceReloadErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type InstanceReloadError = InstanceReloadErrors[keyof InstanceReloadErrors]
+
+export type InstanceReloadResponses = {
+  /**
+   * Instance reload scheduled
+   */
+  200: boolean
+}
+
+export type InstanceReloadResponse = InstanceReloadResponses[keyof InstanceReloadResponses]
 
 export type PathGetData = {
   body?: never
@@ -12800,6 +12954,10 @@ export type V2FsReadErrors = {
    * UnauthorizedError
    */
   401: UnauthorizedError
+  /**
+   * FileNotFoundError
+   */
+  404: FileNotFoundError
 }
 
 export type V2FsReadError = V2FsReadErrors[keyof V2FsReadErrors]
@@ -12835,6 +12993,10 @@ export type V2FsListErrors = {
    * UnauthorizedError
    */
   401: UnauthorizedError
+  /**
+   * FileNotFoundError
+   */
+  404: FileNotFoundError
 }
 
 export type V2FsListError = V2FsListErrors[keyof V2FsListErrors]
@@ -12890,6 +13052,289 @@ export type V2FsFindResponses = {
 }
 
 export type V2FsFindResponse = V2FsFindResponses[keyof V2FsFindResponses]
+
+export type V2FsStatData = {
+  body?: never
+  path?: never
+  query: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+    path: string
+  }
+  url: "/api/fs/stat"
+}
+
+export type V2FsStatErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * FileNotFoundError
+   */
+  404: FileNotFoundError
+}
+
+export type V2FsStatError = V2FsStatErrors[keyof V2FsStatErrors]
+
+export type V2FsStatResponses = {
+  /**
+   * Success
+   */
+  200: {
+    location: LocationInfo
+    data: FileSystemEntry
+  }
+}
+
+export type V2FsStatResponse = V2FsStatResponses[keyof V2FsStatResponses]
+
+export type V2FsWriteData = {
+  body: {
+    path: string
+    content: string
+    mode?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+  }
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/fs/write"
+}
+
+export type V2FsWriteErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * FileNotFoundError
+   */
+  404: FileNotFoundError
+}
+
+export type V2FsWriteError = V2FsWriteErrors[keyof V2FsWriteErrors]
+
+export type V2FsWriteResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2FsWriteResponse = V2FsWriteResponses[keyof V2FsWriteResponses]
+
+export type V2FsMkdirData = {
+  body: {
+    path: string
+    recursive?: boolean
+  }
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/fs/mkdir"
+}
+
+export type V2FsMkdirErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2FsMkdirError = V2FsMkdirErrors[keyof V2FsMkdirErrors]
+
+export type V2FsMkdirResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2FsMkdirResponse = V2FsMkdirResponses[keyof V2FsMkdirResponses]
+
+export type V2FsRemoveData = {
+  body: {
+    path: string
+    recursive?: boolean
+  }
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/fs/remove"
+}
+
+export type V2FsRemoveErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * FileNotFoundError
+   */
+  404: FileNotFoundError
+}
+
+export type V2FsRemoveError = V2FsRemoveErrors[keyof V2FsRemoveErrors]
+
+export type V2FsRemoveResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2FsRemoveResponse = V2FsRemoveResponses[keyof V2FsRemoveResponses]
+
+export type V2FsRenameData = {
+  body: {
+    from: string
+    to: string
+  }
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/fs/rename"
+}
+
+export type V2FsRenameErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * FileNotFoundError
+   */
+  404: FileNotFoundError
+}
+
+export type V2FsRenameError = V2FsRenameErrors[keyof V2FsRenameErrors]
+
+export type V2FsRenameResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2FsRenameResponse = V2FsRenameResponses[keyof V2FsRenameResponses]
+
+export type V2FsCopyData = {
+  body: {
+    from: string
+    to: string
+  }
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+  }
+  url: "/api/fs/copy"
+}
+
+export type V2FsCopyErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+  /**
+   * FileNotFoundError
+   */
+  404: FileNotFoundError
+}
+
+export type V2FsCopyError = V2FsCopyErrors[keyof V2FsCopyErrors]
+
+export type V2FsCopyResponses = {
+  /**
+   * <No Content>
+   */
+  204: void
+}
+
+export type V2FsCopyResponse = V2FsCopyResponses[keyof V2FsCopyResponses]
+
+export type V2FsWatchData = {
+  body?: never
+  path?: never
+  query?: {
+    location?: {
+      directory?: string
+      workspace?: string
+    }
+    path?: string
+  }
+  url: "/api/fs/watch"
+}
+
+export type V2FsWatchErrors = {
+  /**
+   * InvalidRequestError
+   */
+  400: InvalidRequestError
+  /**
+   * UnauthorizedError
+   */
+  401: UnauthorizedError
+}
+
+export type V2FsWatchError = V2FsWatchErrors[keyof V2FsWatchErrors]
+
+export type V2FsWatchResponses = {
+  /**
+   * Success
+   */
+  200: {
+    id: string
+    event: string
+    data: FileSystemWatchEventStream
+  }
+}
+
+export type V2FsWatchResponse = V2FsWatchResponses[keyof V2FsWatchResponses]
 
 export type V2CommandListData = {
   body?: never

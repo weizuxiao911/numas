@@ -23,6 +23,15 @@ const skipInstall = process.argv.includes("--skip-install")
 const sourcemapsFlag = process.argv.includes("--sourcemaps")
 const plugin = createSolidTransformPlugin()
 const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+const webUiName = (() => {
+  const i = process.argv.indexOf("--web-ui")
+  if (i === -1) return "app"
+  const v = process.argv[i + 1]
+  if (v !== "app" && v !== "codeblitz") {
+    throw new Error(`--web-ui must be "app" or "codeblitz", got: ${v}`)
+  }
+  return v
+})()
 
 const createEmbeddedWebUIBundle = async () => {
   // numas 模式: NUMAS_WEB_DIST 指向 numas web 的静态产物 (已 build), 直接内嵌, 不构建 packages/app
@@ -32,8 +41,8 @@ const createEmbeddedWebUIBundle = async () => {
     console.log(`Building Web UI to embed in the binary (numas: ${numasWebDist})`)
     appDir = path.resolve(numasWebDist, "..")
   } else {
-    console.log(`Building Web UI to embed in the binary`)
-    appDir = path.join(import.meta.dirname, "../../app")
+    console.log(`Building Web UI to embed in the binary (--web-ui=${webUiName})`)
+    appDir = path.join(import.meta.dirname, `../../${webUiName}`)
     // 跨平台: 不用 POSIX 的 `OPENCODE_CHANNEL=X cmd` 前缀 (Windows cmd/powershell 不支持), 改注入 process.env
     const prevChannel = process.env.OPENCODE_CHANNEL
     process.env.OPENCODE_CHANNEL = Script.channel
@@ -177,13 +186,13 @@ try {
 
 const binaries: Record<string, string> = {}
 if (!skipInstall) {
-  await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
-  await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`
-  await $`bun install --os="*" --cpu="*" @ff-labs/fff-bun@${pkg.dependencies["@ff-labs/fff-bun"]}`
+  await $`bun install --ignore-scripts --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
+  await $`bun install --ignore-scripts --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`
+  await $`bun install --ignore-scripts --os="*" --cpu="*" @ff-labs/fff-bun@${pkg.dependencies["@ff-labs/fff-bun"]}`
 }
 for (const item of targets) {
   const name = [
-    pkg.name,
+    "numas",
     // changing to win32 flags npm for some reason
     item.os === "win32" ? "windows" : item.os,
     item.arch,
@@ -213,9 +222,9 @@ for (const item of targets) {
       autoloadDotenv: false,
       autoloadTsconfig: true,
       autoloadPackageJson: true,
-      target: name.replace(pkg.name, "bun") as any,
-      outfile: `dist/${name}/bin/opencode`,
-      execArgv: [`--user-agent=opencode/${Script.version}`, "--use-system-ca", "--"],
+      target: name.replace("numas", "bun") as any,
+      outfile: `dist/${name}/bin/numas`,
+      execArgv: [`--user-agent=numas/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
     },
     files: {
@@ -242,7 +251,7 @@ for (const item of targets) {
 
   // Smoke test: only run if binary is for current platform
   if (item.os === process.platform && item.arch === process.arch && !item.abi) {
-    const binaryPath = `dist/${name}/bin/opencode`
+    const binaryPath = `dist/${name}/bin/numas`
     console.log(`Running smoke test: ${binaryPath} --version`)
     try {
       const versionOutput = await $`${binaryPath} --version`.text()

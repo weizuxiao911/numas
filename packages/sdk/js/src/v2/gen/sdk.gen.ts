@@ -90,6 +90,8 @@ import type {
   GlobalUpgradeResponses,
   InstanceDisposeErrors,
   InstanceDisposeResponses,
+  InstanceReloadErrors,
+  InstanceReloadResponses,
   LocationRef,
   LspStatusErrors,
   LspStatusResponses,
@@ -273,12 +275,26 @@ import type {
   V2CredentialUpdateResponses,
   V2EventSubscribeErrors,
   V2EventSubscribeResponses,
+  V2FsCopyErrors,
+  V2FsCopyResponses,
   V2FsFindErrors,
   V2FsFindResponses,
   V2FsListErrors,
   V2FsListResponses,
+  V2FsMkdirErrors,
+  V2FsMkdirResponses,
   V2FsReadErrors,
   V2FsReadResponses,
+  V2FsRemoveErrors,
+  V2FsRemoveResponses,
+  V2FsRenameErrors,
+  V2FsRenameResponses,
+  V2FsStatErrors,
+  V2FsStatResponses,
+  V2FsWatchErrors,
+  V2FsWatchResponses,
+  V2FsWriteErrors,
+  V2FsWriteResponses,
   V2HealthGetErrors,
   V2HealthGetResponses,
   V2IntegrationAttemptCancelErrors,
@@ -1333,10 +1349,28 @@ export class Global extends HeyApiClient {
    *
    * Subscribe to global events from the OpenCode system using server-sent events.
    */
-  public event<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+  public event<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
     return (options?.client ?? this.client).sse.get<GlobalEventResponses, GlobalEventErrors, ThrowOnError>({
       url: "/global/event",
       ...options,
+      ...params,
     })
   }
 
@@ -1948,6 +1982,36 @@ export class Instance extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<InstanceDisposeResponses, InstanceDisposeErrors, ThrowOnError>({
       url: "/instance/dispose",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Reload instance
+   *
+   * Reload the current OpenCode instance from disk: re-reads .opencode/agent, .opencode/skill, opencode.json, ~/.config/opencode, and re-registers all built-in and user-defined agents/skills/tools. Returns immediately; reload completes in the background. Listen on /api/event for instance.reloaded.
+   */
+  public reload<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      workspace?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "workspace" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<InstanceReloadResponses, InstanceReloadErrors, ThrowOnError>({
+      url: "/instance/reload",
       ...options,
       ...params,
     })
@@ -6492,6 +6556,274 @@ export class Fs extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<V2FsFindResponses, V2FsFindErrors, ThrowOnError>({
       url: "/api/fs/find",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Stat path
+   *
+   * Return one filesystem entry (file or directory) for a path relative to the location.
+   */
+  public stat<ThrowOnError extends boolean = false>(
+    parameters: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      path: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "query", key: "path" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<V2FsStatResponses, V2FsStatErrors, ThrowOnError>({
+      url: "/api/fs/stat",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Write file
+   *
+   * Write bytes to a path relative to the location. `content` is base64-encoded.
+   */
+  public write<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      path?: string
+      content?: string
+      mode?: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "body", key: "path" },
+            { in: "body", key: "content" },
+            { in: "body", key: "mode" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2FsWriteResponses, V2FsWriteErrors, ThrowOnError>({
+      url: "/api/fs/write",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Make directory
+   *
+   * Create a directory (recursively by default) at a path relative to the location.
+   */
+  public mkdir<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      path?: string
+      recursive?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "body", key: "path" },
+            { in: "body", key: "recursive" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2FsMkdirResponses, V2FsMkdirErrors, ThrowOnError>({
+      url: "/api/fs/mkdir",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Remove path
+   *
+   * Remove a file or (with `recursive: true`) a directory at a path relative to the location.
+   */
+  public remove<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      path?: string
+      recursive?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "body", key: "path" },
+            { in: "body", key: "recursive" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2FsRemoveResponses, V2FsRemoveErrors, ThrowOnError>({
+      url: "/api/fs/remove",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Rename path
+   *
+   * Rename a path to a new path, both relative to the location.
+   */
+  public rename<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      from?: string
+      to?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "body", key: "from" },
+            { in: "body", key: "to" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2FsRenameResponses, V2FsRenameErrors, ThrowOnError>({
+      url: "/api/fs/rename",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Copy path
+   *
+   * Copy a path (file or directory tree) to a new path, both relative to the location.
+   */
+  public copy<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      from?: string
+      to?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "body", key: "from" },
+            { in: "body", key: "to" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<V2FsCopyResponses, V2FsCopyErrors, ThrowOnError>({
+      url: "/api/fs/copy",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Watch filesystem
+   *
+   * Subscribe to filesystem events under the location. Events for the same path are debounced and emitted after 200ms of quiet.
+   */
+  public watch<ThrowOnError extends boolean = false>(
+    parameters?: {
+      location?: {
+        directory?: string
+        workspace?: string
+      }
+      path?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "location" },
+            { in: "query", key: "path" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).sse.get<V2FsWatchResponses, V2FsWatchErrors, ThrowOnError>({
+      url: "/api/fs/watch",
       ...options,
       ...params,
     })
