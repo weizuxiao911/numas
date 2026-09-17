@@ -76,3 +76,6 @@ sst-env.d.ts
 
 # numas 集成: 上游 demo 截图, 跟 numas 无关
 screenshot-uk.png
+
+.logs/
+.tmp/
