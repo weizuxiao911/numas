@@ -127,9 +127,6 @@ const config = {
     },
     resolve: {
         extensions: ['.ts', '.tsx', '.js', '.json'],
-        extensionAlias: {
-            '.js': ['.ts', '.tsx', '.js'],
-        },
         alias: {
             '@': path_1.default.resolve(WEB, 'src'),
             '@/': path_1.default.resolve(WEB, 'src') + path_1.default.sep,
@@ -159,7 +156,7 @@ const config = {
     module: {
         rules: [
             {
-                test: /\.tsx$/,
+                test: /\.tsx?$/,
                 // 排除 numas 自己的 node_modules (相对 web/ 项目根), 不用 /node_modules/ 这种
                 // 简单 regex, 因为 npx 跑时 file path 包含 /node_modules/numas/, 用简单 regex
                 // 会错误排除 numas 自己的源码, 导致 esbuild-loader 不匹配, 走默认 js parser 报错.
@@ -167,19 +164,9 @@ const config = {
                 use: [{
                         loader: 'esbuild-loader',
                         options: {
+                            // esbuild-loader 默认 tsx=transform, target=es2015; loader 内置 ts 配置
+                            // 不需要 tsconfig (但项目里有 src/ tsconfig.json 给 src/ 自己的 typecheck 用, 不影响构建)
                             loader: 'tsx',
-                            target: 'es2020',
-                        },
-                    }],
-            },
-            {
-                test: /\.ts$/,
-                exclude: /\/node_modules\/(?!numas\/)/,
-                use: [{
-                        loader: 'esbuild-loader',
-                        options: {
-                            // .ts 文件不含 JSX, 用 ts loader 避免把 <T extends ...> 误判为 JSX 元素
-                            loader: 'ts',
                             target: 'es2020',
                         },
                     }],

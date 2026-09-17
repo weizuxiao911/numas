@@ -1,8 +1,8 @@
 {
-  "name": "@opencode-ai/codeblitz",
+  "name": "web",
   "version": "0.1.0",
   "private": true,
-  "description": "Numas codeblitz — opensumi/codeblitz 交互层（纯浏览器）",
+  "description": "Numas web — opensumi/codeblitz 交互层（纯浏览器）",
   "scripts": {
     "dev": "node node_modules/webpack-cli/bin/cli.js serve --config webpack.config.js",
     "build": "cross-env NODE_ENV=production node node_modules/webpack-cli/bin/cli.js --config webpack.config.js",
