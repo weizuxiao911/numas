@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#7c9cff" />
+  <title>numas</title>
+  <style>
+    :root {
+      color-scheme: dark light;
+      --bg: #0b0c0f;
+      --bg-elev: #15171c;
+      --fg: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #7c9cff;
+      --accent-hov: #95aeff;
+      --ok: #4ade80;
+      --warn: #f59e0b;
+      --err: #f87171;
+      --border: rgba(255,255,255,.08);
+      --code-bg: rgba(0,0,0,.35);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      line-height: 1.55;
+    }
+    .card {
+      width: min(620px, 100%);
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.4);
+    }
+    h1 {
+      margin: 0 0 4px;
+      font-size: 24px;
+      letter-spacing: -.01em;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    h1 .logo {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      border-radius: 7px;
+      flex-shrink: 0;
+      position: relative;
+    }
+    h1 .logo::after {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      background: var(--bg);
+      border-radius: 3px;
+    }
+    h1 .logo::before {
+      content: "🐮";
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+    }
+    p { color: var(--muted); margin: 6px 0 18px; font-size: 14px; }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 18px;
+      font-size: 14px;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background .25s, box-shadow .25s;
+    }
+    .dot.up   { background: var(--ok);   box-shadow: 0 0 12px var(--ok); }
+    .dot.down { background: var(--err);  box-shadow: 0 0 12px var(--err); }
+    .dot.wait { background: var(--warn); box-shadow: 0 0 12px var(--warn); animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .35; } }
+    .endpoint {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12.5px;
+      background: var(--code-bg);
+      padding: 2px 8px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      margin-left: auto;
+    }
+    .row { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; }
+    button {
+      font: inherit;
+      background: var(--accent);
+      color: #0b0c0f;
+      border: none;
+      padding: 11px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: transform .05s, opacity .15s, background .15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover  { background: var(--accent-hov); }
+    button:active { transform: translateY(1px); }
+    button[disabled] { opacity: .4; cursor: not-allowed; }
+    button.secondary {
+      background: transparent;
+      color: var(--fg);
+      border: 1px solid var(--border);
+    }
+    button.secondary:hover { background: rgba(255,255,255,.05); }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      margin-top: 8px;
+    }
+    .panel.warn { border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.06); }
+    .panel.err  { border-color: rgba(248,113,113,.35); background: rgba(248,113,113,.06); }
+    .panel.ok   { border-color: rgba(74,222,128,.35); background: rgba(74,222,128,.06); }
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .panel p { margin: 0 0 10px; font-size: 13.5px; color: var(--fg); }
+    .panel pre {
+      margin: 8px 0;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .steps li {
+      counter-increment: step;
+      padding: 8px 0 8px 28px;
+      position: relative;
+      font-size: 13.5px;
+    }
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0; top: 8px;
+      width: 20px; height: 20px;
+      background: var(--accent);
+      color: #0b0c0f;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.6; }
+    .hide { display: none; }
+    .inline-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 7px;
+      background: rgba(124,156,255,.15);
+      color: var(--accent);
+      border-radius: 4px;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1><span class="logo"></span>numas</h1>
+    <p>本地 AI 工作环境。点击下方按钮启动后台服务,启动后浏览器自动跳转到 <code id="endpoint" class="endpoint">http://localhost:4096</code>。</p>
+
+    <div class="status-row">
+      <span id="dot" class="dot"></span>
+      <span id="status">检测中…</span>
+      <span id="endpoint2" class="endpoint">http://localhost:4096</span>
+    </div>
+
+    <div class="row">
+      <button id="launch" disabled>启动 numas</button>
+      <button id="retry" class="secondary">重新检测</button>
+      <a id="open" href="http://localhost:4096/" target="_blank" class="hide">打开 →</a>
+    </div>
+
+    <!-- 检测到 numas 运行中 -->
+    <div id="ok-panel" class="panel ok hide">
+      <h3>已连接</h3>
+      <p>本地 numas 服务运行中,<code>http://localhost:4096</code> 可访问。</p>
+    </div>
+
+    <!-- 唤起中 -->
+    <div id="wait-panel" class="panel warn hide">
+      <h3>正在启动 numas</h3>
+      <p>通过 <code>numas://</code> scheme 唤起本地 numas,请稍候…</p>
+    </div>
+
+    <!-- 未安装 -->
+    <div id="install-panel" class="panel err hide">
+      <h3>未检测到 numas 安装</h3>
+      <p>浏览器唤起 <code>numas://serve</code> 失败(没有 handler 注册)。需要先在系统上安装 numas 桌面版 / CLI。</p>
+      <p>检测到的平台:<strong id="os-name"></strong></p>
+
+      <div id="install-macos" class="hide">
+        <p>macOS 安装方法:</p>
+        <ol class="steps">
+          <li>从 GitHub Releases 下载 <code>numas-darwin-arm64.zip</code> 或 <code>numas-darwin-x64.zip</code></li>
+          <li>解压后将 <code>numas</code> 二进制移到 <code>/usr/local/bin/</code>:</li>
+        </ol>
+        <pre>unzip numas-darwin-arm64.zip
+sudo mv numas /usr/local/bin/
+numas serve --port 4096 &amp;  <span style="color:var(--muted)"># 或装桌面版 packages/desktop-tauri 出 .app</span></pre>
+      </div>
+
+      <div id="install-linux" class="hide">
+        <p>Linux 安装方法:</p>
+        <ol class="steps">
+          <li>从 GitHub Releases 下载 <code>numas-linux-x64.tar.gz</code></li>
+          <li>解压后移动到 PATH:</li>
+        </ol>
+        <pre>tar -xzf numas-linux-x64.tar.gz
+sudo mv numas /usr/local/bin/
+numas serve --port 4096 &amp;</pre>
+      </div>
+
+      <div id="install-windows" class="hide">
+        <p>Windows 安装方法:</p>
+        <ol class="steps">
+          <li>从 GitHub Releases 下载 <code>numas-windows-x64.zip</code></li>
+          <li>解压到任意目录,把 <code>numas.exe</code> 加入 PATH,或:</li>
+        </ol>
+        <pre>Expand-Archive numas-windows-x64.zip
+[Environment]::SetEnvironmentVariable("Path", "$env:Path;C:\numas", "User")
+numas serve --port 4096</pre>
+      </div>
+
+      <div class="inline-actions">
+        <a id="download" class="button-link" href="#" target="_blank">前往下载页 →</a>
+        <span style="color:var(--muted); font-size: 12px;">下载后回到此页面重新检测</span>
+      </div>
+    </div>
+
+    <!-- 启动失败 -->
+    <div id="err-panel" class="panel err hide">
+      <h3>启动失败</h3>
+      <p id="err-msg"></p>
+    </div>
+
+    <details class="hint">
+      <summary style="cursor:pointer;color:var(--muted); user-select: none;">调试/手动</summary>
+      <pre>URL: http://localhost:4096
+唤起 scheme: numas://serve?port=4096
+健康: GET http://localhost:4096/health
+手动启动 CLI: numas serve --port 4096
+后台跑: nohup numas serve --port 4096 &amp;
+停止: pkill -f "numas serve"</pre>
+    </details>
+
+    <div class="hint">实现:浏览器无直启进程能力,只能唤起 <code>numas://</code> scheme 让已安装的 numas 处理。若没装,引导到下载页。</div>
+  </main>
+
+  <script type="module">
+    const PORT = 4096
+    const SERVER_URL = `http://localhost:${PORT}`
+    const SCHEME = `numas://serve?port=${PORT}`
+    const HEALTH_URL = `${SERVER_URL}/health`
+    const LAUNCH_TIMEOUT_MS = 8000  // scheme 唤起后等待的最长时间
+    const POLL_INTERVAL_MS = 500
+
+    const $dot       = document.getElementById('dot')
+    const $status    = document.getElementById('status')
+    const $endpoint  = document.getElementById('endpoint')
+    const $endpoint2 = document.getElementById('endpoint2')
+    const $launch    = document.getElementById('launch')
+    const $retry     = document.getElementById('retry')
+    const $open      = document.getElementById('open')
+    $endpoint.textContent = SERVER_URL
+    $endpoint2.textContent = SERVER_URL
+
+    const $okPanel    = document.getElementById('ok-panel')
+    const $waitPanel  = document.getElementById('wait-panel')
+    const $installPanel = document.getElementById('install-panel')
+    const $errPanel   = document.getElementById('err-panel')
+    const $errMsg     = document.getElementById('err-msg')
+    const $osName     = document.getElementById('os-name')
+    const $download   = document.getElementById('download')
+    const $installMac = document.getElementById('install-macos')
+    const $installLinux = document.getElementById('install-linux')
+    const $installWin  = document.getElementById('install-windows')
+
+    /**
+     * OS / arch detection via userAgent + platform. 决定下载链接和安装指引。
+     */
+    function detectOS() {
+      const ua = navigator.userAgent
+      const platform = navigator.platform || ''
+      let os = 'macos', arch = 'arm64'
+      if (/Windows/i.test(platform) || /Win64/i.test(ua)) {
+        os = 'windows'; arch = 'x64'
+      } else if (/Linux/i.test(platform) || /Linux/i.test(ua)) {
+        os = 'linux'; arch = 'x64'
+        if (/aarch64|arm64/i.test(ua)) arch = 'arm64'
+      } else {
+        // macOS: UA 含 Mac OS X / Intel Mac OS X (intel) 或无 arch 标识(arm64)
+        if (/Mac OS X/i.test(ua) && /Intel/.test(platform)) arch = 'x64'
+        if (/Mac OS X/i.test(ua) && /arm64/i.test(ua)) arch = 'arm64'
+      }
+      return { os, arch }
+    }
+
+    function show(el) { el.classList.remove('hide') }
+    function hide(el) { el.classList.add('hide') }
+    function hideAllPanels() {
+      [$okPanel, $waitPanel, $installPanel, $errPanel].forEach(hide)
+    }
+
+    function setStatus(state, msg) {
+      $dot.className = `dot ${state}`
+      $status.textContent = msg
+      // 启停 launch 按钮的可点状态
+      $launch.disabled = state === 'wait' || state === 'up'
+    }
+
+    function buildDownloadLink({ os, arch }) {
+      // GitHub releases latest. 实际下载名由 build.ts 决定: numas-<os>-<arch>[.zip|.tar.gz]
+      const repo = 'weizuxiao911/numas'
+      if (os === 'macos') {
+        return arch === 'arm64'
+          ? `https://github.com/${repo}/releases/latest/download/numas-darwin-arm64.zip`
+          : `https://github.com/${repo}/releases/latest/download/numas-darwin-x64.zip`
+      }
+      if (os === 'windows') {
+        return `https://github.com/${repo}/releases/latest/download/numas-windows-x64.zip`
+      }
+      // linux
+      return arch === 'arm64'
+        ? `https://github.com/${repo}/releases/latest/download/numas-linux-arm64.tar.gz`
+        : `https://github.com/${repo}/releases/latest/download/numas-linux-x64.tar.gz`
+    }
+
+    function showInstallGuide() {
+      const det = detectOS()
+      $osName.textContent = `${det.os} (${det.arch})`
+      $download.href = buildDownloadLink(det)
+      hide($installMac); hide($installLinux); hide($installWin)
+      if (det.os === 'macos') show($installMac)
+      else if (det.os === 'linux') show($installLinux)
+      else if (det.os === 'windows') show($installWin)
+      show($installPanel)
+    }
+
+    /**
+     * no-cors 健康探测:不读 body,只验 TCP/HTTP 可达性。
+     * CORS 头 / opaque response 都算 up。
+     */
+    async function pingServer(timeoutMs = 1500) {
+      const ctl = new AbortController()
+      const t = setTimeout(() => ctl.abort(), timeoutMs)
+      try {
+        await fetch(HEALTH_URL, { mode: 'no-cors', cache: 'no-store', signal: ctl.signal })
+        return true
+      } catch { return false }
+      finally { clearTimeout(t) }
+    }
+
+    async function pollUntilUp(maxAttempts, intervalMs) {
+      for (let i = 0; i < maxAttempts; i++) {
+        if (await pingServer()) return i
+        await new Promise((r) => setTimeout(r, intervalMs))
+      }
+      return -1
+    }
+
+    /** launch 失败后保留 install 面板,直到用户主动 retry。
+     *  auto-loop 在该状态下只更新 dot/status 文案,不再触碰 panels。 */
+    let inFailureState = false
+
+    /**
+     * 通过 iframe 触发 numas:// scheme(浏览器无 JS API 可直接启动 app)。
+     * 成功: 已安装的 numas desktop / CLI handler 接管,通常会让 numas serve 起来。
+     * 失败: 没有 handler,iframe.src 加载会被浏览器忽略。
+     * 本函数不返回成功/失败(浏览器不暴露结果),需要配合后续 pollUntilUp 推断。
+     */
+    function fireScheme() {
+      try {
+        const iframe = document.createElement('iframe')
+        iframe.style.cssText = 'display:none;width:0;height:0;border:0;'
+        iframe.src = SCHEME
+        document.body.appendChild(iframe)
+        setTimeout(() => { try { iframe.remove() } catch {} }, 3000)
+      } catch (e) {
+        console.warn('[launch] scheme failed', e)
+      }
+    }
+
+    async function check() {
+      hideAllPanels()
+      setStatus('wait', '检测本地 numas 服务…')
+      const up = await pingServer()
+      if (up) {
+        setStatus('up', '已连接 — ' + SERVER_URL)
+        show($okPanel)
+        $open.classList.remove('hide')
+        // 自动跳转到 numas serve(让用户落到 codeblitz IDE)
+        setTimeout(() => { window.location.href = SERVER_URL }, 800)
+      } else {
+        setStatus('down', '本地 numas 未运行 — 点「启动 numas」唤起,或按下方步骤安装')
+        $open.classList.add('hide')
+      }
+    }
+
+    async function launch() {
+      if ($launch.disabled) return
+      $launch.disabled = true
+      hideAllPanels()
+      setStatus('wait', '正在唤起本地 numas…')
+      show($waitPanel)
+
+      const before = Date.now()
+      fireScheme()
+      // 等待服务起来: 最长 LAUNCH_TIMEOUT_MS
+      const maxAttempts = Math.ceil(LAUNCH_TIMEOUT_MS / POLL_INTERVAL_MS)
+      const attempts = await pollUntilUp(maxAttempts, POLL_INTERVAL_MS)
+      const elapsed = Date.now() - before
+
+      if (attempts >= 0) {
+        setStatus('up', `已连接 — ${SERVER_URL} (启动 ${elapsed}ms)`)
+        hideAllPanels()
+        show($okPanel)
+        $open.classList.remove('hide')
+        inFailureState = false
+        // 跳转到 numas serve
+        setTimeout(() => { window.location.href = SERVER_URL }, 600)
+      } else {
+        setStatus('down', `唤起超时 (${elapsed}ms) — 可能未安装 numas`)
+        hideAllPanels()
+        showInstallGuide()
+        $launch.disabled = false
+        inFailureState = true  // 保留 install 面板,auto-loop 不再 reset
+      }
+    }
+
+    $launch.addEventListener('click', launch)
+    $retry.addEventListener('click', () => { inFailureState = false; check() })
+
+    // 后台定时复检(捕获用户外部启动 numas 的情况)。
+    // launch 失败后保留 install 面板 — auto-loop 只更新 dot/status, 不动 panels。
+    setInterval(async () => {
+      if ($launch.disabled || inFailureState) return
+      const up = await pingServer()
+      if (up) {
+        setStatus('up', '已连接 — ' + SERVER_URL)
+        show($okPanel)
+        $open.classList.remove('hide')
+        setTimeout(() => { window.location.href = SERVER_URL }, 800)
+      } else {
+        setStatus('down', '本地 numas 未运行 — 点「启动 numas」唤起,或按下方步骤安装')
+        $open.classList.add('hide')
+      }
+    }, 5000)
+
+    // 启动
+    check()
+  </script>
+</body>
+</html>

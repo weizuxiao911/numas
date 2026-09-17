@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <title>numas</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0e0f12; color: #e8eaed;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+    body { display: grid; place-items: center; }
+    .wrap { text-align: center; }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid rgba(255,255,255,.12);
+      border-top-color: #7c9cff;
+      border-radius: 50%;
+      animation: spin .9s linear infinite;
+      margin: 0 auto 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hint { color: #9aa0a6; font-size: 13px; }
+    code { font-family: ui-monospace, monospace; font-size: 12px;
+      background: rgba(255,255,255,.06); padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="spinner" aria-hidden="true"></div>
+    <div>启动 numas 服务…</div>
+    <div class="hint" id="hint">spawning <code>numas serve --port 4096</code></div>
+  </div>
+  <script>
+    // Listen for sidecar status events from the Tauri shell.
+    (async () => {
+      try {
+        const { listen } = window.__TAURI__.event;
+        await listen('sidecar-stdout', (e) => {
+          console.log('[sidecar]', e.payload);
+        });
+        await listen('sidecar-stderr', (e) => {
+          console.warn('[sidecar]', e.payload);
+        });
+      } catch (e) { /* ignore — not in Tauri context */ }
+    })();
+  </script>
+</body>
+</html>
