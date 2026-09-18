@@ -1,0 +1,11 @@
+{
+  "name": "@numas/tauri",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "prepare:sidecar": "bun ./scripts/prepare.ts",
+    "dev": "bun ./scripts/prepare.ts && bunx @tauri-apps/cli dev",
+    "build": "bun ./scripts/build.ts"
+  }
+}

@@ -1,0 +1,42 @@
+# numas desktop shell (Tauri)
+
+最小化后台运行的 numas 桌面壳：托盘常驻，托管随包的 numas server（`http://127.0.0.1:24096`），
+浏览器作为 UI，支持 `numas://serve?port=24096` scheme 唤起。
+
+## 行为
+
+- 双击启动：进托盘 → 启动 numas server → 打开系统浏览器访问 `http://127.0.0.1:24096`
+- `numas://serve?port=<port>`：进托盘并确保 server 在跑，不打开浏览器（触发页自行轮询健康）
+- 托盘「打开」：打开浏览器；托盘「退出」：结束壳进程并停止自己拉起的 numas server
+- 只停自己拉起的 server；若 24096 上已有服务（例如手动 `numas serve`），退出时不碰它
+
+## 本地构建
+
+先构建当前平台的 numas CLI（内嵌 codeblitz）：
+
+```bash
+cd packages/opencode
+bun run build --single
+```
+
+再构建壳（自动把二进制同步到 `binaries/numas-<target-triple>`）：
+
+```bash
+cd packages/tauri
+bun run build
+```
+
+产物在 `packages/tauri/target/release/bundle/`（macOS: dmg/app，Windows: nsis，Linux: appimage/deb/rpm）。
+
+开发调试：
+
+```bash
+cd packages/tauri
+bun run dev
+```
+
+## 说明
+
+- 全平台打包靠本机构建（macOS/Windows/Linux × x64/arm64），不使用 CI
+- `icons/` 为 🐮 占位图标（`bunx @tauri-apps/cli icon <1024.png>` 生成），可随时替换
+- 壳不依赖系统已安装的 numas，二进制随包分发
