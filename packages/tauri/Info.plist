@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>numas 需要访问「文稿」文件夹,以在您的文档目录中读写工作区文件。</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>numas 需要访问「桌面」文件夹,以在您的桌面目录中读写工作区文件。</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>numas 需要访问「下载」文件夹,以在您的下载目录中读写工作区文件。</string>
+</dict>
+</plist>

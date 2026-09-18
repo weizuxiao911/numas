@@ -27,7 +27,11 @@
     "externalBin": ["binaries/numas"],
     "category": "DeveloperTool",
     "shortDescription": "Numas AI workspace",
-    "longDescription": "Numas desktop shell: tray + numas:// scheme around the bundled numas server."
+    "longDescription": "Numas desktop shell: tray + numas:// scheme around the bundled numas server.",
+    "macOS": {
+      "hardenedRuntime": false,
+      "infoPlist": "Info.plist"
+    }
   },
   "plugins": {
     "deep-link": {
