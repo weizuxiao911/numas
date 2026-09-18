@@ -1,0 +1,26 @@
+.github/**
+.vscode/**
+src/**
+shared/**
+webview-src/**
+test/**
+scripts/**
+patches/**
+node_modules/**
+dist-test/**
+playwright-report/**
+test-results/**
+*.map
+.gitignore
+eslint.config.mjs
+tsconfig*.json
+esbuild.mjs
+playwright.config.mjs
+implementation_plan.md
+media/icon-source.png
+media/banner.svg
+# Kept in the repository for documentation, but nothing references them from the
+# packaged extension, so users should not download them on every update.
+media/screenshots/**
+media/docx-icon.svg
+scratch/**
