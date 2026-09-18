@@ -324,4 +324,12 @@ AI **仍需 `question`**:
 
 AI 自主维护, 用户可随时指出错误或要求补充. 后续按 §3.1 自查铁律持续沉淀.
 
+### 4.1 实践指南
+
+- 删除/重命名子包后, 提交前全仓 grep 包名 (含 `.html` / `.md` / 脚本), 清残留引用再提交. 本次删 `packages/desktop-tauri` 后 `test/launch.html` 仍有安装说明残留.
+
+### 4.2 避坑指南
+
+- 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动 (如 AGENTS.md / version.json), 不要默认全量 `git add -A`; 用 `question` 让用户拍板纳入范围与拆分方式.
+
 
