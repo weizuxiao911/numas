@@ -5,7 +5,8 @@
 
 ## 行为
 
-- 双击启动：进托盘 → 启动 numas server → 打开系统浏览器访问 `http://127.0.0.1:24096`
+- 无 Dock（Accessory），只有菜单栏单色托盘图标
+- 双击启动：进托盘 → 启动 numas server → 等健康就绪后打开系统浏览器 `http://127.0.0.1:24096`
 - `numas://serve?port=<port>`：进托盘并确保 server 在跑，不打开浏览器（触发页自行轮询健康）
 - 托盘「打开」：打开浏览器；托盘「退出」：结束壳进程并停止自己拉起的 numas server
 - 只停自己拉起的 server；若 24096 上已有服务（例如手动 `numas serve`），退出时不碰它
@@ -23,7 +24,17 @@ bun run build --single
 
 ```bash
 cd packages/tauri
-bun run build
+bun run build                 # 当前平台
+bun run build:arm64           # macOS arm64
+bun run build:x64             # macOS x64（需先 rustup target add x86_64-apple-darwin）
+bun run build:universal       # macOS universal（需两个架构的 numas 二进制）
+```
+
+跨架构时先用 `NUMAS_TARGET` 交叉构建对应二进制，例如：
+
+```bash
+cd packages/opencode
+NUMAS_WEB_DIST=../codeblitz/dist NUMAS_TARGET=darwin-x64 bun run script/build.ts
 ```
 
 产物在 `packages/tauri/target/release/bundle/`（macOS: dmg/app，Windows: nsis，Linux: appimage/deb/rpm）。

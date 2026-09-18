@@ -6,6 +6,9 @@
   "scripts": {
     "prepare:sidecar": "bun ./scripts/prepare.ts",
     "dev": "bun ./scripts/prepare.ts && bunx @tauri-apps/cli dev",
-    "build": "bun ./scripts/build.ts"
+    "build": "bun ./scripts/build.ts",
+    "build:arm64": "bun ./scripts/build.ts --target aarch64-apple-darwin",
+    "build:x64": "bun ./scripts/build.ts --target x86_64-apple-darwin",
+    "build:universal": "bun ./scripts/build.ts --target universal-apple-darwin"
   }
 }

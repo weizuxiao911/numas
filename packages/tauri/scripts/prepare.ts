@@ -1,33 +1,63 @@
+import { $ } from "bun"
 import { chmod, copyFile, mkdir } from "node:fs/promises"
 import { join } from "node:path"
 
 const root = join(import.meta.dir, "../../..")
 const pkg = join(import.meta.dir, "..")
 
-const targets: Record<string, { dir: string; triple: string }> = {
-  "darwin-arm64": { dir: "numas-darwin-arm64", triple: "aarch64-apple-darwin" },
-  "darwin-x64": { dir: "numas-darwin-x64", triple: "x86_64-apple-darwin" },
-  "win32-arm64": { dir: "numas-windows-arm64", triple: "aarch64-pc-windows-msvc" },
-  "win32-x64": { dir: "numas-windows-x64", triple: "x86_64-pc-windows-msvc" },
-  "linux-arm64": { dir: "numas-linux-arm64", triple: "aarch64-unknown-linux-gnu" },
-  "linux-x64": { dir: "numas-linux-x64", triple: "x86_64-unknown-linux-gnu" },
+const targets = {
+  "aarch64-apple-darwin": { dir: "numas-darwin-arm64", exe: "numas" },
+  "x86_64-apple-darwin": { dir: "numas-darwin-x64", exe: "numas" },
+  "aarch64-pc-windows-msvc": { dir: "numas-windows-arm64", exe: "numas.exe" },
+  "x86_64-pc-windows-msvc": { dir: "numas-windows-x64", exe: "numas.exe" },
+  "aarch64-unknown-linux-gnu": { dir: "numas-linux-arm64", exe: "numas" },
+  "x86_64-unknown-linux-gnu": { dir: "numas-linux-x64", exe: "numas" },
+} as const
+
+function hostTriple() {
+  if (process.platform === "darwin") return process.arch === "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin"
+  if (process.platform === "win32") return process.arch === "arm64" ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc"
+  if (process.platform === "linux") return process.arch === "arm64" ? "aarch64-unknown-linux-gnu" : "x86_64-unknown-linux-gnu"
+  throw new Error(`unsupported host platform: ${process.platform}-${process.arch}`)
 }
 
-const key = `${process.platform}-${process.arch}`
-const target = targets[key]
-if (!target) throw new Error(`unsupported host platform: ${key}`)
-
-const exe = process.platform === "win32" ? "numas.exe" : "numas"
-const source = join(root, "packages", "opencode", "dist", target.dir, "bin", exe)
-if (!(await Bun.file(source).exists())) {
-  throw new Error(
-    `missing numas CLI binary: ${source}\n先构建: cd packages/opencode && bun run build --single`,
-  )
+async function copySidecar(triple: string, dest: string) {
+  const entry = targets[triple as keyof typeof targets]
+  if (!entry) throw new Error(`unsupported target: ${triple}`)
+  const source = join(root, "packages", "opencode", "dist", entry.dir, "bin", entry.exe)
+  if (!(await Bun.file(source).exists())) {
+    throw new Error(`missing numas CLI binary: ${source}\n先构建: cd packages/opencode && NUMAS_TARGET=... bun run script/build.ts`)
+  }
+  await copyFile(source, dest)
+  if (!dest.endsWith(".exe")) await chmod(dest, 0o755)
 }
 
-const destDir = join(pkg, "binaries")
-await mkdir(destDir, { recursive: true })
-const dest = join(destDir, `numas-${target.triple}${process.platform === "win32" ? ".exe" : ""}`)
-await copyFile(source, dest)
-if (process.platform !== "win32") await chmod(dest, 0o755)
-console.log(`[numas] sidecar ready: ${dest}`)
+export async function prepare(target?: string) {
+  const triple = target ?? hostTriple()
+  const destDir = join(pkg, "binaries")
+  await mkdir(destDir, { recursive: true })
+
+  if (triple === "universal-apple-darwin") {
+    const archs = [
+      ["aarch64-apple-darwin", join(destDir, "numas-aarch64-apple-darwin")],
+      ["x86_64-apple-darwin", join(destDir, "numas-x86_64-apple-darwin")],
+    ] as const
+    for (const [arch, dest] of archs) {
+      if (!(await Bun.file(dest).exists())) await copySidecar(arch, dest)
+    }
+    const dest = join(destDir, "numas-universal-apple-darwin")
+    await $`lipo -create ${archs[0][1]} ${archs[1][1]} -output ${dest}`
+    await chmod(dest, 0o755)
+    console.log(`[numas] universal sidecar ready: ${dest}`)
+    return
+  }
+
+  const dest = join(destDir, `numas-${triple}${triple.includes("windows") ? ".exe" : ""}`)
+  await copySidecar(triple, dest)
+  console.log(`[numas] sidecar ready: ${dest}`)
+}
+
+if (import.meta.main) {
+  const index = process.argv.indexOf("--target")
+  await prepare(index === -1 ? undefined : process.argv[index + 1])
+}
