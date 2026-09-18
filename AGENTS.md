@@ -327,9 +327,15 @@ AI 自主维护, 用户可随时指出错误或要求补充. 后续按 §3.1 自
 ### 4.1 实践指南
 
 - 删除/重命名子包后, 提交前全仓 grep 包名 (含 `.html` / `.md` / 脚本), 清残留引用再提交. 本次删 `packages/desktop-tauri` 后 `test/launch.html` 仍有安装说明残留.
+- `packages/tauri` 壳构建顺序: 先在 `packages/opencode` 跑 `bun run build --single` (内嵌 codeblitz 的 numas 二进制), 再 `packages/tauri` 的 `scripts/prepare.ts` 同步到 `binaries/numas-<triple>`, 最后 `tauri build`; 缺二进制时 `cargo check` 就会因 externalBin 校验失败.
+- tray-only Tauri 壳: macOS 用 `ActivationPolicy::Accessory` 隐藏 Dock; 单实例 + `numas://` deep link 由 `tauri-plugin-single-instance` + `tauri-plugin-deep-link` 承载; 只 kill 自己 spawn 的 sidecar.
 
 ### 4.2 避坑指南
 
 - 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动 (如 AGENTS.md / version.json), 不要默认全量 `git add -A`; 用 `question` 让用户拍板纳入范围与拆分方式.
+- macOS dev 下 `tauri-plugin-deep-link` 的运行时 `register()` 返回 `unsupported platform`, `numas://` 只能在 `tauri build` 产出的 .app (CFBundleURLTypes) 里验证, 直接 `cargo run` 测不了 scheme.
+- `tauri.conf.json` 的 `frontendDist` 相对 config 文件所在目录解析 (包根布局写 `assets`, 不要按 src-tauri 习惯写 `../assets`).
+- opencode `bun run build` 会自动 bump `version.json` patch 并可能改写 `bun.lock` (平台包), 提交前逐项甄别, 不要无脑全量 add.
+
 
 
