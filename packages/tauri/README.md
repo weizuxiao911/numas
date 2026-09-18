@@ -46,6 +46,16 @@ cd packages/tauri
 bun run dev
 ```
 
+## macOS 签名 + 公证
+
+无凭据时构建会自动 ad-hoc 整包签名（仅本机可用；分发到别的机器会被 Gatekeeper 拦）。对外分发需要 Developer ID：
+
+1. 安装 `Developer ID Application` 证书到登录钥匙串
+2. `cp .env.example .env.local`，填入证书名与公证凭据（Bun 自动加载 `.env.local`）
+3. `bun run build` → 自动签名 + 公证 + staple
+
+凭据只放 `.env.local`（已 gitignore），不入库。
+
 ## 说明
 
 - 全平台打包靠本机构建（macOS/Windows/Linux × x64/arm64），不使用 CI

@@ -8,6 +8,10 @@ const target = index === -1 ? undefined : process.argv[index + 1]
 
 await prepare(target)
 
+if (process.platform === "darwin" && !process.env.APPLE_SIGNING_IDENTITY) {
+  process.env.APPLE_SIGNING_IDENTITY = "-"
+}
+
 const version = (await Bun.file(join(import.meta.dir, "../../../version.json")).json()) as {
   major: number
   minor: number
