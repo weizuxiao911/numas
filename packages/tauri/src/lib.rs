@@ -1,5 +1,4 @@
 use std::net::{TcpStream, ToSocketAddrs};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -15,14 +14,13 @@ const DEFAULT_PORT: u16 = 24096;
 const SERVER_URL: &str = "http://127.0.0.1:24096";
 
 struct ServerState(Mutex<Option<CommandChild>>);
-struct LaunchFlags(AtomicBool);
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             let urls: Vec<String> = argv.into_iter().filter(|arg| arg.starts_with("numas://")).collect();
             if urls.is_empty() {
-                open_when_ready(app.clone(), DEFAULT_PORT);
+                ensure_server_running(app.clone(), DEFAULT_PORT);
                 return;
             }
             handle_deep_links(app, &urls);
@@ -31,7 +29,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .manage(ServerState(Mutex::new(None)))
-        .manage(LaunchFlags(AtomicBool::new(false)))
         .setup(|app| {
             let handle = app.handle().clone();
 
@@ -77,21 +74,13 @@ pub fn run() {
 
             let urls: Vec<String> = std::env::args().filter(|arg| arg.starts_with("numas://")).collect();
             if urls.is_empty() {
-                let handle = handle.clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(2000));
-                    if handle.state::<LaunchFlags>().0.load(Ordering::SeqCst) {
-                        return;
-                    }
-                    open_when_ready(handle, DEFAULT_PORT);
-                });
+                ensure_server_running(handle.clone(), DEFAULT_PORT);
             } else {
                 handle_deep_links(&handle, &urls);
             }
 
             let handle = handle.clone();
             app.deep_link().on_open_url(move |event| {
-                handle.state::<LaunchFlags>().0.store(true, Ordering::SeqCst);
                 let urls: Vec<String> = event.urls().iter().map(|url| url.to_string()).collect();
                 handle_deep_links(&handle, &urls);
             });
@@ -103,9 +92,25 @@ pub fn run() {
         .run(|app, event| match event {
             RunEvent::ExitRequested { .. } => stop_server(app),
             RunEvent::Exit => stop_server(app),
-            RunEvent::Reopen { .. } => open_when_ready(app.clone(), DEFAULT_PORT),
+            RunEvent::Reopen { .. } => ensure_server_running(app.clone(), DEFAULT_PORT),
+            RunEvent::Opened { urls } => {
+                let list: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
+                handle_deep_links(&app, &list);
+            }
             _ => {}
         });
+}
+
+fn ensure_server_running(app: AppHandle, port: u16) {
+    std::thread::spawn(move || {
+        ensure_server(&app, port);
+        for _ in 0..120 {
+            if port_listening(port) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+    });
 }
 
 fn open_when_ready(app: AppHandle, port: u16) {
@@ -120,6 +125,12 @@ fn open_when_ready(app: AppHandle, port: u16) {
         std::thread::sleep(Duration::from_millis(500));
         open_browser(&app);
     });
+}
+
+fn open_browser(app: &AppHandle) {
+    if let Err(error) = app.opener().open_url(SERVER_URL, None::<&str>) {
+        eprintln!("[numas] failed to open browser: {error}");
+    }
 }
 
 fn ensure_server(app: &AppHandle, port: u16) {
@@ -175,12 +186,6 @@ fn stop_server(app: &AppHandle) {
     let child = state.0.lock().ok().and_then(|mut guard| guard.take());
     if let Some(child) = child {
         let _ = child.kill();
-    }
-}
-
-fn open_browser(app: &AppHandle) {
-    if let Err(error) = app.opener().open_url(SERVER_URL, None::<&str>) {
-        eprintln!("[numas] failed to open browser: {error}");
     }
 }
 
