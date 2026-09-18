@@ -22,8 +22,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             let urls: Vec<String> = argv.into_iter().filter(|arg| arg.starts_with("numas://")).collect();
             if urls.is_empty() {
-                ensure_server(app, DEFAULT_PORT);
-                open_browser(app);
+                open_when_ready(app.clone(), DEFAULT_PORT);
                 return;
             }
             handle_deep_links(app, &urls);
@@ -43,9 +42,6 @@ pub fn run() {
                 }
             }
 
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
             let open_item = MenuItem::with_id(app, "open", "打开", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
@@ -57,10 +53,7 @@ pub fn run() {
                 .menu(&menu)
                 .show_menu_on_left_click(true)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "open" => {
-                        ensure_server(app, DEFAULT_PORT);
-                        open_browser(app);
-                    }
+                    "open" => open_when_ready(app.clone(), DEFAULT_PORT),
                     "quit" => {
                         stop_server(app);
                         app.exit(0);
@@ -74,12 +67,13 @@ pub fn run() {
                         ..
                     } = event
                     {
-                        let app = tray.app_handle();
-                        ensure_server(app, DEFAULT_PORT);
-                        open_browser(app);
+                        open_when_ready(tray.app_handle().clone(), DEFAULT_PORT);
                     }
                 })
                 .build(app)?;
+
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let urls: Vec<String> = std::env::args().filter(|arg| arg.starts_with("numas://")).collect();
             if urls.is_empty() {
@@ -89,8 +83,7 @@ pub fn run() {
                     if handle.state::<LaunchFlags>().0.load(Ordering::SeqCst) {
                         return;
                     }
-                    ensure_server(&handle, DEFAULT_PORT);
-                    open_browser(&handle);
+                    open_when_ready(handle, DEFAULT_PORT);
                 });
             } else {
                 handle_deep_links(&handle, &urls);
@@ -110,8 +103,23 @@ pub fn run() {
         .run(|app, event| match event {
             RunEvent::ExitRequested { .. } => stop_server(app),
             RunEvent::Exit => stop_server(app),
+            RunEvent::Reopen { .. } => open_when_ready(app.clone(), DEFAULT_PORT),
             _ => {}
         });
+}
+
+fn open_when_ready(app: AppHandle, port: u16) {
+    std::thread::spawn(move || {
+        ensure_server(&app, port);
+        for _ in 0..120 {
+            if port_listening(port) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        std::thread::sleep(Duration::from_millis(500));
+        open_browser(&app);
+    });
 }
 
 fn ensure_server(app: &AppHandle, port: u16) {
@@ -205,10 +213,5 @@ fn port_listening(port: u16) -> bool {
 }
 
 fn tray_icon() -> tauri::image::Image<'static> {
-    let bytes: &'static [u8] = if cfg!(target_os = "macos") {
-        include_bytes!("../icons/tray.png")
-    } else {
-        include_bytes!("../icons/icon.png")
-    };
-    tauri::image::Image::from_bytes(bytes).expect("invalid tray icon")
+    tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png")).expect("invalid tray icon")
 }
