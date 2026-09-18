@@ -336,6 +336,7 @@ AI 自主维护, 用户可随时指出错误或要求补充. 后续按 §3.1 自
 - macOS dev 下 `tauri-plugin-deep-link` 的运行时 `register()` 返回 `unsupported platform`, `numas://` 只能在 `tauri build` 产出的 .app (CFBundleURLTypes) 里验证, 直接 `cargo run` 测不了 scheme.
 - `tauri.conf.json` 的 `frontendDist` 相对 config 文件所在目录解析 (包根布局写 `assets`, 不要按 src-tauri 习惯写 `../assets`).
 - opencode `bun run build` 会自动 bump `version.json` patch 并可能改写 `bun.lock` (平台包), 提交前逐项甄别, 不要无脑全量 add.
+- macOS 26 按 **bundle id 记住菜单栏项的隐藏状态**: 若托盘项曾在 Accessory (无 Dock) 状态下创建而被系统放入隐藏位, 该 bundle id 会持续隐藏 (换新 bundle id 才恢复). 正确顺序: **先创建托盘项, 再切 Accessory**; 托盘图标用 22px 单色模板 (`icon_as_template(true)`), 显示位置由系统控制, 不要自定义.
 
 
 
