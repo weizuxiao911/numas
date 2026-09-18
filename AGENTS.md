@@ -302,6 +302,7 @@ function defaultDirectory(request, _url) {
 - 用户给的纠正/指引, 当轮即时修正.
 - 反复出现的同类纠正, 提炼成 §4 避坑指南.
 - 用户的隐式偏好 (例如"回答精简", "先看现象再下结论"), 观察到后沉淀.
+- **引导下载安装环节不写死版本号 / asset 文件名**: 走 GitHub Releases API latest 机制 (fetch latest release 的 assets[] 按 OS/arch 匹配 asset.name), 不在 buildDownloadLink/Url 类函数里塞写死的 semver / 文件名常量. build-time 配置 (tauri.conf.json / Cargo.toml 等) 的 semver 字段不在此列 (用户 2026-09-17 纠错).
 
 ### 3.3 自维护边界
 
