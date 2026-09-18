@@ -46,6 +46,16 @@ cd packages/tauri
 bun run dev
 ```
 
+## 同事安装（macOS，无开发者账号）
+
+把 dmg 和 `scripts/install-macos.sh` 一起发给同事，运行：
+
+```bash
+bash install-macos.sh numas_0.1.17_aarch64.dmg
+```
+
+脚本会自动替换安装到 `/Applications`、去除 quarantine 并启动。手动方式：拖入 `/Applications` 后执行 `xattr -cr /Applications/numas.app`，或首次打开时到 系统设置 → 隐私与安全性 → 「仍要打开」。
+
 ## macOS 签名 + 公证
 
 无凭据时构建会自动 ad-hoc 整包签名（仅本机可用；分发到别的机器会被 Gatekeeper 拦）。对外分发需要 Developer ID：
