@@ -25,7 +25,7 @@ const plugin = createSolidTransformPlugin()
 const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
 const webUiName = (() => {
   const i = process.argv.indexOf("--web-ui")
-  if (i === -1) return "app"
+  if (i === -1) return "codeblitz"
   const v = process.argv[i + 1]
   if (v !== "app" && v !== "codeblitz") {
     throw new Error(`--web-ui must be "app" or "codeblitz", got: ${v}`)

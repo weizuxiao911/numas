@@ -1,11 +1,11 @@
 import { Effect } from "effect"
 import { effectCmd, fail } from "../effect-cmd"
-import { withNetworkOptions, resolveNetworkOptions, validateWebUIOption } from "../network"
+import { withServeNetworkOptions, resolveNetworkOptions, validateWebUIOption } from "../network"
 import { Flag } from "@opencode-ai/core/flag/flag"
 
 export const ServeCommand = effectCmd({
   command: "serve",
-  builder: (yargs) => withNetworkOptions(yargs),
+  builder: (yargs) => withServeNetworkOptions(yargs),
   describe: "starts a headless opencode server",
   // Server loads instances per-request via x-opencode-directory header — no
   // need for an ambient project InstanceContext at startup.

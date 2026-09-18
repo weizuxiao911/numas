@@ -207,24 +207,24 @@
 <body>
   <main class="card">
     <h1><span class="logo"></span>numas</h1>
-    <p>本地 AI 工作环境。点击下方按钮启动后台服务,启动后浏览器自动跳转到 <code id="endpoint" class="endpoint">http://localhost:4096</code>。</p>
+    <p>本地 AI 工作环境。点击下方按钮启动后台服务,启动后浏览器自动跳转到 <code id="endpoint" class="endpoint">http://localhost:24096</code>。</p>
 
     <div class="status-row">
       <span id="dot" class="dot"></span>
       <span id="status">检测中…</span>
-      <span id="endpoint2" class="endpoint">http://localhost:4096</span>
+      <span id="endpoint2" class="endpoint">http://localhost:24096</span>
     </div>
 
     <div class="row">
       <button id="launch" disabled>启动 numas</button>
       <button id="retry" class="secondary">重新检测</button>
-      <a id="open" href="http://localhost:4096/" target="_blank" class="hide">打开 →</a>
+      <a id="open" href="http://localhost:24096/" target="_blank" class="hide">打开 →</a>
     </div>
 
     <!-- 检测到 numas 运行中 -->
     <div id="ok-panel" class="panel ok hide">
       <h3>已连接</h3>
-      <p>本地 numas 服务运行中,<code>http://localhost:4096</code> 可访问。</p>
+      <p>本地 numas 服务运行中,<code>http://localhost:24096</code> 可访问。</p>
     </div>
 
     <!-- 唤起中 -->
@@ -247,7 +247,7 @@
         </ol>
         <pre>unzip numas-darwin-arm64.zip
 sudo mv numas /usr/local/bin/
-numas serve --port 4096 &amp;</pre>
+numas serve --port 24096 &amp;</pre>
       </div>
 
       <div id="install-linux" class="hide">
@@ -258,7 +258,7 @@ numas serve --port 4096 &amp;</pre>
         </ol>
         <pre>tar -xzf numas-linux-x64.tar.gz
 sudo mv numas /usr/local/bin/
-numas serve --port 4096 &amp;</pre>
+numas serve --port 24096 &amp;</pre>
       </div>
 
       <div id="install-windows" class="hide">
@@ -269,7 +269,7 @@ numas serve --port 4096 &amp;</pre>
         </ol>
         <pre>Expand-Archive numas-windows-x64.zip
 [Environment]::SetEnvironmentVariable("Path", "$env:Path;C:\numas", "User")
-numas serve --port 4096</pre>
+numas serve --port 24096</pre>
       </div>
 
       <div class="inline-actions">
@@ -286,11 +286,11 @@ numas serve --port 4096</pre>
 
     <details class="hint">
       <summary style="cursor:pointer;color:var(--muted); user-select: none;">调试/手动</summary>
-      <pre>URL: http://localhost:4096
-唤起 scheme: numas://serve?port=4096
-健康: GET http://localhost:4096/health
-手动启动 CLI: numas serve --port 4096
-后台跑: nohup numas serve --port 4096 &amp;
+      <pre>URL: http://localhost:24096
+唤起 scheme: numas://serve?port=24096
+健康: GET http://localhost:24096/global/health
+手动启动 CLI: numas serve --port 24096
+后台跑: nohup numas serve --port 24096 &amp;
 停止: pkill -f "numas serve"</pre>
     </details>
 
@@ -298,10 +298,10 @@ numas serve --port 4096</pre>
   </main>
 
   <script type="module">
-    const PORT = 4096
+    const PORT = 24096
     const SERVER_URL = `http://localhost:${PORT}`
     const SCHEME = `numas://serve?port=${PORT}`
-    const HEALTH_URL = `${SERVER_URL}/health`
+    const HEALTH_URL = `${SERVER_URL}/global/health`
     const LAUNCH_TIMEOUT_MS = 8000  // scheme 唤起后等待的最长时间
     const POLL_INTERVAL_MS = 500
 

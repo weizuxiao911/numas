@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { UI } from "../ui"
 import { effectCmd, fail } from "../effect-cmd"
-import { withNetworkOptions, resolveNetworkOptions, validateWebUIOption } from "../network"
+import { withServeNetworkOptions, resolveNetworkOptions, validateWebUIOption } from "../network"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { networkInterfaces } from "os"
 import { spawn } from "child_process"
@@ -31,7 +31,7 @@ function getNetworkIPs() {
 export const WebCommand = effectCmd({
   command: "web",
   builder: (yargs) =>
-    withNetworkOptions(yargs).option("dev", {
+    withServeNetworkOptions(yargs).option("dev", {
       type: "boolean" as const,
       describe:
         "dev mode: do not auto-open the browser; caller (e.g. dev.js) opens it with a custom URL (e.g. ?directory=)",

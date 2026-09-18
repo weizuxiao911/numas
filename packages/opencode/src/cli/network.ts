@@ -72,6 +72,13 @@ export function withNetworkOptions<T>(yargs: Argv<T>) {
   return yargs.options(options)
 }
 
+export function withServeNetworkOptions<T>(yargs: Argv<T>) {
+  return withNetworkOptions(yargs)
+    .default("port", 24096)
+    .default("hostname", "0.0.0.0")
+    .default("cors", ["*"])
+}
+
 export function hasArg(name: string) {
   return networkArgs().some((arg) => arg === name || arg.startsWith(name + "="))
 }
