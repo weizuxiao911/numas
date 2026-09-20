@@ -342,7 +342,7 @@ AI 自主维护, 用户可随时指出错误或要求补充. 后续按 §3.1 自
 - 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动 (如 AGENTS.md / version.json), 不要默认全量 `git add -A`; 用 `question` 让用户拍板纳入范围与拆分方式.
 - macOS dev 下 `tauri-plugin-deep-link` 的运行时 `register()` 返回 `unsupported platform`, `numas://` 只能在 `tauri build` 产出的 .app (CFBundleURLTypes) 里验证, 直接 `cargo run` 测不了 scheme.
 - `tauri.conf.json` 的 `frontendDist` 相对 config 文件所在目录解析 (包根布局写 `assets`, 不要按 src-tauri 习惯写 `../assets`).
-- opencode `bun run build` 会自动 bump `version.json` patch 并可能改写 `bun.lock` (平台包), 提交前逐项甄别, 不要无脑全量 add.
+- **opencode 打包版本号固定官方 `1.18.30`** (`packages/script/src/index.ts`): UA = `opencode/${InstallationVersion}` (`packages/opencode/src/session/llm/request.ts`), opencode Console 免费模型按 UA 校验来源, `numas-v<...>` 定制版本号会被拒. 打包不再自动 bump `version.json` (桌面发版人工改, 与 §4.1 一致); `bun run build` 仍可能改写 `bun.lock` (平台包), 提交前逐项甄别, 不要无脑全量 add.
 - macOS 26 按 **bundle id 记住菜单栏项的隐藏状态**: 若托盘项曾在 Accessory (无 Dock) 状态下创建而被系统放入隐藏位, 该 bundle id 会持续隐藏 (换新 bundle id 才恢复). 正确顺序: **先创建托盘项, 再切 Accessory**; 托盘图标用 22px 单色模板 (`icon_as_template(true)`), 显示位置由系统控制, 不要自定义.
 - 端口 404 排查先查**残留进程占用**: 已删除目录的 dev server 可能仍在监听 (如旧 `test/poc-opencode-ide` 的 vite 占 5173), 新起服务 bind 不到 → 返回旧进程的 404. 用 `lsof -iTCP:<port> -sTCP:LISTEN -n -P` 看 PID, 确认对应已删除目录后 `kill` 再验.
 - codeblitz 前置 numas 检测 (`packages/codeblitz/src/gate`) 支持 `?numasPort=<port>` URL 覆盖 (仅当该参数存在时生效), 用于不打扰真实环境地模拟"未安装/自定义端口"验证引导分支; 默认探测配置的后端基址 (`appBaseUrl()`).

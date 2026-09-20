@@ -31,29 +31,18 @@ const CHANNEL = await (async () => {
 })()
 const IS_PREVIEW = CHANNEL !== "latest"
 
-// numas fork 版本命名: numas-v<major>.<minor>.<patch>-<UTC yyyyMMddHHmm>.
-// version.json 在 numas 根 (上溯 4 层), 维护 major/minor (人工) + patch (构建时自增, 每次构建 +1, 持久化回写).
-// 读不到兜底 0.0.0. 时间戳取构建瞬间 UTC, 保证每次构建可追溯.
-const VERSION_FILE = path.resolve(import.meta.dir, "../../../version.json")
-const NUMAS_VERSION = await (async () => {
-  try {
-    const v = (await Bun.file(VERSION_FILE).json()) as { major?: number; minor?: number; patch?: number }
-    const major = typeof v.major === "number" ? v.major : 0
-    const minor = typeof v.minor === "number" ? v.minor : 0
-    const patch = (typeof v.patch === "number" ? v.patch : 0) + 1
-    await Bun.write(VERSION_FILE, JSON.stringify({ major, minor, patch }, null, 2) + "\n")
-    return `${major}.${minor}.${patch}`
-  } catch {
-    return "0.0.0"
-  }
-})()
+// numas fork: 版本号固定用官方 opencode 版本号, 使发给 provider 的 UA 呈官方形态.
+//   原因: UA 构造见 packages/opencode/src/session/llm/request.ts (`opencode/${InstallationVersion}`);
+//   opencode Console 免费模型按 UA 判定请求来源, numas-v<...> 这类定制版本号会被拒:
+//   "OpenCode's free tier can only be used from within OpenCode".
+//   (原逻辑为 numas-v<仓库版本>-<UTC时间戳>, 便于 fork 产物识别/追溯; 如需回滚恢复该段即可.)
+const NUMAS_VERSION = "1.18.30"
 
 const VERSION = await (async () => {
   if (env.OPENCODE_VERSION) return env.OPENCODE_VERSION
   if (IS_PREVIEW) {
-    const ts = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")
-    // numas: 覆盖 upstream 的 0.0.0-<channel>-<ts>, 用 numas-标识 + v<仓库版本>-<ts> (fork 产物可识别)
-    return `numas-v${NUMAS_VERSION}-${ts}`
+    // numas: 非 release 构建统一用官方版本号 (UA 需呈官方形态)
+    return NUMAS_VERSION
   }
   const version = await fetch("https://registry.npmjs.org/opencode-ai/latest")
     .then((res) => {
