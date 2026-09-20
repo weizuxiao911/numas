@@ -1,26 +1,59 @@
+/* gate 引导页 — 按应用主题 (light/dark) 适配
+   token 来源: opensumi-design-light/dark-theme (editor.background / panel.background /
+   foreground / descriptionForeground / border); 品牌紫对齐应用 overrides.css (#6d5ef5, 白字). */
+
 .gate {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
-  background: linear-gradient(160deg, #0d0f14 0%, #151a24 55%, #1a1426 100%);
-  color: #e8eaed;
+  background: var(--gate-bg);
+  color: var(--gate-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   padding: 24px;
   z-index: 10000;
 }
 
+/* 浅色 (opensumi-design-light-theme) */
+.gate--light {
+  --gate-bg: #f1f2f3;                        /* editor.background */
+  --gate-card-bg: #ffffff;                   /* panel.background */
+  --gate-card-border: rgba(21, 27, 33, 0.14);
+  --gate-text: #151b21;                      /* foreground */
+  --gate-text-dim: rgba(21, 27, 33, 0.65);   /* descriptionForeground */
+  --gate-box-bg: rgba(21, 27, 33, 0.03);
+  --gate-box-border: rgba(21, 27, 33, 0.08);
+  --gate-code-bg: rgba(21, 27, 33, 0.05);
+  --gate-btn-ghost-border: rgba(21, 27, 33, 0.18);
+  --gate-shadow: 0 16px 48px rgba(21, 27, 33, 0.1);
+}
+
+/* 深色 (opensumi-design-dark-theme) */
+.gate--dark {
+  --gate-bg: #181818;                        /* editor.background */
+  --gate-card-bg: #151b21;                   /* panel.background */
+  --gate-card-border: rgba(255, 255, 255, 0.12);
+  --gate-text: #d7dbde;                      /* foreground */
+  --gate-text-dim: #868c91;                  /* descriptionForeground */
+  --gate-box-bg: rgba(255, 255, 255, 0.03);
+  --gate-box-border: rgba(255, 255, 255, 0.08);
+  --gate-code-bg: rgba(0, 0, 0, 0.35);
+  --gate-btn-ghost-border: rgba(255, 255, 255, 0.16);
+  --gate-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
 .gate__card {
   width: min(480px, 100%);
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 18px;
+  background: var(--gate-card-bg);
+  border: 1px solid var(--gate-card-border);
+  border-radius: 16px;
   padding: 36px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--gate-shadow);
   text-align: center;
 }
 
+/* 品牌 logo: 与应用 splash 一致 (紫底白字 + 紫光晕) */
 .gate__logo {
   width: 56px;
   height: 56px;
@@ -29,21 +62,23 @@
   place-items: center;
   font-size: 30px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #6d5ef5, #a78bfa);
-  box-shadow: 0 12px 40px rgba(109, 94, 245, 0.35);
+  background: linear-gradient(135deg, #6d5ef5, #8b7bff);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(109, 94, 245, 0.3);
 }
 
 .gate__title {
   margin: 0 0 10px;
   font-size: 22px;
   font-weight: 700;
+  color: var(--gate-text);
 }
 
 .gate__desc {
   margin: 0 0 22px;
   font-size: 14px;
   line-height: 1.65;
-  color: #b0b6bd;
+  color: var(--gate-text-dim);
 }
 
 .gate__status {
@@ -52,8 +87,8 @@
   justify-content: center;
   gap: 10px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--gate-box-bg);
+  border: 1px solid var(--gate-box-border);
   border-radius: 10px;
   font-size: 13.5px;
   margin-bottom: 18px;
@@ -63,24 +98,21 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--muted, #9aa0a6);
+  background: #9aa0a6;
   flex-shrink: 0;
-  transition: background 0.25s, box-shadow 0.25s;
+  transition: background 0.25s;
 }
 
 .gate__dot.up {
-  background: #4ade80;
-  box-shadow: 0 0 12px #4ade80;
+  background: #22a06b;
 }
 
 .gate__dot.down {
-  background: #f87171;
-  box-shadow: 0 0 12px #f87171;
+  background: #e5484d;
 }
 
 .gate__dot.wait {
-  background: #f59e0b;
-  box-shadow: 0 0 12px #f59e0b;
+  background: #d97706;
   animation: gate-pulse 1.2s ease-in-out infinite;
 }
 
@@ -94,7 +126,7 @@
   margin: 0 0 16px;
   font-size: 13.5px;
   line-height: 1.6;
-  color: #e8eaed;
+  color: var(--gate-text);
 }
 
 .gate__actions {
@@ -118,30 +150,31 @@
   transition: filter 0.15s ease, background 0.15s ease;
 }
 
+/* 品牌主按钮: 与应用紫按钮一致 (白字) */
 .gate__btn--primary {
   background: linear-gradient(135deg, #6d5ef5, #8b7bff);
-  color: #0d0f14;
+  color: #fff;
 }
 
 .gate__btn--primary:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.08);
 }
 
 .gate__btn--ghost {
   background: transparent;
-  color: #e8eaed;
-  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--gate-text);
+  border-color: var(--gate-btn-ghost-border);
 }
 
 .gate__btn--ghost:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--gate-box-bg);
 }
 
 .gate__hint {
   margin-top: 18px;
   text-align: left;
   font-size: 12px;
-  color: #9aa0a6;
+  color: var(--gate-text-dim);
 }
 
 .gate__hint summary {
@@ -152,11 +185,12 @@
 .gate__hint pre {
   margin: 10px 0 0;
   padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--gate-code-bg);
+  border: 1px solid var(--gate-box-border);
   border-radius: 6px;
   font-size: 12px;
   overflow-x: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.6;
+  color: var(--gate-text);
 }

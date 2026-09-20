@@ -9,6 +9,27 @@ interface GateProps {
 
 type Phase = 'checking' | 'waking' | 'install' | 'ready';
 
+/** 读应用当前主题 id (opensumi 偏好持久化): workbench.colorTheme 优先, 兜底 general.theme. */
+function storedThemeId(): string {
+  try {
+    let fallback = '';
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key) continue;
+      if (key.endsWith(':workbench.colorTheme')) return window.localStorage.getItem(key) || '';
+      if (key.endsWith(':general.theme')) fallback = window.localStorage.getItem(key) || '';
+    }
+    return fallback;
+  } catch {
+    return '';
+  }
+}
+
+/** gate 配色跟随应用主题 (缺省 light, 与应用默认 opensumi-design-light-theme 一致). */
+function gateTheme(): 'light' | 'dark' {
+  return /dark/i.test(storedThemeId()) ? 'dark' : 'light';
+}
+
 /**
  * 前置 numas 接入门控 (2026-09-20 修正):
  *   前后端分离: CLI/内嵌模式后端=页面自身 (同源, 秒过); 独立部署模式后端=本机 numas.
@@ -17,6 +38,7 @@ type Phase = 'checking' | 'waking' | 'install' | 'ready';
  *   2. 探测不通 → 下载/安装引导: 「下载安装包」(GitHub latest asset) +
  *      「启动 Numas」(仅用户显式点击才 fire numas://serve)
  *   3. 引导期间每 3s 自动轮询端口 → 应用启动后自动接入, 无需手动重试
+ *   4. 配色按应用主题 (light/dark) 适配 — 见 gate.css 两套 token
  */
 export function Gate({ children }: GateProps) {
   const [phase, setPhase] = useState<Phase>('checking');
@@ -91,8 +113,10 @@ export function Gate({ children }: GateProps) {
     return <>{children}</>;
   }
 
+  const theme = gateTheme();
+
   return (
-    <div className="gate">
+    <div className={`gate gate--${theme}`}>
       <div className="gate__card">
         <div className="gate__logo" aria-hidden>
           🐮
