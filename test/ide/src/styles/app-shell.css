@@ -1,0 +1,321 @@
+/**
+ * App Shell 全局布局 — 由 App 顶层 import, 不在拓展内
+ * 包含: SOLO 模式三列 (sidebar / main / aside) + 自定义拖动条
+ *
+ * 主题色: 全部走 codeblitz/opensumi token, 不硬编码颜色
+ * 折叠/展开动效: sidebar 跟 resizer 都加 transition: width, 平滑向左折
+ */
+
+/* SOLO/IDE 模式切换: 新布局 (AppRenderer key 重建) 淡入, 柔和过渡不突兀 */
+@keyframes numas-mode-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.app-solo,
+.app-ide {
+  animation: numas-mode-fade-in 260ms ease-out;
+}
+
+.app-solo {
+  --resizer-w: 6px;
+  /* sidebar 折叠动效: cubic-bezier 让"折"的动作自然, 跟 macOS 风格一致 */
+  --solo-ease: cubic-bezier(0.4, 0.0, 0.2, 1);
+  --solo-duration: 200ms;
+
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  background: var(--editor-background);
+  overflow: hidden;
+  position: relative;
+}
+
+.app-solo__sidebar,
+.app-solo__main,
+.app-solo__aside {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* sidebar 折叠动效: 用 CSS variable --sidebar-w 控制宽 (由 SoloLayout 注入 inline style),
+   transition 跟踪 var 变化, 实现"折"动效. 折叠=1px, 展开=256/231/... */
+.app-solo__sidebar {
+  z-index: 1;
+  background: var(--editor-background);
+  flex: 0 0 var(--sidebar-w, 320px);
+  width: var(--sidebar-w, 320px);
+  transition: flex-basis var(--solo-duration) var(--solo-ease),
+              width var(--solo-duration) var(--solo-ease);
+  will-change: width;
+}
+/* sidebar 三段: action (auto) / container (flex) / footer (auto); 区域 padding 由列壳提供 */
+.app-solo__sidebar-action {
+  flex: 0 0 auto; min-width: 0;
+  height: 48px; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 0 10px;
+}
+.app-solo__sidebar-container { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; padding: 8px 10px 12px; }
+/* 中列 main: action / container / footer 三段, 占满剩余宽度
+   跟 sidebar 半档色差: 混 2.5% 前景色, 自动随主题反相
+    - 亮色主题: 前景色深, 中列略深于 sidebar (sidebar 更亮)
+    - 暗色主题: 前景色浅, 中列略亮于 sidebar (sidebar 更暗)
+   5% 时色差过大显得两块割裂, 降到 2.5% 只做轻微区分 */
+.app-solo__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: color-mix(in srgb, var(--editor-background) 97.5%, var(--editor-foreground) 2.5%);
+  display: flex;
+  flex-direction: column;
+}
+.app-solo__main-action {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 48px;
+}
+.app-solo__main-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-solo__main-footer { flex: 0 0 auto; min-width: 0; }
+
+/* 右列 aside: 关闭时宽 0 完全隐藏, 打开时由 --aside-w 控制
+   左侧挨一个 resizer, 跟 sidebar 拖动条同款 (1px 主线)
+   body 内三段: action / middle(sidebar|container) / footer */
+.app-solo__aside {
+  flex: 0 0 var(--aside-w, 0);
+  width: var(--aside-w, 0);
+  min-width: 0;
+  background: var(--editor-background);
+  display: flex;
+  flex-direction: row;
+  transition: flex-basis var(--solo-duration) var(--solo-ease),
+              width var(--solo-duration) var(--solo-ease);
+}
+.app-solo__aside-resizer {
+  flex: 0 0 var(--resizer-w);
+  width: var(--resizer-w);
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+}
+.app-solo__aside-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--editor-border);
+  transform: translateX(-0.5px);
+}
+.app-solo__aside-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* aside action 区: 背景默认主题色 (editor-background, 亮色 #fff), 与下方内容留呼吸空间
+   (上下呼吸空间 = resizer 宽 --resizer-w, 视觉留白统一) */
+.app-solo__aside-action {
+  flex: 0 0 auto;
+  min-width: 0;
+  height: 48px;
+  background: var(--editor-background);
+  margin-bottom: var(--resizer-w);
+}
+.app-solo__aside-middle {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  margin-bottom: var(--resizer-w);
+  /* 浏览器视图是 position:absolute inset:0, 需要 middle 作包含块 (否则定位到整个 aside, 与顶部 action 重叠) */
+  position: relative;
+}
+.app-solo__aside-sidebar {
+  flex: 0 0 268px; width: 268px; min-width: 0;
+  display: flex; flex-direction: column;
+  /* 右缘分隔线由拖拽条 (.app-solo__aside-resizer--inner) 的 ::before 提供, 不再用 border */
+}
+/* 查看模式: 隐藏官方 left 槽自带活动栏 (与 查看/终端/浏览器 胶囊重复) */
+.app-solo__aside-sidebar [class*="left_tab_bar"] { display: none; }
+/* 查看模式: 打开官方 explorer 标题栏动作图标 (新建文件/新建文件夹/筛选/刷新/全部折叠).
+   design 主题只给 bottom slot 定义了 iconAction 尺寸, left slot 默认 2px + 全局 .kt-icon::before display:none → 不可见 */
+.app-solo__aside-sidebar [class*="titleActions"] span[class*="iconAction"] {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; margin-left: 4px;
+}
+.app-solo__aside-sidebar [class*="titleActions"] span[class*="iconAction"]::before { display: inline-block; }
+/* 全局: design 主题 .kt-icon::before display:none, titleActions 里其它动作图标 (终端工具条
+   搜索/清屏/拆分/关闭, 底部面板展开/折叠等) glyph 全被隐藏 → 按钮空白不可见. 统一恢复. */
+.app-solo [class*="titleActions"] span[class*="iconAction"]::before,
+.app-solo [class*="titleActions"] span[class*="btnAction"]::before {
+  display: inline-block !important;
+}
+.app-solo__aside-container { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+/* 浏览器视图常驻渲染 wrapper: 铺满 middle (position:absolute 的包含块), 显隐由 style.display 控制 */
+.app-solo__aside-browser {
+  position: absolute; inset: 0;
+  overflow: hidden;
+}
+.app-solo__aside-browser .app-browser { position: absolute; inset: 0; }
+/* 终端模式: 隐藏底部模块 tab 条 (仅终端一个模块, 冗余; 保留终端面板自身 zsh 标题栏) */
+.app-solo__aside-container .bottom-slot .next_bottom_bar { display: none; }
+/* 查看模式: 隐藏编辑器 tab 栏右侧 actions 区 (design 主题下 .kt-icon::before 被全局 display:none,
+   图标不可见只剩空位; aside 布局也用不到拆分编辑器等动作) */
+.app-solo__aside-container [class*="editor_actions"] { display: none !important; }
+/* aside 内官方拓展视图去掉主题自带阴影 (flat 布局; left=explorer / bottom=终端 / 编辑区 tabs).
+   主题用 unlayered !important 定义阴影, 必须放进 @layer 的 !important 才能盖过 (cascade layer 规则) */
+@layer numas-override {
+  .app-solo__aside .left-slot,
+  .app-solo__aside .bottom-slot,
+  .app-solo__aside [class*="kt_editor_tabs"] { box-shadow: none !important; }
+}
+.app-solo__aside-footer { flex: 0 0 auto; min-width: 0; }
+
+/* 拖动条: 朴素 1px 主线, 折叠时跟 sidebar 一起收, 动效跟 sidebar 同步 */
+.app-solo__resizer {
+  flex: 0 0 var(--resizer-w);
+  width: var(--resizer-w);
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 2;
+  transition: flex-basis var(--solo-duration) var(--solo-ease),
+              width var(--solo-duration) var(--solo-ease);
+  will-change: width;
+}
+.app-solo__resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--editor-border);
+  transform: translateX(-0.5px);
+}
+
+/* ============ 启动 loading (工作空间解析中) ============
+   解析链: URL ?directory= → 后端 /path.directory. 解析完成前显示, 无 border. */
+.app-boot {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--editor-background, #1e1e1e);
+  color: var(--ai-fg-muted, #8b8b8b);
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  font-size: 12.5px;
+  user-select: none;
+}
+.app-boot__spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.55;
+  animation: app-boot-spin 0.75s linear infinite;
+}
+.app-boot__text { opacity: 0.8; letter-spacing: 0.02em; }
+@keyframes app-boot-spin { to { transform: rotate(360deg); } }
+
+/* ===== opencode 挂了 → codeblitz 全局 loading 覆盖 (整页锁定, 阻止一切操作) ===== */
+.app-global-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 99999; /* 盖过 codeblitz 全部 UI (弹层 z-index 均 < 10w) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--editor-background, #fff) 82%, transparent);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  cursor: wait;
+  user-select: none;
+}
+.app-global-loading__box {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  background: var(--app-panel-bg, var(--editorWidget-background, #fff));
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  color: var(--editor-foreground, #1f2328);
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif);
+  font-size: 13px;
+}
+/* 文字流光 (shimmer) */
+.app-global-loading__text {
+  background: linear-gradient(
+    90deg,
+    var(--descriptionForeground, #8f8f8f) 0%,
+    var(--descriptionForeground, #8f8f8f) 40%,
+    var(--editor-foreground, #1f2328) 50%,
+    var(--descriptionForeground, #8f8f8f) 60%,
+    var(--descriptionForeground, #8f8f8f) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: app-global-shimmer 1.8s linear infinite;
+}
+@keyframes app-global-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+/* 省略号循环: '' → '.' → '..' → '...' */
+.app-global-loading__dots::after {
+  content: '';
+  animation: app-global-dots 1.4s steps(4, end) infinite;
+}
+@keyframes app-global-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+/* ===== 全局隐藏滚动条 (保留滚动能力) ===== */
+* {
+  scrollbar-width: none;            /* Firefox */
+  -ms-overflow-style: none;         /* 旧 Edge/IE */
+}
+*::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none;
+}
+/* codeblitz 自定义滚动条组件同样隐藏 */
+.kt-scrollbar__track,
+.kt-scrollbar__thumb,
+[class*="scrollbar_track"],
+[class*="scrollbar_thumb"] {
+  display: none !important;
+}
+
+/* ===== SOLO aside: 隐藏官方 left tabbar (活动栏图标条, 与胶囊/菜单重复); IDE 模式保留 ===== */
+.app-solo #opensumi-left-tabbar {
+  display: none !important;
+}
