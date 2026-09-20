@@ -62,7 +62,10 @@ export async function pingNumas(timeoutMs = 1500): Promise<boolean> {
   }
 }
 
-/** 通过隐藏 iframe 触发 numas:// scheme (浏览器无 JS API 可直启应用). */
+/** 通过隐藏 iframe 触发 numas:// scheme (浏览器无 JS API 可直启应用).
+ *  ⚠️ 铁律: 仅允许在**用户显式手势**回调里调用 (如按钮 onClick).
+ *  禁止在页面加载/自动流程里调用 — Chrome 对非手势的外部协议跳转会拦截并弹
+ *  「未设定用来打开URL」系统框 (2026-09-20 实测; 自动唤起已从 Gate 移除). */
 export function fireScheme(): void {
   try {
     const iframe = document.createElement('iframe');

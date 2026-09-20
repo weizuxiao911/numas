@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ACTIVE_PORT, ACTIVE_SCHEME, NUMAS_RELEASES_URL, backendBaseUrl, fireScheme, pingNumas, resolveDownload, type DownloadInfo } from './numas';
+import { ACTIVE_PORT, NUMAS_RELEASES_URL, backendBaseUrl, pingNumas, resolveDownload, type DownloadInfo } from './numas';
 import './gate.css';
 
 interface GateProps {
@@ -7,7 +7,7 @@ interface GateProps {
   children: React.ReactNode;
 }
 
-type Phase = 'checking' | 'waking' | 'install' | 'ready';
+type Phase = 'checking' | 'install' | 'ready';
 
 /** 读应用当前主题 id (opensumi 偏好持久化): workbench.colorTheme 优先, 兜底 general.theme. */
 function storedThemeId(): string {
@@ -31,14 +31,15 @@ function gateTheme(): 'light' | 'dark' {
 }
 
 /**
- * 前置 numas 接入门控 (2026-09-20 修正):
+ * 前置 numas 接入门控 (2026-09-20 修正 v3):
  *   前后端分离: CLI/内嵌模式后端=页面自身 (同源, 秒过); 独立部署模式后端=本机 numas.
- *   1. 进入 → 只做端口探测, 绝不自动 fire scheme (未安装时触发 scheme 会弹
- *      系统「未设定用来打开URL…」, 且 Chrome 对外部协议跳转要求用户手势)
- *   2. 探测不通 → 下载/安装引导: 「下载安装包」(GitHub latest asset) +
- *      「启动 Numas」(仅用户显式点击才 fire numas://serve)
- *   3. 引导期间每 3s 自动轮询端口 → 应用启动后自动接入, 无需手动重试
- *   4. 配色按应用主题 (light/dark) 适配 — 见 gate.css 两套 token
+ *   流程 (零弹窗, 用户不做选择):
+ *   1. 进入 → 只探测端口 (24096)。在线 → 直接接入。
+ *   2. 不在线 → 显示下载引导 (主按钮=下载安装包)。**绝不自动 fire scheme**
+ *      (自定义 scheme 非用户手势触发会被 Chrome 拦并弹「未设定用来打开URL」;
+ *       已安装未启动的用户自己启动应用即可)
+ *   3. 引导页持续自动轮询 → 用户装好/启动后自动接入, 无需任何点击重试。
+ *   4. 配色按应用主题 (light/dark) 适配 — 见 gate.css 两套 token。
  */
 export function Gate({ children }: GateProps) {
   const [phase, setPhase] = useState<Phase>('checking');
@@ -67,7 +68,9 @@ export function Gate({ children }: GateProps) {
     return () => window.clearInterval(timer);
   }, [phase]);
 
-  /** 进入检测: 只探测端口 → 在线放行; 离线进入下载引导 */
+  /**
+   * 进入检测: 在线 → 直接接入; 不在线 → 下载引导 (绝不自动 fire scheme, 零弹窗).
+   */
   async function check() {
     setPhase('checking');
     setDot('wait');
@@ -78,35 +81,15 @@ export function Gate({ children }: GateProps) {
       setDot('up');
       setStatus(`已连接本地 numas — ${backendBaseUrl()}/global/health`);
       setPhase('ready');
-    } else {
-      setDot('down');
-      setStatus('未检测到本地 numas 应用');
-      setPhase('install');
-      // 进入引导时异步解析当前平台可下载的最新安装包
-      void resolveDownload().then((d) => { if (mounted.current) setDownload(d); });
-    }
-  }
-
-  /** 显式唤起 (仅用户点击): fire numas://serve 后轮询等待上线; 失败回到引导 */
-  async function wake() {
-    setPhase('waking');
-    setDot('wait');
-    setStatus('正在唤起本地 numas…');
-    fireScheme();
-    for (let i = 0; i < 16; i++) {
-      await new Promise((r) => setTimeout(r, 500));
-      if (!mounted.current) return;
-      if (await pingNumas(1200)) {
-        setDot('up');
-        setStatus(`已连接本地 numas — ${backendBaseUrl()}/global/health`);
-        setPhase('ready');
-        return;
-      }
+      return;
     }
     if (!mounted.current) return;
+
+    // 未在线 → 下载引导 (自动轮询, 装好自动接入)
     setDot('down');
-    setStatus('未能唤起本地 numas (可能尚未安装)');
+    setStatus('未检测到 numas 应用, 请下载安装');
     setPhase('install');
+    void resolveDownload().then((d) => { if (mounted.current) setDownload(d); });
   }
 
   if (phase === 'ready') {
@@ -134,7 +117,7 @@ export function Gate({ children }: GateProps) {
         {phase === 'install' && (
           <div className="gate__install">
             <p className="gate__install-tip">
-              未检测到 numas 服务。未安装请先下载安装; 已安装请点「启动 Numas」, 启动后本页会自动接入。
+              未检测到 numas 应用。请下载安装包, 安装完成后本页将自动接入, 无需其他操作。
             </p>
             <div className="gate__actions">
               {download?.available ? (
@@ -146,23 +129,15 @@ export function Gate({ children }: GateProps) {
                   前往下载页
                 </a>
               )}
-              <button className="gate__btn gate__btn--ghost" type="button" onClick={wake}>
-                启动 Numas
-              </button>
             </div>
             {download && !download.available && (
               <p className="gate__install-tip" style={{ marginTop: 10, fontSize: 12 }}>
                 当前平台暂未提供安装包, 可前往 release 页手动选择。
               </p>
             )}
-            <details className="gate__hint">
-              <summary>手动启动 (已安装 CLI)</summary>
-              <pre>
-                {`numas serve --port ${ACTIVE_PORT}`}
-                {'\n'}
-                {`唤起 scheme: ${ACTIVE_SCHEME}`}
-              </pre>
-            </details>
+            <p className="gate__install-tip" style={{ marginTop: 10, fontSize: 12 }}>
+              正在自动检测… 安装并启动后, 本页将自动连接本地 numas。
+            </p>
           </div>
         )}
       </div>
