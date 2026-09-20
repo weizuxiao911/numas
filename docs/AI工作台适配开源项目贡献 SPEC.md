@@ -18,7 +18,17 @@
 
 1. “开源贡献 AI 工作台”是纯 web IDE 项目，部署在平台侧， 通过 numas://scheme 方式唤起用户本地的 numas 作为服务器端。（前后端分离）
 2. 如果用户本地未下载 numas 应用程序，需提供下载地址，并引导安装，直到“开源贡献 AI 工作台”可以接入本地 numas 应用程序 API 接口。
-3. “活动任务页”（:5173，实现在 test/demo 下）和“开源贡献 AI 工作台”（:7788, 实现在 test/ide 下， 拷贝 packages/codeblitz，使用 webpack 运行，补充前置 numas://scheme 检测和下载引导，直到IDE接入本地 numas 服务器）是两个单独的 web 网站。边界职责说明： 
+3. “活动任务页”（:5173，实现在 test/demo 下）和“开源贡献 AI 工作台”（:7788, 实现在 pacakges/codeblitz 下，使用 webpack 运行，单独打包成 site 产物，补充前置 numas://scheme 检测和下载引导，直到IDE 接入本地 numas 服务器）是两个单独的 web 网站。边界职责说明： 
   - “活动任务页”： 显示业务交互，按参考完成独立站点，终点是“领取任务”按钮
   - “开源贡献 AI 工作台”： 是从点击“领取任务”按钮，到加载 IDE 为止
   - 本地 numas 服务器： 后台运行，仅提供 API 接口
+
+--- 
+
+# packages/codeblitz 改造
+
+> 改造当且仅当访问codeblitz（:7788）URL 参数是repo={远程git仓库地址}时生效
+
+1. 维持现有流程：认领任务（test/demo，端口5173） → 检测或引导下载，直到启动本地 numas 服务，codeblitz 与本地 numas 正常通信（packages/codeblitz，端口7788）
+2. 检查 codeblitz 请求 URL 是否携带 repo 参数，如果是切换成 IDE 模式
+3. 其他我们边做边调整，我觉得可以后你负责维护功能设计到文档(docs/AI工作台适配开源项目贡献 SPEC.md)
