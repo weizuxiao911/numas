@@ -329,6 +329,7 @@ AI 自主维护, 用户可随时指出错误或要求补充. 后续按 §3.1 自
 - 删除/重命名子包后, 提交前全仓 grep 包名 (含 `.html` / `.md` / 脚本), 清残留引用再提交. 本次删 `packages/desktop-tauri` 后 `test/launch.html` 仍有安装说明残留.
 - `packages/tauri` 壳构建顺序: 先在 `packages/opencode` 跑 `bun run build --single` (内嵌 codeblitz 的 numas 二进制), 再 `packages/tauri` 的 `scripts/prepare.ts` 同步到 `binaries/numas-<triple>`, 最后 `tauri build`; 缺二进制时 `cargo check` 就会因 externalBin 校验失败.
 - tray-only Tauri 壳: macOS 用 `ActivationPolicy::Accessory` 隐藏 Dock; 单实例 + `numas://` deep link 由 `tauri-plugin-single-instance` + `tauri-plugin-deep-link` 承载; 只 kill 自己 spawn 的 sidecar.
+- **前后端分离单源** (2026-09-20): 前端唯一源 = `packages/codeblitz`; numas 接入门控内建在 `src/gate` (探测目标取 `appBaseUrl()` — CLI/内嵌=同源自身秒过, 独立部署=本机 numas). 独立部署产物: `npm run build:site` → `packages/codeblitz/site/` (`.env.site` 注入后端基址, 平台侧静态托管); 旧 `test/ide` 拷贝已删除. 不要再拷贝前端源码到别处.
 - **桌面发布规则** (固化在 `packages/tauri/scripts/release.ts`, 后续发版只改 `version.json` + `CHANGELOG.md`):
   - 版本: 读 `version.json` (不写死); Release title 只写版本号 `v<semver>`; notes 从 `packages/tauri/CHANGELOG.md` 对应 `## [<semver>]` 段读
   - tag: `numas-v<semver>-<YYYYMMDDHHMM>` (与既有 release 规律一致)
@@ -344,7 +345,9 @@ AI 自主维护, 用户可随时指出错误或要求补充. 后续按 §3.1 自
 - opencode `bun run build` 会自动 bump `version.json` patch 并可能改写 `bun.lock` (平台包), 提交前逐项甄别, 不要无脑全量 add.
 - macOS 26 按 **bundle id 记住菜单栏项的隐藏状态**: 若托盘项曾在 Accessory (无 Dock) 状态下创建而被系统放入隐藏位, 该 bundle id 会持续隐藏 (换新 bundle id 才恢复). 正确顺序: **先创建托盘项, 再切 Accessory**; 托盘图标用 22px 单色模板 (`icon_as_template(true)`), 显示位置由系统控制, 不要自定义.
 - 端口 404 排查先查**残留进程占用**: 已删除目录的 dev server 可能仍在监听 (如旧 `test/poc-opencode-ide` 的 vite 占 5173), 新起服务 bind 不到 → 返回旧进程的 404. 用 `lsof -iTCP:<port> -sTCP:LISTEN -n -P` 看 PID, 确认对应已删除目录后 `kill` 再验.
-- test/ide 前置 numas 检测加了 `?numasPort=<port>` URL 覆盖 (仅当该参数存在时生效), 用于不打扰真实环境地模拟"未安装/自定义端口"验证引导分支; 默认仍走 24096.
+- codeblitz 前置 numas 检测 (`packages/codeblitz/src/gate`) 支持 `?numasPort=<port>` URL 覆盖 (仅当该参数存在时生效), 用于不打扰真实环境地模拟"未安装/自定义端口"验证引导分支; 默认探测配置的后端基址 (`appBaseUrl()`).
+- **不要在页面加载时自动 fire 自定义协议 scheme** (如 `numas://`): 未注册时 macOS 会弹系统「未设定用来打开URL…」对话框, 且浏览器无 API 可静默查询 scheme 是否已注册; Chrome 77+ 还要求外部协议跳转必须由**用户手势**触发 (非手势会被静默拦截). 正确模式: 端口探测做检测, fire 只在用户显式点击时执行.
+- **反复挂载 DMG / 跑 debug 构建会在 LaunchServices 累积 numas.app 注册** (指向已删除路径), 导致 `numas://` 报「找不到该文件」. 清理: `lsregister -dump | grep -E '^path:.*numas\.app'` 收集路径后逐条 `lsregister -u <path>` (2026-09-20 实测清了 39 条残留).
 
 
 

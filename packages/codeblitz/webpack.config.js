@@ -44,12 +44,15 @@ function getEnv(name, fallback = '') {
     return process.env[name] || loadEnvVar(name, '') || fallback;
 }
 const isDev = process.env.NODE_ENV !== 'production';
+// 产物目录: 默认 dist/ (CLI 内嵌模式, 由 numas serve --web-ui 提供);
+// DEPLOY_ENV=site → site/ (前后端分离独立部署产物, 平台侧静态托管)
+const OUT_DIR = process.env.DEPLOY_ENV === 'site' ? 'site' : 'dist';
 const config = {
     mode: isDev ? 'development' : 'production',
     target: 'web',
     entry: path_1.default.resolve(WEB, 'src/index.tsx'),
     output: {
-        path: path_1.default.resolve(WEB, 'dist'),
+        path: path_1.default.resolve(WEB, OUT_DIR),
         filename: '[name].[contenthash:8].js',
         publicPath: '/',
     },
@@ -74,6 +77,7 @@ const config = {
             '**/node_modules/**',
             '**/.webpack-cache/**',
             '**/dist/**',
+            '**/site/**',
             '**/.playwright-screenshots/**',
             '**/.playwright-mcp/**',
         ],

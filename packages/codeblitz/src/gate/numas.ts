@@ -1,29 +1,30 @@
 /**
- * gate/numas.ts — test/ide 前置: 检测/唤起本地 numas 服务端
+ * gate/numas.ts — 前端前置: 检测/唤起本地 numas 服务端
  *
- * 工作台 (:7788) 是纯 web, 前后端分离: 后端 = 用户本地的 numas 应用
- * (tauri 壳, 注册 numas:// scheme, 内嵌 numas serve). 页面加载必须先
- * 确认本地 numas 可达, 否则无法访问任何 API.
+ * 前后端分离: 前端 (codeblitz) 有两种运行形态, 探测目标统一取"配置的后端基址":
+ *   - CLI/内嵌模式: 由 `numas serve --web-ui` 提供 (同源) → 后端 = 页面自身 origin
+ *   - 独立部署模式: 平台侧托管 site/ 产物 → 后端 = 用户本机 numas (127.0.0.1:24096)
  *
- * 链路:
- *   - 探测:  GET http://127.0.0.1:24096/global/health  (no-cors, 只验可达)
- *   - 唤起:  iframe 触发 numas://serve?port=24096 (浏览器无 JS 直启进程能力,
- *            只能靠 scheme handler; 成功与否浏览器不暴露, 靠后续轮询推断)
- *   - 引导:  未探测到 → 展示下载/安装引导 + 「重试」按钮
+ * 链路 (2026-09-20 修正):
+ *   - 探测:  GET <backend>/global/health  (no-cors, 只验可达)
+ *   - 唤起:  **仅在用户显式点击时** 用隐藏 iframe fire `numas://serve`
+ *            (未安装时触发 scheme 会被系统接管 → 弹「未设定用来打开URL…」,
+ *            且 Chrome 对外部协议跳转要求用户手势 → 绝不自动 fire)
+ *   - 引导:  未探测到 → 下载引导 (GitHub latest asset) + 「启动 Numas」+ 自动轮询
  */
 
+import { appBaseUrl } from '../infra/url';
+import { getPlatform } from '../infra/os';
+
 export const NUMAS_PORT = 24096;
-export const NUMAS_SCHEME = `numas://serve?port=${NUMAS_PORT}`;
-/** 健康探测端点 (绝对地址直连本地 numas; CORS 由 no-cors 规避) */
-export const NUMAS_HEALTH = `http://127.0.0.1:${NUMAS_PORT}/global/health`;
+/** 唤起 scheme: 不带端口参数 — tauri 壳未收到 ?port= 时默认 24096 (packages/tauri/src/lib.rs) */
+export const NUMAS_SCHEME = 'numas://serve';
 /** GitHub 仓库 (桌面安装包发布源; 由 §3.2 约定: 下载走 API 匹配 latest asset, 不写死版本/文件名) */
 export const NUMAS_REPO = 'weizuxiao911/numas';
 /** 兜底: 直接跳 release 页面 (API 失败时用) */
 export const NUMAS_RELEASES_URL = `https://github.com/${NUMAS_REPO}/releases/latest`;
 
-import { getPlatform } from '../infra/os';
-
-/** 调试/演示: URL `?numasPort=` 可覆盖探测端口 (模拟未安装/自定义端口), 便于验证引导分支. */
+/** 调试/演示: URL `?numasPort=` 可覆盖后端端口 (模拟未安装/自定义端口), 便于验证引导分支. */
 function overridePort(): number | null {
   try {
     const raw = new URL(window.location.href).searchParams.get('numasPort');
@@ -34,23 +35,25 @@ function overridePort(): number | null {
     return null;
   }
 }
-const _port = overridePort() ?? NUMAS_PORT;
-export const ACTIVE_PORT = _port;
-export const ACTIVE_SCHEME = `numas://serve?port=${_port}`;
-export const ACTIVE_HEALTH = `http://127.0.0.1:${_port}/global/health`;
 
-export type NumasGateState =
-  | { status: 'checking' }
-  | { status: 'connecting' }
-  | { status: 'ready' }
-  | { status: 'install'; reason: 'timeout' | 'unreachable' };
+/** 后端基址 (去尾 /): 调试覆盖优先; 否则 = 配置的后端 (同源模式=页面自身, 独立部署=注入的本机 numas) */
+export function backendBaseUrl(): string {
+  const override = overridePort();
+  if (override) return `http://127.0.0.1:${override}`;
+  return appBaseUrl().replace(/\/+$/, '');
+}
+
+/** 后端端口 (展示用): 默认 24096; 调试覆盖时用覆盖值 */
+export const ACTIVE_PORT = overridePort() ?? NUMAS_PORT;
+/** 仅调试覆盖端口时带 ?port= (让壳起在自定义端口); 默认端口无需参数 */
+export const ACTIVE_SCHEME = ACTIVE_PORT === NUMAS_PORT ? NUMAS_SCHEME : `${NUMAS_SCHEME}?port=${ACTIVE_PORT}`;
 
 /** no-cors 健康探测: 不读 body, 只验 TCP/HTTP 可达; CORS/opaque 都算 up. */
 export async function pingNumas(timeoutMs = 1500): Promise<boolean> {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    await fetch(ACTIVE_HEALTH, { mode: 'no-cors', cache: 'no-store', signal: ctl.signal });
+    await fetch(`${backendBaseUrl()}/global/health`, { mode: 'no-cors', cache: 'no-store', signal: ctl.signal });
     return true;
   } catch {
     return false;
@@ -70,27 +73,6 @@ export function fireScheme(): void {
   } catch {
     /* 浏览器忽略 scheme 失败 */
   }
-}
-
-export interface NumasProbeResult {
-  ok: boolean;
-  /** 触发 scheme 唤醒前是否已在线 (直接进入 ready, 不弹引导) */
-  wasUp: boolean;
-}
-
-/** 轮询等待本地 numas 上线; 返回最终可达结果.
- *  @param maxAttempts 轮询次数 (含首次探测)
- *  @param intervalMs  轮询间隔 */
-export async function pollNumas(maxAttempts = 12, intervalMs = 500): Promise<NumasProbeResult> {
-  let up = await pingNumas();
-  if (up) return { ok: true, wasUp: true };
-  fireScheme();
-  for (let i = 1; i < maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, intervalMs));
-    up = await pingNumas();
-    if (up) return { ok: true, wasUp: false };
-  }
-  return { ok: false, wasUp: false };
 }
 
 // ============================================================

@@ -101,7 +101,7 @@ const LAYOUTS: Record<AppMode, React.FC> = {
 export const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>(() => getAppMode());
   const defaultModules = getDefaultAppConfig().modules || [];
-  // metadata 预取单例: index.tsx 渲染前已发起, 这里读全局缓存 (同步, 不再重复 fetch).
+  // metadata 预取单例: Gate 放行后首次渲染时读取缓存 (同步; 若为空由下方 useEffect 拉取).
   const [meta, setMeta] = useState<ExtensionMetadata[]>(() => getPreloadedMetadata());
   // metadata 门控: AppRenderer 内 createApp 只在首次挂载执行一次 (useConstant),
   // 若此时 vsix 元数据未就绪, ClientApp 会永久只剩内置扩展 (线上 vsix 全部失效的根因).
