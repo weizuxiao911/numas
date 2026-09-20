@@ -32,3 +32,17 @@
 1. 维持现有流程：认领任务（test/demo，端口5173） → 检测或引导下载，直到启动本地 numas 服务，codeblitz 与本地 numas 正常通信（packages/codeblitz，端口7788）
 2. 检查 codeblitz 请求 URL 是否携带 repo 参数，如果是切换成 IDE 模式
 3. 其他我们边做边调整，我觉得可以后你负责维护功能设计到文档(docs/AI工作台适配开源项目贡献 SPEC.md)
+
+---
+
+## 功能设计 (AI 维护)
+
+### 1. URL `?repo=` → 强制 IDE 模式 (2026-09-20 定稿)
+
+- **触发**: codeblitz 页面 URL 携带 `repo` 参数 (远程 git 仓库地址; 由活动任务页【领取任务】注入)
+- **行为**: 加载时强制 `ide` 模式, 并写入 `localStorage.NUMAS_MODE` (后续无 repo 打开也保持 IDE)
+- **无 repo**: 按 `localStorage.NUMAS_MODE` / 默认 `solo`
+- **参数处理**: `repo` / `issue` 保留在 URL, 不做一次性清理 (供 AI 工作台后续读取 issue/项目信息)
+- **手动切换**: 模式切换按钮保留, 不锁定
+- **实现**: `packages/codeblitz/src/App.tsx` — `readStoredAppMode()` 前置 URL 判定 (`urlRepoMode()`)
+- **与门控关系**: 模式判定在模块加载时完成, 与 Gate (numas 接入门控) 无耦合; 接入成功后按判定模式渲染

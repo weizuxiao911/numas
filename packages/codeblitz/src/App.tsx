@@ -35,7 +35,22 @@ export type AppMode = 'solo' | 'ide';
 /** 模式持久化 key: 模式切换按钮会 reload 页面重建 ClientApp (layoutComponent 只在 createApp
  *  时消费一次, 运行时不换布局), 必须持久化否则 reload 后回落 solo. */
 const APP_MODE_STORAGE_KEY = 'NUMAS_MODE';
+/** 任务源入口: URL 携带 `?repo=` (远程 git 仓库地址) → 强制 IDE 模式并持久化.
+ *  参数保留在 URL (供 AI 工作台后续读取 issue/项目信息), 不做一次性清理;
+ *  手动切换按钮不受影响 (不锁). */
+function urlRepoMode(): AppMode | null {
+  try {
+    return new URL(window.location.href).searchParams.get('repo') ? 'ide' : null;
+  } catch {
+    return null;
+  }
+}
 function readStoredAppMode(): AppMode {
+  const forced = urlRepoMode();
+  if (forced) {
+    try { window.localStorage.setItem(APP_MODE_STORAGE_KEY, forced); } catch { /* localStorage 不可用忽略 */ }
+    return forced;
+  }
   try { return window.localStorage.getItem(APP_MODE_STORAGE_KEY) === 'ide' ? 'ide' : 'solo'; } catch { return 'solo'; }
 }
 let _appMode: AppMode = readStoredAppMode();
