@@ -8,5 +8,7 @@
 	<string>numas 需要访问「桌面」文件夹,以在您的桌面目录中读写工作区文件。</string>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>numas 需要访问「下载」文件夹,以在您的下载目录中读写工作区文件。</string>
+	<key>LSUIElement</key>
+	<true/>
 </dict>
 </plist>

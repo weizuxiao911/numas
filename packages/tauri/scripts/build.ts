@@ -19,6 +19,12 @@ const version = (await Bun.file(join(import.meta.dir, "../../../version.json")).
 }
 const semver = `${version.major}.${version.minor}.${version.patch}`
 
-await $`bunx @tauri-apps/cli build ${target ? ["--target", target] : []} --config ${JSON.stringify({ version: semver })}`.cwd(
+// bundle id 固定 dev.numas.app (见 tauri.conf.json); 无 Dock 靠 Info.plist 静态
+// LSUIElement=true, 不依赖运行时 Accessory 切换, 无需每版换 id (2026-09-20 决策).
+const configOverride = {
+  version: semver,
+}
+
+await $`bunx @tauri-apps/cli build ${target ? ["--target", target] : []} --config ${JSON.stringify(configOverride)}`.cwd(
   join(import.meta.dir, ".."),
 )

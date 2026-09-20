@@ -1,9 +1,10 @@
 use std::net::{TcpStream, ToSocketAddrs};
+use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, RunEvent};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
@@ -32,6 +33,9 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
+            #[cfg(target_os = "macos")]
+            cleanup_stale_registrations();
+
             #[cfg(any(target_os = "linux", all(debug_assertions, target_os = "macos")))]
             {
                 if let Err(error) = app.deep_link().register("numas") {
@@ -53,24 +57,12 @@ pub fn run() {
                     "open" => open_when_ready(app.clone(), DEFAULT_PORT),
                     "quit" => {
                         stop_server(app);
+                        cleanup_registrations_now();
                         app.exit(0);
                     }
                     _ => {}
                 })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        open_when_ready(tray.app_handle().clone(), DEFAULT_PORT);
-                    }
-                })
                 .build(app)?;
-
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let urls: Vec<String> = std::env::args().filter(|arg| arg.starts_with("numas://")).collect();
             if urls.is_empty() {
@@ -182,10 +174,67 @@ fn ensure_server(app: &AppHandle, port: u16) {
 }
 
 fn stop_server(app: &AppHandle) {
+    // 1) 停自己拉起的 sidecar (若存在)
     let state = app.state::<ServerState>();
     let child = state.0.lock().ok().and_then(|mut guard| guard.take());
     if let Some(child) = child {
         let _ = child.kill();
+    }
+    // 2) 无条件停 24096 进程 (不管是否自己拉起的), 确保端口干净释放
+    if port_listening(DEFAULT_PORT) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = Command::new("pkill")
+                .args(["-f", "numas serve --port 24096"])
+                .output();
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let _ = Command::new("pkill")
+                .args(["-f", "numas serve --port 24096"])
+                .output();
+        }
+        #[cfg(target_os = "windows")]
+        {
+            let _ = Command::new("taskkill")
+                .args(["/F", "/FI", "WINDOWTITLE eq numas*"])
+                .output();
+        }
+    }
+}
+
+/// [退出] 时同步清理 LaunchServices 中除当前 app 外的所有 numas.app 注册.
+#[cfg(target_os = "macos")]
+fn cleanup_registrations_now() {
+    let lsreg = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+    let current = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.ancestors().nth(2).map(|d| d.to_path_buf()))
+        .and_then(|p| {
+            if p.extension().map(|e| e == "app").unwrap_or(false) {
+                Some(p)
+            } else {
+                None
+            }
+        });
+
+    let Ok(output) = Command::new(lsreg).arg("-dump").output() else {
+        return;
+    };
+    let Ok(text) = String::from_utf8(output.stdout) else {
+        return;
+    };
+
+    for line in text.lines() {
+        let Some(rest) = line.strip_prefix("path:") else { continue };
+        let path = rest.trim();
+        if !path.ends_with(".app") || !path.contains("numas") {
+            continue;
+        }
+        if current.as_ref().is_some_and(|c| c.to_string_lossy() == path) {
+            continue;
+        }
+        let _ = Command::new(lsreg).arg("-u").arg(path).output();
     }
 }
 
@@ -219,4 +268,54 @@ fn port_listening(port: u16) -> bool {
 
 fn tray_icon() -> tauri::image::Image<'static> {
     tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png")).expect("invalid tray icon")
+}
+
+/// 启动时清理 LaunchServices 中 numas.app 的陈旧注册 (macOS only).
+///
+/// 背景: 拖拽 / 脚本 / 手动安装 numas.app 后, 旧的废弃拷贝 (如 `.Trash/`, 旧路径)
+/// 仍留在 LaunchServices 注册表里, 系统按 bundle id (dev.numas.app) 记忆 Accessory/Dock
+/// 状态, 可能把新装的 app 带偏 (托盘非单色 / Dock 闪现 / 状态继承). 每次启动清理一遍:
+///   - **继承当前**: 正在运行的 app 自身保留注册
+///   - **移除旧的**: 除当前运行 app 外的所有 numas.app 注册全部卸载
+///     (同一 bundle id 同一时刻只应有一个活跃 app; 其它路径的注册都是旧的/冲突的)
+/// 纯后台线程执行, 不阻塞启动; 失败静默忽略.
+#[cfg(target_os = "macos")]
+fn cleanup_stale_registrations() {
+    std::thread::spawn(|| {
+        let lsreg = "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+        let current = std::env::current_exe().ok().and_then(|p| {
+            // current_exe 是 Contents/MacOS/numas-tauri; 向上两级拿 .app
+            p.ancestors()
+                .nth(2)
+                .map(|d| d.to_path_buf())
+        });
+        let current_app = current.and_then(|p| {
+            if p.extension().map(|e| e == "app").unwrap_or(false) {
+                Some(p)
+            } else {
+                None
+            }
+        });
+
+        let Ok(output) = Command::new(lsreg).arg("-dump").output() else {
+            return;
+        };
+        let Ok(text) = String::from_utf8(output.stdout) else {
+            return;
+        };
+
+        for line in text.lines() {
+            let Some(rest) = line.strip_prefix("path:") else { continue };
+            let path = rest.trim();
+            if !path.ends_with(".app") || !path.contains("numas") {
+                continue;
+            }
+            // 继承当前运行中的 app, 其余 (旧版本 / 其它路径 / 残留) 一律移除
+            if current_app.as_ref().is_some_and(|c| c.to_string_lossy() == path) {
+                continue;
+            }
+            eprintln!("[numas] 移除 LaunchServices 注册: {path}");
+            let _ = Command::new(lsreg).arg("-u").arg(path).output();
+        }
+    });
 }
