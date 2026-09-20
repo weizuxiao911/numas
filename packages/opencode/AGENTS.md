@@ -129,3 +129,83 @@ Use `Effect.cached` when multiple concurrent callers should share a single in-fl
 Use `EffectBridge` for native or external callbacks (`@parcel/watcher`, `node-pty`, native `fs.watch`, plugin callbacks, etc.) that need to re-enter Effect services with instance/workspace context.
 
 Plain async code should pass explicit context or stay inside an Effect fiber; do not add ambient instance context shims.
+
+---
+
+# 上游 fork 约定 (opencode fork 继承)
+
+> numas fork 自 upstream opencode, 以下是 numas 必须继续遵守的上游约束 (有删减/中文化).
+> 与 numas 自有约定冲突时, 以本节为准 + 在避坑沉淀修正记录, 不得静默偏离.
+
+## 分支命名
+
+- 短横线分隔 ≤3 词, **不**使用 `feat/` / `fix/` 之类前缀
+- 示例: `session-recovery`, `fix-scroll-state`, `regenerate-sdk`
+
+## 提交与 PR 标题
+
+- **conventional commit 风格**: `type(scope): summary`
+- **type 合法集**: `feat` / `fix` / `docs` / `chore` / `refactor` / `test`
+- **scope 可选**: 涉及包名/模块名时添加, 如 `core` / `opencode` / `tui` / `app` / `desktop` / `sdk` / `plugin`
+- 示例: `fix(tui): simplify thinking toggle styling`, `docs: update contributing guide`, `chore(sdk): regenerate types`
+
+## 代码风格 (TypeScript / Effect)
+
+- **单一函数**: 一函数到底, 除非可组合/可复用, 不预先抽单次使用的小 helper
+- **避免 try/catch**: 能用 Schema decoder / Effect 错误通道就别 try/catch
+- **避免 any**: 靠 type inference + schema 推断, 不显式 any
+- **用 Bun API**: `Bun.file()` 替代 `fs.readFile`, `Bun.serve` 替代 node http 等
+- **函数式数组方法**: 优先 `flatMap` / `filter` / `map`; filter 上挂 type guard 维持下游类型推断
+- **常量优先**: `const` over `let`; 三元 / 早返回替代重赋值
+- **避免 else**: 早返回替代 else, 提升主路径可读性
+- **主函数读作 happy path**: 复杂校验/支持细节挪到紧邻的 helper, helper 紧贴主 export 下方
+- **不 alias imports**: 不用 `import { foo as bar }` 或重命名 import
+- **不 star imports**: 不用 `import * as Foo from "..."` 或 `import type * as Foo from "..."`
+- **按需 dynamic import**: 重模块/启动敏感入口按需延迟加载; 动态导入的命名绑定写在用到它的最小作用域顶部, 不要 inline `.then(...)` 链
+- **Effect generators**: 先 `yield* Service` 绑定到命名变量再调用方法, 不嵌套 `yield* (yield* Foo.Service).bar()`
+- **同名命名空间导入**: `import { Project } from "@opencode-ai/core/project"` 后 `Project.ID`, 不 alias
+- **Effect Schema helpers**: 解析不可信 JSON 优先 `Schema.UnknownFromJsonString` / `Schema.decodeUnknownOption`, 不手写 `JSON.parse` 包 `Effect.try`
+- **Effect helper 不返 Effect**: 仅当 helper 真做 effectful 工作才返 Effect; 同步解析/校验/option 构造保持同步
+
+## 类型检查
+
+- 从 **package dir** 跑 `bun typecheck`, **不**直接 `tsc`
+- 例: `cd packages/opencode && bun run typecheck`
+- CI 必须从 package dir 跑, 不允许从 repo root 触发 (历史教训: root 跑会污染上下文导致漏报)
+
+## 测试
+
+- **避免 mocks**, `globalThis.*` 不到万不得已不用
+- **测真实实现**, 不把逻辑复制到测试里再"测一遍"
+- **tests 不能从 repo root 跑** (guard: `do-not-run-tests-from-root`)
+- 必须从 package dir 跑, 例 `cd packages/opencode && bun test`
+
+## V2 Session Core 架构约束 (核心)
+
+> numas V2 session 重写上游架构, 以下是必须保留的不变量. 完整规范见 `specs/v2/session.md`.
+
+- **durable prompt admission 与 model execution 分离**: `SessionV2.prompt(...)` 先 admit 一条 durable `session_input` row, 再调度 advisory `SessionExecution.wake(sessionID)`; `resume: false` 时只 admit 不调度
+- **prompt 复用语义**: 复用 Session ID 沿用现有 Session; 复用 prompt message ID 仅当 Session/prompt/delivery mode 全匹配才做 exact retry; 冲突复用必须失败; 历史 projected prompts 在 exact retry 时懒合成 promoted inbox record
+- **`SessionExecution` process-global + Session-ID based**: 本地实现持有 process-local Session coordinator, 仅在 drain 开始时通过 `SessionStore` + `LocationServiceMap.get(session.location)` 寻址; 任何层不得拿 Session ID
+- **V2 interruption 只针对 active process-local ownership chain**, idle/missing 是 no-op
+- **`SessionRunner` / model resolution / tool registry / permissions / filesystem 全部 Location-scoped**: 缺省 `Location.workspaceID` = implicit-local placement; 显式 workspace identity 保留给未来 placement 语义
+- **每个 provider turn 仅一次显式 `llm.stream(request)` 调用**, durable continuation 前必须 reload projected history; 不桥接 legacy `SessionPrompt.loop(...)`, 不委托 in-memory tool loop
+- **本地 Session drains 保持 process-local** 直到 clustering 实装: `SessionRunCoordinator` 合并 explicit same-Session resumes, 合并 prompt wakeups, 允许不同 Session 并发; advisory wakes 仅 drain eligible durable inbox; post-crash continuation recovery 需单独 explicit design
+- **drain 无 durable identity / transcript boundary**
+- **delivery 词汇显式**: 默认 steer (在 safe provider-turn boundary promote), 显式 `queue` 输入保持 pending 至 Session idle; promote 一条 queue 后重评 continuation, 再决定是否 promote 下一条; promote 任何新 user input 重置 selected agent 的 provider-turn allowance (一批 steers 重置一次)
+- **`EventV2` replay owner claims 与 clustered Session execution ownership 分离**
+- **System Context algebra / registry / built-ins 放 `src/system-context`**, Context Source producers 与其观察到的 domain 同地; Session History 选择 + Context Epoch 持久化 Session-owned
+
+---
+
+# 本子工程避坑
+
+- **opencode 打包版本号固定官方 `1.18.30`** (`packages/script/src/index.ts` 的 `NUMAS_VERSION`):
+  UA = `opencode/${InstallationVersion}` (`src/session/llm/request.ts`), opencode Console 免费模型按 UA
+  校验来源, `numas-v<...>` 定制版本号会被拒. 打包不再自动 bump 根 `version.json` (桌面发版人工改);
+  `bun run build` 仍可能改写 `bun.lock` (平台包), 提交前逐项甄别, 不要无脑全量 add.
+- 删除/重命名子包后, 提交前全仓 grep 包名 (含 `.html` / `.md` / 脚本), 清残留引用再提交.
+  本次删 `packages/desktop-tauri` 后 `test/launch.html` 仍有安装说明残留.
+- 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动, 不要默认全量 `git add -A`;
+  用 `question` 让用户拍板纳入范围与拆分方式.
+
