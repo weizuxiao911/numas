@@ -106,9 +106,9 @@ packages/tauri/
 ```mermaid
 flowchart TD
     A[双击 app] --> S{24096 在跑?}
-    B[numas://serve?port=24096] --> S
-    C[托盘「打开」] --> S
-    D[点击托盘图标] --> E[弹出菜单 [打开] [退出]]
+    B["numas://serve?port=24096"] --> S
+    C["托盘「打开」"] --> S
+    D[点击托盘图标] --> E["弹出菜单 【打开】【退出】"]
     S -- 否 --> F[拉起 sidecar]
     S -- 是 --> G[复用, 不重复拉起]
     F --> H[server 就绪]
@@ -116,9 +116,9 @@ flowchart TD
     H --> I[托盘常驻]
     C -. 等健康就绪后 .-> J[浏览器访问 24096]
     E --> C
-    E --> K[托盘「退出」]
-    K --> L[kill sidecar + 停 24096]
-    K --> M[清 LaunchServices 陈旧注册]
+    E --> K["托盘「退出」"]
+    K --> L["kill sidecar + 停 24096"]
+    K --> M["清 LaunchServices 陈旧注册"]
     L --> N[退出 app]
     M --> N
     I -. 系统退出/关机 .-> L
@@ -210,13 +210,13 @@ bun run scripts/release.ts --dry-run  # 只预览
 ```
 
 规则（单一事实源）:
-- 版本号: 读 `../../version.json`（`major.minor.patch`）
+- 版本号: 读 `../version.json`（`major.minor.patch`）
 - tag: `numas-v<semver>-<YYYYMMDDHHMM>`
 - asset 命名: `numas-darwin-arm64.dmg` / `numas-darwin-x64.dmg` 等（连字符, 平台用 darwin/windows/linux）
 - Release title 只写版本号; notes 从 `CHANGELOG.md` 对应 `## [<semver>]` 段读
 - 上传 `weizuxiao911/numas`; 幂等（同 tag 复用, `--clobber` 覆盖）
 - **opencode 二进制版本固定官方 `1.18.30`**（`packages/script/src/index.ts` 的 `NUMAS_VERSION`）,
-  `version.json` 只作用于 codeblitz / tauri 壳版本, 不影响 opencode 二进制 UA
+  `version.json` 只作用于 tauri 壳版本, 不影响 opencode 二进制 UA; codeblitz 用自身 `package.json` 版本
 
 ---
 

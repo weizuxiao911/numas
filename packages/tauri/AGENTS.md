@@ -73,8 +73,8 @@ server 生命周期: `port_listening(port)` 探测 → 已在跑则复用; 自�
 
 ## 4. 版本与打包（单一事实源）
 
-- **版本号唯一源**: 根 `version.json`（`major.minor.patch`）。
-  - `version.json` 只作用于 **codeblitz / tauri 壳** 版本。
+- **版本号唯一源**: `packages/tauri/version.json`（`major.minor.patch`）。
+  - `version.json` 只作用于 **tauri 壳** 版本; codeblitz 用自身 `package.json` 版本。
   - opencode 二进制版本**固定官方 `1.18.30`**（`packages/script/src/index.ts` 的 `NUMAS_VERSION`）,
     与 `version.json` 无关, 禁止让 version.json 影响 opencode 二进制 UA。
 - **bundle id**: 固定 `com.numas.app`, 不随版本变（见 §2.2）。

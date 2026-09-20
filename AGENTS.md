@@ -182,8 +182,8 @@ AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁
 ### 4.1 实践指南
 
 - `packages/tauri` 壳构建顺序: 先在 `packages/opencode` 跑 `bun run build --single` (内嵌 codeblitz 的 numas 二进制), 再 `packages/tauri` 的 `scripts/prepare.ts` 同步到 `binaries/numas-<triple>`, 最后 `tauri build`; 缺二进制时 `cargo check` 就会因 externalBin 校验失败. (桌面壳细节见 `packages/tauri/AGENTS.md`)
-- **桌面发布规则** (固化在 `packages/tauri/scripts/release.ts`, 后续发版只改 `version.json` + `CHANGELOG.md`):
-  - 版本: 读 `version.json` (不写死); Release title 只写版本号 `v<semver>`; notes 从 `packages/tauri/CHANGELOG.md` 对应 `## [<semver>]` 段读
+- **桌面发布规则** (固化在 `packages/tauri/scripts/release.ts`, 后续发版只改 `packages/tauri/version.json` + `CHANGELOG.md`):
+  - 版本: 读 `packages/tauri/version.json` (不写死); Release title 只写版本号 `v<semver>`; notes 从 `packages/tauri/CHANGELOG.md` 对应 `## [<semver>]` 段读
   - tag: `numas-v<semver>-<YYYYMMDDHHMM>` (与既有 release 规律一致)
   - asset 命名连字符规范 (平台用 darwin/windows/linux, 不带 Tauri triple 的 apple): `numas-darwin-arm64.dmg` / `numas-darwin-x64.dmg` / `numas-windows-<arch>.msi` / `numas-linux-<arch>.AppImage`
   - **坑**: `gh release upload 文件#label` 的 `#label` 只是显示标签, 不改 asset 文件名; 必须先 cp/rename 成规范名再上传 (release.ts 里已处理)
@@ -193,5 +193,5 @@ AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁
 
 ### 4.2 避坑指南
 
-- 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动 (如 AGENTS.md / version.json), 不要默认全量 `git add -A`; 用 `question` 让用户拍板纳入范围与拆分方式.
+- 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动 (如 AGENTS.md / packages/tauri/version.json), 不要默认全量 `git add -A`; 用 `question` 让用户拍板纳入范围与拆分方式.
 - **反复挂载 DMG / 跑 debug 构建会在 LaunchServices 累积 numas.app 注册** (指向已删除路径), 导致 `numas://` 报「找不到该文件」. 清理: `lsregister -dump | grep -E '^path:.*numas\.app'` 收集路径后逐条 `lsregister -u <path>` (2026-09-20 实测清了 39 条残留). (托盘/无 Dock 细节见 `packages/tauri/AGENTS.md`)

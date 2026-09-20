@@ -3,7 +3,7 @@
  * release.ts — numas Tauri 桌面壳打包分发 (全平台 arm/amd)
  *
  * 规则 (单一事实源, 升级版本只改 version.json, 本脚本自动适配):
- *   1. 版本号:  读 ../../version.json (major.minor.patch), 不写死.
+ *   1. 版本号:  读 ../version.json (major.minor.patch), 不写死.
  *   2. tag:     `numas-v<semver>-<YYYYMMDDHHMM>` (与现有 release 规律一致).
  *   3. 产物定位: target/<triple>/release/bundle/<type>/... (Tauri `bundle.targets=all`).
  *   4. asset 命名: 连字符规范, 平台用 darwin/windows/linux (与现有 CLI 资产
@@ -135,7 +135,7 @@ interface Found {
 }
 
 async function main() {
-  const version = (await Bun.file(join(root, "version.json")).json()) as {
+  const version = (await Bun.file(join(pkg, "version.json")).json()) as {
     major: number
     minor: number
     patch: number
