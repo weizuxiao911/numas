@@ -6,12 +6,10 @@ import './styles.css';
 const WORKBENCH_URL = 'http://localhost:7788';
 
 function claim(task: TaskCard): void {
+  // 任务源只标记两个参数: repo = 开源项目 (git) URL, issue = issue URL
   const params = new URLSearchParams({
-    repo: task.repo,
-    owner: task.owner,
-    issue: String(task.issueNumber),
-    title: task.title,
-    url: task.issueUrl,
+    repo: `https://github.com/${task.repo}`,
+    issue: task.issueUrl,
   });
   window.open(`${WORKBENCH_URL}/?${params.toString()}`, '_blank');
 }
