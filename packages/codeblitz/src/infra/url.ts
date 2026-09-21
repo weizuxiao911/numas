@@ -178,7 +178,10 @@ export const cwdHeader = workdirHeader;
 
 /** 启动时向后端探测 /path, 仅取 directory 作技术兜底 (不当已选项目) + 返回 home.
  *  App 启动门控用: 至少等 /path 返回一次 (拿到 home 锚点), 但即使未选项目也不阻塞.
- *  幂等: 并发调用共享同一次请求. */
+ *  幂等: 并发调用共享同一次请求.
+ *  ⚠️ fallback 必须用 home, 不用 directory: numas serve 从根目录启动时 /path 无 header 的
+ *  directory 是 process.cwd() (= '/'), FilePicker 落到 '/' 会列根目录异常 (空目录 bug).
+ *  未选项目时默认浏览起点应是 home. */
 let _resolving: Promise<void> | null = null;
 export function resolveFallback(): Promise<void> {
   if (_fallbackDir) return Promise.resolve();
@@ -189,10 +192,13 @@ export function resolveFallback(): Promise<void> {
     try {
       const res = await fetch(`${base.replace(/\/+$/, '')}/path`, { headers: { Accept: 'application/json' } });
       const json: any = await res.json().catch(() => null);
-      const dir = (typeof json?.directory === 'string' && json.directory)
-        || (typeof json?.worktree === 'string' && json.worktree)
-        || '';
-      if (dir) setFallbackDirectory(dir);
+      // 优先 home (默认浏览起点); directory 仅当 home 缺失时兜底 (但绝不用 '/' 根)
+      const home = (typeof json?.home === 'string' && json.home) ? json.home : '';
+      const dir = (typeof json?.directory === 'string' && json.directory && json.directory !== '/')
+        ? json.directory
+        : '';
+      if (home) setFallbackDirectory(home);
+      else if (dir) setFallbackDirectory(dir);
     } catch {
       /* 未选项目且 /path 不可用: 纯空态 */
     } finally {
