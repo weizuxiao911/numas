@@ -6,7 +6,8 @@ import '@codeblitzjs/ide-core/bundle/codeblitz.css';
 import '@codeblitzjs/ide-core/languages';
 
 import { getBuiltinModules } from './config/modules';
-import { appBaseUrl, isBootReady, resolveBoot } from './infra/url';
+import { appBaseUrl, getWorkdir, isBootReady, resolveBoot, setWorkdir } from './infra/url';
+import { isWorkdirLinkedToRepo } from './infra/repo';
 import { preferences } from './config/preferences';
 import { getPreloadedMetadata, preloadExtensionMetadata } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
@@ -144,6 +145,22 @@ export const App: React.FC = () => {
     if (wsReady) return;
     let alive = true;
     void resolveBoot().then(() => { if (alive) setWsReady(true); });
+    return () => { alive = false; };
+  }, [wsReady]);
+
+  // 节点 1 前置校验 (2026-09-21): URL 携带 ?repo= 时, 若已选项目且与 repo 不关联
+  // (宽松口径: 项目 git remote 无一个归一化等于 repo), 重置回未选择项目状态,
+  // 避免旧项目干扰针对该 repo 的任务流程.
+  React.useEffect(() => {
+    if (!wsReady) return;
+    let alive = true;
+    void (async () => {
+      const repo = new URL(window.location.href).searchParams.get('repo');
+      if (!repo || !getWorkdir()) return; // 无 repo 或无项目 → 不处理
+      const linked = await isWorkdirLinkedToRepo(repo);
+      if (!alive) return;
+      if (!linked) setWorkdir(''); // 重置回未选择项目 (触发 workdir:changed → UI 空态)
+    })();
     return () => { alive = false; };
   }, [wsReady]);
 
