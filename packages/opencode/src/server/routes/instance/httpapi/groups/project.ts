@@ -39,6 +39,16 @@ export const ProjectApi = HttpApi.make("project")
             description: "Retrieve the currently active project that OpenCode is working with.",
           }),
         ),
+        HttpApiEndpoint.get("currentRemotes", `${root}/current/remotes`, {
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(ProjectV2.Remote), "Current project git remotes"),
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "project.currentRemotes",
+            summary: "Get current project git remotes",
+            description: "List git remote references (name + url) for the current working directory project.",
+          }),
+        ),
         HttpApiEndpoint.post("initGit", `${root}/git/init`, {
           query: WorkspaceRoutingQuery,
           success: described(Project.Info, "Project information after git initialization"),

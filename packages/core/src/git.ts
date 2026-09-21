@@ -17,6 +17,11 @@ export class Repository extends Schema.Class<Repository>("Git.Repository")({
   commonDirectory: AbsolutePath,
 }) {}
 
+export class RemoteRef extends Schema.Class<RemoteRef>("Git.RemoteRef")({
+  name: Schema.String,
+  url: Schema.String,
+}) {}
+
 export const ChangeSet = Schema.String.pipe(Schema.brand("Git.ChangeSet"))
 export type ChangeSet = typeof ChangeSet.Type
 
@@ -78,6 +83,7 @@ export interface Interface {
   }
   readonly remote: {
     readonly get: (repository: Repository, name?: string) => Effect.Effect<string | undefined>
+    readonly list: (repository: Repository) => Effect.Effect<readonly RemoteRef[]>
   }
   readonly history: {
     readonly head: (repository: Repository) => Effect.Effect<string | undefined>
@@ -206,6 +212,23 @@ const layer = Layer.effect(
       const result = yield* run(repository.worktree, proc)(["remote", "get-url", name])
       if (result.exitCode !== 0) return undefined
       return result.text.trim() || undefined
+    })
+
+    const remoteList = Effect.fn("Git.remote.list")(function* (repository: Repository) {
+      const result = yield* run(repository.worktree, proc)(["remote", "-v"])
+      if (result.exitCode !== 0) return []
+      const seen = new Set<string>()
+      const refs: RemoteRef[] = []
+      for (const line of result.text.split("\n")) {
+        // git remote -v 输出形如:  origin  https://github.com/a/b.git (fetch)
+        const m = line.match(/^([^\s]+)\s+(.+?)\s+\((fetch|push)\)$/)
+        if (!m) continue
+        const [_, name, url] = m
+        if (seen.has(name)) continue // 每 remote 只取首个 (fetch) 行
+        seen.add(name)
+        refs.push(new RemoteRef({ name, url: url.trim() }))
+      }
+      return refs
     })
 
     const roots = Effect.fn("Git.history.rootCommits")(function* (repository: Repository) {
@@ -924,7 +947,7 @@ const layer = Layer.effect(
 
     return Service.of({
       repo: { discover, clone, create },
-      remote: { get: remote },
+      remote: { get: remote, list: remoteList },
       history: { head, branch, defaultRemoteBranch: remoteHead, rootCommits: roots },
       sync: { fetchRemotes: fetch, fetchBranch, checkoutRemoteBranch: checkout, resetHard: reset },
       change: { capture, apply, discard },

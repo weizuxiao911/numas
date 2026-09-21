@@ -7,6 +7,9 @@ import { AbsolutePath } from "../schema"
 export const ID = Project.ID
 export type ID = typeof ID.Type
 
+export const Remote = Project.Remote
+export type Remote = typeof Remote.Type
+
 export const Vcs = Schema.Union([
   Schema.Struct({
     type: Schema.Literal("git"),

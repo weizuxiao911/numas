@@ -17,6 +17,9 @@ export type ID = ProjectSchema.ID
 export const Vcs = ProjectSchema.Vcs
 export type Vcs = ProjectSchema.Vcs
 
+export const Remote = ProjectSchema.Remote
+export type Remote = ProjectSchema.Remote
+
 export class Info extends Schema.Class<Info>("Project.Info")({
   id: ID,
 }) {}

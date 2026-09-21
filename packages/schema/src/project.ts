@@ -40,5 +40,12 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "Project" })
 export interface Info extends Schema.Schema.Type<typeof Info> {}
 
+/** 项目 git 远程仓库引用 (名称 + 地址). */
+export const Remote = Schema.Struct({
+  name: Schema.String,
+  url: Schema.String,
+}).annotate({ identifier: "Project.Remote" })
+export interface Remote extends Schema.Schema.Type<typeof Remote> {}
+
 const Updated = define({ type: "project.updated", schema: Info.fields })
 export const Event = { Updated, Definitions: inventory(Updated) }
