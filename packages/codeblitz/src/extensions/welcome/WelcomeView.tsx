@@ -255,9 +255,8 @@ export const WelcomeView: React.FC = () => {
 
       {/* 底部悬浮步骤按钮组 (按时序展开; 点击行为交给用户; 每个按钮触发 chat 执行技能) */}
       <div className="numas-welcome__steps">
-        <span className="numas-welcome__steps-label">引导流程</span>
         <button type="button" className="numas-welcome__step" onClick={stepEnv}>
-          <span className="numas-welcome__step-num">1</span>环境准备
+          <span className="numas-welcome__step-num">1</span>环境检查
         </button>
         <button type="button" className="numas-welcome__step" onClick={stepLoad}>
           <span className="numas-welcome__step-num">2</span>载入工程

@@ -180,7 +180,7 @@
   color: #6d5ef5;
 }
 
-/* 底部悬浮步骤按钮组 (sticky 贴底; 内容滚动时始终可见; 按时序展开, 点击行为交给用户) */
+/* 底部悬浮步骤按钮组 (sticky 贴底; 内容滚动时始终可见; 居中分布, 按时序展开, 点击行为交给用户) */
 .numas-welcome__steps {
   position: sticky;
   bottom: 0;
@@ -191,15 +191,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 12px;
   padding: 14px 4px 18px;
   background: var(--welcomePage-background, var(--editor-background, #f1f2f3));
-}
-
-.numas-welcome__steps-label {
-  margin-right: 4px;
-  font-size: 12px;
-  color: var(--descriptionForeground, rgba(21, 27, 33, 0.55));
 }
 
 .numas-welcome__step {
