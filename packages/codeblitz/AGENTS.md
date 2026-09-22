@@ -117,10 +117,25 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   旧 `test/ide` 拷贝已删除. **不要再拷贝前端源码到别处.**
 - codeblitz 前置 numas 检测 (`src/gate`) 支持 `?numasPort=<port>` URL 覆盖 (仅当该参数存在时生效),
   用于不打扰真实环境地模拟"未安装/自定义端口"验证引导分支; 默认探测配置的后端基址 (`appBaseUrl()`).
-- **不要在页面加载时自动 fire 自定义协议 scheme** (如 `numas://`): 未注册时 macOS 会弹系统
-  「未设定用来打开URL…」对话框, 且浏览器无 API 可静默查询 scheme 是否已注册; Chrome 77+ 还要求
-  外部协议跳转必须由**用户手势**触发 (非手势会被静默拦截). 正确模式: 端口探测做检测, fire 只在
-  用户显式点击时执行.
+- **自定义协议 scheme (`numas://`) 唤起的浏览器行为与弹窗根因** (2026-09-22 实测修订, 取代旧结论):
+  - **Chrome 强制要求用户手势**: 页面加载时自动 fire (iframe / `location.href` 均如此) 被静默拦截,
+    console 报 `Not allowed to launch 'numas://serve' because a user gesture is required`, **无系统弹窗**.
+    解法: 进入时 fire 一次(尽力而为, 部分浏览器有效) + **首次用户交互 (pointerdown/keydown) 补 fire**
+    (满足手势); **整页最多补一次** (用 ref 跨 phase 持久, 反复 fire 会在下述"已允许"状态下反复弹框).
+  - **未注册 scheme + 手势 fire**: Chrome 报 `Failed to launch ... scheme does not have a registered
+    handler`, **静默失败, 无系统弹窗** (playwright 实测 + AppleScript 窗口枚举确认).
+  - **弹窗真正根因 (两个)**:
+    1. **Chrome "始终允许" 记录**: 用户曾在 Chrome 确认框勾"始终允许"后, 该 origin+scheme 存于
+       `Default/Preferences` → `protocol_handler.allowed_origin_protocol_pairs[origin][scheme]=true`;
+       Chrome 跳过确认**直接交系统启动** → 应用已删/未装 → macOS 弹「找不到该文件」/「未设定用来打开URL」;
+       gate 反复 fire → **一直弹**. 清理: 退出 Chrome → 编辑 Preferences 删嵌套 key (结构是
+       `origin -> scheme -> true`, 不是扁平 key!) + `safe_browsing.external_app_redirect_timestamps[scheme]`
+       → 重开 Chrome. (Chrome 运行中编辑会被覆盖, 必须先退出.)
+    2. **LaunchServices 死注册**: dmg 挂载/已删构建产物残留声称 `numas:` scheme → 系统选到失效 handler →
+       弹框. 清理: `lsregister -dump | grep -E '^path:.*numas.*\.app$'` 逐条 `lsregister -u`
+       (挂载卷死路径需先卸载卷; 构建产物 app 直接删).
+  - **结论**: fire 未注册 scheme 本身**不会弹窗**; 弹窗一律来自"系统认为有 handler 但 app 不存在"
+    (allowed 记录 / 死注册). 排查弹窗先查这两处, 再动 gate 代码.
 - 端口 404 排查先查**残留进程占用**: 已删除目录的 dev server 可能仍在监听 (如旧 `test/poc-opencode-ide`
   的 vite 占 5173), 新起服务 bind 不到 → 返回旧进程的 404. 用 `lsof -iTCP:<port> -sTCP:LISTEN -n -P`
   看 PID, 确认对应已删除目录后 `kill` 再验.
