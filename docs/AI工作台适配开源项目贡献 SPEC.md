@@ -147,15 +147,21 @@
    | 4 | 提交 PR | 触发「提交 PR」技能 |
 
 **顶部入口** (`IdeLayout`):
-- **[帮助] 按钮** (选择项目右侧): `WorkbenchEditorService.open(URI('welcome://'))` → 打开/聚焦 welcome tab
+- **[帮助] 按钮** (顶部右侧, `?` icon): `WorkbenchEditorService.open(URI('welcome://'))` → 打开/聚焦 welcome tab
   (官方注册 ONE_PER_WORKBENCH, 重复打开只聚焦; 解决用户手动关闭 welcome 后无法重新打开)
 - **[提交 PR] 按钮** (顶部右侧): **仅选择项目后显示** (订阅 workdir 变化) → 触发「提交 PR」技能
+- **[关闭项目] 按钮** (选择项目右侧): **仅选择项目后显示** → 清空 workdir + 刷新页面 → 恢复默认状态 (无项目 → welcome)
 
 **关键设计决策**:
 - **step2 时序 (方案 A)**: AI 无法触发前端弹窗 → 先让用户选目录, 再把「技能 + 仓库 + 目标目录」发给 chat;
-  clone 完成由前端**轮询目标目录** (`/api/fs/stat` 带 header) 判定 → 自动 `setWorkdir` 切换项目
+  clone 完成由前端**轮询**判定 (等 `.git` 出现 → `.git/index` 连续两次存在 = checkout 落地) →
+  **走 chat 的 `setProject` 命令切换** (含实例 reload + 会话重载; 直接 setWorkdir 会导致资源管理器/chat 不刷新)
 - **step 不做前端状态机**: 按钮全部可点, 前置条件由 skill/AI 检查并引导 (简单、不易卡死)
 - **按钮只发触发消息** (`chatbot.send` 跨拓展命令), 流程提示词在远程 skill 里, 不捆绑到按钮
+
+**FilePicker 增强** (选择目录体验):
+- **新建文件夹**: 头部「＋ 新建文件夹」按钮 → 行内输入名称 → 当前目录创建 → 刷新列表
+- **进入子目录清空搜索词** (过滤条件不带入影响子目录)
 
 **issue 数据来源 (方案 A)**: 浏览器直接 fetch `api.github.com/repos/{owner}/{repo}/issues/{n}` (CORS 允许;
 未鉴权 60 req/hr).

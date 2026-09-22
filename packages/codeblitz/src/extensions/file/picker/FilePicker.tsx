@@ -70,8 +70,10 @@ export const FilePicker: React.FC = () => {
   const [checked, setChecked] = useState<Map<string, DirEntry>>(new Map());
   /** open 模式: 选中的子目录 (单选, 仅当前列表视图内有效; 导航/切换目录即清空). select 模式恒空. */
   const [openPick, setOpenPick] = useState<DirEntry | null>(null);
-  /** 面包屑右侧搜索词: 对当前列表按名称实时过滤 (两种模式通用, 切换目录时保留) */
+  /** 面包屑右侧搜索词: 对当前列表按名称实时过滤 (进入新目录时清空) */
   const [query, setQuery] = useState('');
+  /** 新建文件夹输入值: null=未在新建; string=输入中 */
+  const [newDir, setNewDir] = useState<string | null>(null);
   const fs = useInjectable<any>(FsToken as any);
   const configRef = useRef<FilePickerConfig | null>(null);
   const inputRef = useRef<HTMLDivElement>(null);
@@ -102,6 +104,7 @@ export const FilePicker: React.FC = () => {
       return;
     }
     setLoading(true);
+    setQuery(''); // 进入新目录清空搜索过滤 (不得带入影响子目录)
     try {
       const r = await browseDir(fs, dir);
       setCurrentPath(r.path);
@@ -114,6 +117,24 @@ export const FilePicker: React.FC = () => {
       setLoading(false);
     }
   }, [notifyError, withinRoot]);
+
+  /** 在当前目录下新建文件夹 → 刷新列表 */
+  const createDir = useCallback(async () => {
+    const name = (newDir || '').trim();
+    if (!name || !currentPath) return;
+    if (/[\\/]/.test(name)) {
+      notifyError('名称不能包含路径分隔符');
+      return;
+    }
+    const target = `${currentPath.replace(/\/+$/, '')}/${name}`;
+    const ok = await fs.mkdirAbs(target);
+    if (!ok) {
+      notifyError('创建文件夹失败');
+      return;
+    }
+    setNewDir(null);
+    await doBrowse(currentPath);
+  }, [newDir, currentPath, fs, notifyError, doBrowse]);
 
   useEffect(() => {
     const onRequest = (e: Event) => {
@@ -265,7 +286,34 @@ export const FilePicker: React.FC = () => {
               <button className="fp-search-clear" title="清空搜索" onClick={() => setQuery('')}>✕</button>
             )}
           </div>
+          <button
+            type="button"
+            className="fp-mkdir"
+            title="在当前目录新建文件夹"
+            onClick={() => setNewDir((v) => (v === null ? '' : null))}
+          >
+            ＋ 新建文件夹
+          </button>
         </div>
+        {newDir !== null && (
+          <div className="fp-mkdir-row">
+            <input
+              className="fp-mkdir-input"
+              type="text"
+              autoFocus
+              placeholder="新文件夹名称"
+              value={newDir}
+              spellCheck={false}
+              onChange={(e) => setNewDir(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void createDir();
+                if (e.key === 'Escape') setNewDir(null);
+              }}
+            />
+            <button type="button" className="fp-mkdir-btn is-primary" onClick={() => void createDir()}>创建</button>
+            <button type="button" className="fp-mkdir-btn" onClick={() => setNewDir(null)}>取消</button>
+          </div>
+        )}
         <div className="fp-body">
           <div className="fp-main">
             {loading && <div className="fp-loading">加载中…</div>}
@@ -385,6 +433,15 @@ const STYLES = `
 .fp-search-input:focus{border-color:var(--ai-accent);background:var(--ai-accent-soft)}
 .fp-search-clear{position:absolute;right:5px;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;background:none;border:none;color:var(--ai-fg-muted);cursor:pointer;border-radius:4px;font-size:11px;padding:0;line-height:1}
 .fp-search-clear:hover{background:var(--ai-hover);color:var(--ai-fg)}
+.fp-mkdir{height:28px;padding:0 12px;background:none;border:1px solid var(--ai-divider);border-radius:8px;color:var(--ai-fg-muted);font-size:12px;cursor:pointer;flex-shrink:0;white-space:nowrap;transition:all .15s}
+.fp-mkdir:hover{background:var(--ai-hover);color:var(--ai-fg);border-color:var(--ai-accent)}
+.fp-mkdir-row{display:flex;align-items:center;gap:8px;padding:8px 18px;border-bottom:1px solid var(--ai-divider);flex-shrink:0}
+.fp-mkdir-input{flex:1;height:28px;background:color-mix(in srgb, var(--ai-fg) 6%, transparent);border:1px solid var(--ai-divider);border-radius:8px;color:var(--ai-fg);font-size:12.5px;padding:0 10px;outline:none;box-sizing:border-box}
+.fp-mkdir-input:focus{border-color:var(--ai-accent);background:var(--ai-accent-soft)}
+.fp-mkdir-btn{height:28px;padding:0 14px;background:none;border:1px solid var(--ai-divider);border-radius:8px;color:var(--ai-fg-muted);font-size:12.5px;cursor:pointer;flex-shrink:0;transition:all .12s}
+.fp-mkdir-btn:hover{background:var(--ai-hover);color:var(--ai-fg)}
+.fp-mkdir-btn.is-primary{background:var(--ai-accent);border-color:var(--ai-accent);color:var(--ai-accent-fg);font-weight:600}
+.fp-mkdir-btn.is-primary:hover{background:var(--ai-accent-strong)}
 .fp-nav-item{background:none;border:none;color:var(--ai-fg-muted);cursor:pointer;padding:2px 5px;border-radius:4px;white-space:nowrap;font-size:12.5px;transition:all .12s;flex-shrink:0}
 .fp-nav-item--cur{color:var(--ai-fg);font-weight:600}
 .fp-nav-item--locked{opacity:.4;cursor:default}

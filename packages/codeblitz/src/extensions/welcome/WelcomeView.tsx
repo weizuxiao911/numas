@@ -19,7 +19,7 @@ import { useInjectable } from '@opensumi/ide-core-browser';
 import { CommandService } from '@opensumi/ide-core-common';
 
 import { renderMarkdown, renderMermaidBlocks } from '../../infra/markdown';
-import { appBaseUrl, setWorkdir } from '../../infra/url';
+import { appBaseUrl } from '../../infra/url';
 import './welcome.css';
 
 /** 触发 chat 执行 skill 的跨拓展命令 id (chat 拓展注册, 见 extensions/chat/module.ts) */
@@ -145,7 +145,7 @@ export const WelcomeView: React.FC = () => {
 
   /**
    * step2 载入工程 → 先弹 FilePicker 选 clone 父目录 (方案 A: 用户先选, 再交给 AI) →
-   * 触发「载入工程」技能 (含目标目录) → 轮询项目目录出现 (clone 完成) → 自动切换工作区.
+   * 触发「载入工程」技能 (含目标目录) → 等 clone 完成 → 走 chat 切项目流程.
    */
   function stepLoad() {
     if (!task?.repo) return;
@@ -159,7 +159,7 @@ export const WelcomeView: React.FC = () => {
               if (!parent) return;
               sendToChat([`请执行「${SKILL_LOAD}」技能。`, ...taskLines(), `clone 目标目录: ${parent}`]);
               const repoName = (task.ownerRepo || task.repo).split('/').filter(Boolean).pop() || '';
-              if (repoName) void pollForProject(`${parent.replace(/\/+$/, '')}/${repoName}`);
+              if (repoName) void waitCloneAndSwitch(`${parent.replace(/\/+$/, '')}/${repoName}`);
             },
           },
         },
@@ -167,23 +167,46 @@ export const WelcomeView: React.FC = () => {
     );
   }
 
-  /** 轮询目标项目目录出现 (clone 完成) → 自动切换工作区 (setWorkdir) */
-  async function pollForProject(path: string) {
+  /** 探测路径存在 (fs stat, header 指向该路径) */
+  async function pathExists(path: string, rel = '.'): Promise<boolean> {
     const base = appBaseUrl();
-    if (!base) return;
-    for (let i = 0; i < 100; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      try {
-        const res = await fetch(`${base.replace(/\/+$/, '')}/api/fs/stat?path=.`, {
-          headers: { 'x-opencode-directory': encodeURI(path) },
-          cache: 'no-store',
-        });
-        if (res.ok) {
-          setWorkdir(path);
+    if (!base) return false;
+    try {
+      const res = await fetch(`${base.replace(/\/+$/, '')}/api/fs/stat?path=${encodeURIComponent(rel)}`, {
+        headers: { 'x-opencode-directory': encodeURI(path) },
+        cache: 'no-store',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 等 clone 完成 → 切换项目 (走 chat 的 setProject 命令: 含实例 reload + 会话重载,
+   * 直接 setWorkdir 会导致资源管理器/chat 不刷新, 需手动刷新).
+   *
+   * clone 完成判定 (避免目录刚建就切过去):
+   *   1. 等 .git 出现 (clone 开始)
+   *   2. 等 .git/index 连续两次探测存在 (checkout 已落地)
+   */
+  async function waitCloneAndSwitch(projectPath: string) {
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 120; i++) {
+      await sleep(3000);
+      if (await pathExists(projectPath, '.git')) break;
+    }
+    let stable = 0;
+    for (let i = 0; i < 200; i++) {
+      await sleep(3000);
+      if (await pathExists(projectPath, '.git/index')) {
+        stable += 1;
+        if (stable >= 2) {
+          void commandService.executeCommand('chatbot.setProject', projectPath);
           return;
         }
-      } catch {
-        /* 网络抖动, 继续轮询 */
+      } else {
+        stable = 0;
       }
     }
   }
