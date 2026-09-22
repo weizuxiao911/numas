@@ -1,0 +1,238 @@
+/* welcome 引导页 — 跟随 IDE 主题变量 (opensumi theme), 品牌紫按钮
+   注意: 不要在此设 overflow (会自建 scroll container → 底部 steps 的 sticky 失效);
+   滚动交给外层编辑器容器. */
+.numas-welcome {
+  min-height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 24px 0;
+  color: var(--foreground, var(--editor-foreground, #151b21));
+  background: var(--welcomePage-background, var(--editor-background, #f1f2f3));
+}
+
+.numas-welcome__card {
+  width: 100%;
+  max-width: 780px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 4px 24px;
+}
+
+.numas-welcome__card--plain {
+  align-items: center;
+  text-align: center;
+  padding: 56px 30px;
+  gap: 10px;
+}
+
+.numas-welcome__logo {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #6d5ef5, #8b7bff);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(109, 94, 245, 0.3);
+}
+
+.numas-welcome__repo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--descriptionForeground, rgba(21, 27, 33, 0.65));
+}
+
+.numas-welcome__repo-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.numas-welcome__issue-num {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--editorWidget-background, rgba(21, 27, 33, 0.06));
+  font-size: 12px;
+}
+
+.numas-welcome__title,
+.numas-welcome__issue-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+/* issue 标题即链接 (新标签页打开); 悬停显品牌色 + 下划线 */
+.numas-welcome__issue-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.numas-welcome__issue-title a:hover {
+  color: #6d5ef5;
+  text-decoration: underline;
+}
+
+.numas-welcome__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.numas-welcome__state {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+.numas-welcome__state--open {
+  color: #1a7f37;
+  background: rgba(34, 160, 107, 0.12);
+}
+
+.numas-welcome__state--closed {
+  color: #8250df;
+  background: rgba(130, 80, 223, 0.12);
+}
+
+.numas-welcome__author {
+  color: var(--descriptionForeground, rgba(21, 27, 33, 0.65));
+}
+
+.numas-welcome__label {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--editorWidget-background, rgba(21, 27, 33, 0.06));
+  color: var(--descriptionForeground, rgba(21, 27, 33, 0.65));
+}
+
+.numas-welcome__desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--descriptionForeground, rgba(21, 27, 33, 0.65));
+}
+
+.numas-welcome__desc--error {
+  color: #e5484d;
+}
+
+/* issue 正文 (Markdown 渲染) — 不限高, 适配内容 (整页滚动) */
+.numas-welcome__body {
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--editorWidget-background, rgba(21, 27, 33, 0.03));
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.numas-welcome__body h1,
+.numas-welcome__body h2,
+.numas-welcome__body h3 {
+  font-size: 15px;
+  margin: 14px 0 8px;
+}
+
+.numas-welcome__body p {
+  margin: 8px 0;
+}
+
+.numas-welcome__body ul,
+.numas-welcome__body ol {
+  padding-left: 22px;
+  margin: 8px 0;
+}
+
+.numas-welcome__body code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--editorWidget-background, rgba(21, 27, 33, 0.06));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.numas-welcome__body pre {
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow: auto;
+  background: var(--editor-background, rgba(21, 27, 33, 0.05));
+}
+
+.numas-welcome__body pre code {
+  padding: 0;
+  background: none;
+}
+
+.numas-welcome__body img {
+  max-width: 100%;
+}
+
+.numas-welcome__body a {
+  color: #6d5ef5;
+}
+
+/* 底部悬浮步骤按钮组 (sticky 贴底; 内容滚动时始终可见; 按时序展开, 点击行为交给用户) */
+.numas-welcome__steps {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin-top: auto;
+  width: 100%;
+  max-width: 780px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 4px 18px;
+  background: var(--welcomePage-background, var(--editor-background, #f1f2f3));
+}
+
+.numas-welcome__steps-label {
+  margin-right: 4px;
+  font-size: 12px;
+  color: var(--descriptionForeground, rgba(21, 27, 33, 0.55));
+}
+
+.numas-welcome__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--editorWidget-background, rgba(21, 27, 33, 0.06));
+  color: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.numas-welcome__step:hover {
+  background: #6d5ef5;
+  color: #fff;
+}
+
+.numas-welcome__step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #6d5ef5;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.numas-welcome__step:hover .numas-welcome__step-num {
+  background: rgba(255, 255, 255, 0.25);
+}

@@ -102,3 +102,85 @@
 **待决策点 (延续)**:
 - 权限策略: 每次写操作弹审批 (A) / 只对写危险操作弹 (B) / 首次授权记住 (C). 倾向 B.
 - 持久化: 项目↔repo 映射存 localStorage 还是 numas 服务端.
+
+---
+
+## 4. Skill 分发机制 (2026-09-22 定稿并实装)
+
+> 目标: AI 引导能力 (skill) 随 numas 分发, **用户零配置**, 且**不写死在 opencode 代码里**.
+
+**架构**:
+1. **远程 skill 仓库**: `https://github.com/weizuxiao911/numas-skills` (public, gitee 镜像待建)
+   - 结构: `index.json` + `<skill-name>/SKILL.md` (目录名 = skill name)
+   - **必须用 raw 内容地址** (opencode discovery 直接 GET `{url}/index.json` 与 `{url}/{skill}/文件`;
+     仓库网页地址会 404)
+2. **numas 首次启动自动创建 `~/.config/opencode/numas.json`**, 写入 `skills.urls` (raw 地址):
+   - 实现: `packages/opencode/src/config/config.ts` 的 `loadGlobal` (常量 `NUMAS_SKILL_URLS`)
+   - 双 URL 冗余: GitHub raw + Gitee raw (一个失败静默跳过)
+   - 已存在不覆盖 (用户可手动改 numas.json 覆盖默认源)
+3. **opencode 启动时按 `skills.urls` 远程拉取** skill → 缓存到 `~/.cache/opencode/skills/<name>/`
+   → skill 工具可加载 (AI 引导能力生效)
+4. **更新机制**: 改 skill 内容后**递增 index.json 的 version** → 客户端重新拉取
+
+**已验证** (2026-09-22): numas.json 自动创建 ✓ → 从 GitHub raw 拉取「开发环境检查」✓ →
+缓存 SKILL.md (version=1) ✓ → `/skill` API 列出 ✓
+
+**已分发 skill**:
+- `开发环境检查`: 自动跑 `gh --version` / `gh auth status`, 缺失时引导安装 (brew/官网) 与
+  `gh auth login` 授权, 最后汇总环境状态.
+
+---
+
+## 5. welcome 引导页 + 顶部入口 (节点 2, 2026-09-22 定稿)
+
+> 用 codeblitz **官方 welcome 机制** (`runtimeConfig.WelcomePage` + `startupEditor: 'welcomePage'`),
+> 未选项目/无打开文件时显示. 组件放 `packages/codeblitz/src/extensions/welcome/`.
+
+**页面内容**:
+1. **大屏 issue 卡片**: repo / 标题 (链接 → 新标签页打开) / 状态 / labels / 正文 (Markdown 渲染, 不限高)
+2. **底部悬浮步骤按钮组** (sticky 贴底, 内容滚动时始终可见; 按时序展开, 点击行为交给用户):
+   | step | 按钮 | 行为 |
+   |---|---|---|
+   | 1 | 环境准备 | 触发「开发环境检查」技能 |
+   | 2 | 载入工程 | **先弹 FilePicker 选 clone 父目录** → 触发「载入工程」技能 (含目标目录) → 轮询项目目录出现 → 自动切换工作区 |
+   | 3 | 修复问题 | 触发「修复问题」技能 |
+   | 4 | 提交 PR | 触发「提交 PR」技能 |
+
+**顶部入口** (`IdeLayout`):
+- **[帮助] 按钮** (选择项目右侧): `WorkbenchEditorService.open(URI('welcome://'))` → 打开/聚焦 welcome tab
+  (官方注册 ONE_PER_WORKBENCH, 重复打开只聚焦; 解决用户手动关闭 welcome 后无法重新打开)
+- **[提交 PR] 按钮** (顶部右侧): **仅选择项目后显示** (订阅 workdir 变化) → 触发「提交 PR」技能
+
+**关键设计决策**:
+- **step2 时序 (方案 A)**: AI 无法触发前端弹窗 → 先让用户选目录, 再把「技能 + 仓库 + 目标目录」发给 chat;
+  clone 完成由前端**轮询目标目录** (`/api/fs/stat` 带 header) 判定 → 自动 `setWorkdir` 切换项目
+- **step 不做前端状态机**: 按钮全部可点, 前置条件由 skill/AI 检查并引导 (简单、不易卡死)
+- **按钮只发触发消息** (`chatbot.send` 跨拓展命令), 流程提示词在远程 skill 里, 不捆绑到按钮
+
+**issue 数据来源 (方案 A)**: 浏览器直接 fetch `api.github.com/repos/{owner}/{repo}/issues/{n}` (CORS 允许;
+未鉴权 60 req/hr).
+
+---
+
+## 6. 已分发技能 (numas-skills 仓库)
+
+| 技能 | 用途 |
+|---|---|
+| 开发环境检查 | gh 安装/授权检查与引导 |
+| 载入工程 | fork 到用户账号 + clone 到指定目录 + 配置双远程 (origin=fork, upstream=原仓库) |
+| 修复问题 | 理解 issue → 探索项目 → 设计方案 (用户确认) → 执行修复 → 验收 → 保留方案文档 |
+| 提交 PR | 推送到 fork + 向上游发起 PR (标题/描述先给用户确认) |
+
+---
+
+## 7. 节点进度
+
+| 节点 | 内容 | 状态 |
+|---|---|---|
+| 1 | 前置校验 + 机械重置 (URL 带 repo 时校验 workdir 关联, 不匹配重置) | ✅ 已验收 (2026-09-22) |
+| 2 | welcome 引导页 (issue 卡片 + 步骤按钮组) + 顶部入口 (帮助/提交 PR) | ✅ 已实现待验收 |
+| 3 | 环境前置 skill (gh 安装/授权引导) | ✅ skill 已分发 |
+| 4 | fork + clone + 双远程 (「载入工程」技能) | ✅ skill 已分发 (待端到端验收) |
+| 5 | 关联识别持久化 (双远程策略) | ⬜ 待开发 |
+| 6 | AI 引导认知 issue + 修复 (「修复问题」技能) | ✅ skill 已分发 (待端到端验收) |
+| 7 | 提交 PR (「提交 PR」技能) | ✅ skill 已分发 (待端到端验收) |

@@ -16,11 +16,13 @@ import React from 'react';
 // import { createPortal } from 'react-dom'; // WorkBuddy 功能已整体注释, 恢复时一并取消注释
 import { SlotLocation, SlotRenderer } from '@opensumi/ide-core-browser';
 import { BoxPanel, SplitPanel } from '@opensumi/ide-core-browser/lib/components';
-import { CommandService } from '@opensumi/ide-core-common';
+import { CommandService, URI } from '@opensumi/ide-core-common';
+import { WorkbenchEditorService } from '@opensumi/ide-editor';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 
 import { SOLO_SLOTS } from '../config/slots';
+import { isWorkdirSelected, subscribeWorkdir } from '../infra/url';
 import { WorkspacePicker } from '../extensions/workspace/WorkspacePicker';
 import { FilePicker } from '../extensions/file';
 import { IdeRightTopbar } from './IdeRightTopbar';
@@ -55,6 +57,17 @@ const styles = `
 }
 .app-ide__toggle:hover { background: color-mix(in srgb, currentColor 14%, transparent); color: var(--editor-foreground); }
 .app-ide__toggle.is-active { color: var(--editor-foreground); }
+/* 顶部文字按钮 (帮助 / 提交 PR) */
+.app-ide__text-btn {
+  height: 32px; flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 12px;
+  border: none; border-radius: 8px; background: none; cursor: pointer;
+  color: var(--descriptionForeground, #8f8f8f);
+  font-size: 13px;
+  transition: background .12s, color .12s;
+}
+.app-ide__text-btn:hover { background: color-mix(in srgb, currentColor 14%, transparent); color: var(--editor-foreground); }
 .app-ide__top .app-side-topbar { flex: 0 0 auto; padding: 0; }
 /* === WorkBuddy 启动按钮 + 下载引导样式 (用户要求暂时注释掉整个功能; 恢复时去掉本块注释) ===
 .app-ide__top-divider {
@@ -178,6 +191,42 @@ const styles = `
   .app-ide .kt-tab-panel { background: var(--editor-background, #ffffff) !important; }
 }
 `;
+
+/** 帮助按钮: 打开/聚焦 welcome 引导 tab (官方注册 ONE_PER_WORKBENCH, 重复打开只聚焦不重复) */
+const HelpButton: React.FC = () => {
+  const editorService = useInjectable<WorkbenchEditorService>(WorkbenchEditorService);
+  const onClick = () => {
+    try {
+      void editorService.open(new URI('welcome://'), { preview: false });
+    } catch { /* 编辑器服务未就绪忽略 */ }
+  };
+  return (
+    <button type="button" className="app-ide__text-btn" title="帮助 (打开引导页)" onClick={onClick}>
+      帮助
+    </button>
+  );
+};
+
+/** 提交 PR 按钮: 仅选择项目后显示; 触发 chat 执行「提交 PR」技能 (跨拓展命令 chatbot.send) */
+const PrButton: React.FC = () => {
+  const commandService = useInjectable<CommandService>(CommandService);
+  const [selected, setSelected] = React.useState<boolean>(() => isWorkdirSelected());
+  React.useEffect(() => subscribeWorkdir((dir) => setSelected(!!dir)), []);
+  if (!selected) return null;
+  const onClick = () => {
+    const lines = ['请执行「提交 PR」技能。'];
+    try {
+      const issue = new URL(window.location.href).searchParams.get('issue');
+      if (issue) lines.push(`任务 issue: ${issue}`);
+    } catch { /* URL 解析失败忽略 */ }
+    void commandService.executeCommand('chatbot.send', lines.join('\n'));
+  };
+  return (
+    <button type="button" className="app-ide__text-btn" title="提交 PR (触发 AI 向上游发起 PR)" onClick={onClick}>
+      提交 PR
+    </button>
+  );
+};
 
 /** 内置浏览器按钮: 在编辑区打开浏览器 tab (browser.open 全局命令, 跨拓展契约) */
 const IdeBrowserButton: React.FC = () => {
@@ -363,6 +412,51 @@ export function IdeLayout(): React.ReactElement {
   const [dragging, setDragging] = React.useState(false);
   const dragRef = React.useRef<{ startX: number; startW: number } | null>(null);
 
+  // 未选项目 → 左侧资源管理器默认折叠 (2026-09-22).
+  //   - 初始: 仅未选项目时折叠 (不覆盖用户已有持久化状态)
+  //   - workdir 变化: 选项目 → 展开; 清空 → 折叠 (仅变化时同步, 不覆盖用户手动切换)
+  //   - 时序: tabbar 会异步恢复持久化状态 (restoreTabbarService), 会覆盖早期调用 →
+  //     等 layoutService.viewReady (恢复完成) 后再应用, 并追加延迟兜底.
+  //   - 坑: toggleSlot(slot, false) 在"已折叠"时是 no-op → 不触发 tabbar handleChange 的
+  //     setSize(barSize), wrapper 会保持默认宽度 (残留空区). 折叠后补一次显式收缩.
+  const layoutService = useInjectable<IMainLayoutService>(IMainLayoutService);
+  React.useEffect(() => {
+    let alive = true;
+    let lastSelected = isWorkdirSelected();
+    const apply = (visible: boolean): boolean => {
+      try {
+        layoutService.toggleSlot(SlotLocation.left, visible);
+        if (!visible) {
+          const svc = layoutService.getTabbarService(SlotLocation.left);
+          const bar = svc?.['barSize'];
+          if (svc?.resizeHandle && typeof bar === 'number') svc.resizeHandle.setSize(bar);
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const collapseIfNoProject = () => {
+      if (!alive || lastSelected) return;
+      apply(false);
+    };
+    try {
+      void layoutService.viewReady.promise.then(collapseIfNoProject);
+    } catch { /* 服务异常忽略 */ }
+    const timers = [window.setTimeout(collapseIfNoProject, 800), window.setTimeout(collapseIfNoProject, 2000)];
+    const unsub = subscribeWorkdir((dir) => {
+      const selected = !!dir;
+      if (selected === lastSelected) return;
+      lastSelected = selected;
+      apply(selected);
+    });
+    return () => {
+      alive = false;
+      timers.forEach((t) => window.clearTimeout(t));
+      unsub();
+    };
+  }, [layoutService]);
+
   const onRightResizerDown = (e: React.MouseEvent) => {
     e.preventDefault();
     dragRef.current = { startX: e.clientX, startW: rightW };
@@ -402,8 +496,10 @@ export function IdeLayout(): React.ReactElement {
           <div className="app-ide__top-left">
             <SlotRenderer slot={SOLO_SLOTS.SidebarAction} />
             <SlotRenderer slot={SOLO_SLOTS.MainAction} />
+            <HelpButton />
           </div>
           <div className="app-ide__top-right">
+            <PrButton />
             {/* WorkBuddy 启动按钮 (用户要求暂时注释掉整个功能, 恢复时去掉注释即可)
             <WorkBuddyButton />
             <span className="app-ide__top-divider" />
