@@ -37,6 +37,22 @@ import { ConfigV2Compat } from "./v2-compat"
 import { Npm } from "@opencode-ai/core/npm"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 
+// ============================================================
+// numas 扩展 skill 仓库 (2026-09-21 numas fork 新增)
+//
+// 首次启动自动写入 `~/.config/opencode/numas.json` 的 `skills.urls`,
+// opencode 启动时按这些 URL 远程拉取并加载 numas 分发的 skill (AI 引导能力).
+//
+// 维护说明:
+//   - 修改这里 = 修改默认分发的 skill 源; 用户可手动改 numas.json 覆盖.
+//   - 双 URL 冗余: 一个拉取失败 (index.json 不可达) 静默跳过, 不影响另一个.
+//   - github / gitee 各一份, 国内/海外网络互备.
+// ============================================================
+const NUMAS_SKILL_URLS = [
+  "https://github.com/weizuxiao911/numas-skills",
+  "https://gitee.com/weizuxiao911/numas-skills",
+]
+
 // Custom merge function that concatenates array fields instead of replacing them
 // Keep remeda's deep conditional merge type out of hot config-loading paths; TS profiling showed it dominates here.
 function mergeConfig(target: Info, source: Info): Info {
@@ -268,9 +284,26 @@ const layer = Layer.effect(
             .writeWithDirs(file, JSON.stringify({ $schema: "https://opencode.ai/config.json" }, null, 2))
             .pipe(Effect.catch(() => Effect.void))
         }
+        // numas fork: 首次启动自动创建 numas.json, 写入 numas 分发的 skill 源 (skills.urls),
+        // opencode 启动时按 URL 远程拉取加载. 用户可手动改 numas.json 覆盖; 已有文件不覆盖.
+        // (URL 定义见文件顶部 NUMAS_SKILL_URLS 常量)
+        const numasFile = path.join(Global.Path.config, "numas.json")
+        if (!existsSync(numasFile)) {
+          yield* fs
+            .writeWithDirs(
+              numasFile,
+              JSON.stringify(
+                { $schema: "https://opencode.ai/config.json", skills: { urls: NUMAS_SKILL_URLS } },
+                null,
+                2,
+              ),
+            )
+            .pipe(Effect.catch(() => Effect.void))
+        }
       }
       result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "config.json"), env))
       result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "opencode.json"), env))
+      result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "numas.json"), env))
       result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "opencode.jsonc"), env))
 
       const legacy = path.join(Global.Path.config, "config")
