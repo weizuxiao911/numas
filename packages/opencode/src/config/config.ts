@@ -45,12 +45,14 @@ import { withTransientReadRetry } from "@/util/effect-http-client"
 //
 // 维护说明:
 //   - 修改这里 = 修改默认分发的 skill 源; 用户可手动改 numas.json 覆盖.
+//   - 必须用 **raw 内容地址** (discovery 直接 GET `{url}/index.json` 与 `{url}/{skill}/文件`;
+//     仓库网页地址会 404). 仓库: https://github.com/weizuxiao911/numas-skills (public, raw 无鉴权)
 //   - 双 URL 冗余: 一个拉取失败 (index.json 不可达) 静默跳过, 不影响另一个.
-//   - github / gitee 各一份, 国内/海外网络互备.
+//   - github / gitee 各一份, 国内/海外网络互备. (gitee 镜像需手动同步)
 // ============================================================
 const NUMAS_SKILL_URLS = [
-  "https://github.com/weizuxiao911/numas-skills",
-  "https://gitee.com/weizuxiao911/numas-skills",
+  "https://raw.githubusercontent.com/weizuxiao911/numas-skills/main",
+  "https://gitee.com/weizuxiao911/numas-skills/raw/main",
 ]
 
 // Custom merge function that concatenates array fields instead of replacing them
