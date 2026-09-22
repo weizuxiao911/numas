@@ -10,7 +10,7 @@ import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/inject
 import { IFileServiceClient } from '@opensumi/ide-file-service';
 import { URI } from '@opensumi/ide-core-common';
 
-import { renderMarkdown, renderMermaidBlocks } from './render';
+import { renderMarkdown, renderMermaidBlocks } from '../../infra/markdown';
 import { styles } from './styles';
 
 export const MD_PREVIEW_SCHEME = 'numas-md-preview';
