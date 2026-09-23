@@ -18,6 +18,7 @@
 
 .app-solo {
   --resizer-w: 6px;
+  --gutter-w: 2px;
   /* sidebar 折叠动效: cubic-bezier 让"折"的动作自然, 跟 macOS 风格一致 */
   --solo-ease: cubic-bezier(0.4, 0.0, 0.2, 1);
   --solo-duration: 200ms;
@@ -184,6 +185,17 @@
   .app-solo__aside .left-slot,
   .app-solo__aside .bottom-slot,
   .app-solo__aside [class*="kt_editor_tabs"] { box-shadow: none !important; }
+  /* aside 内 explorer(文件系统) ↔ 编辑器 分隔: 窄灰 gutter (与 IDE 三栏一致, 宽 --gutter-w).
+     overrides.css 的 resize-handle::before 透明/hover 高亮是 unlayered !important,
+     必须放本 @layer 的 !important 才能盖过 (层叠层 important 优先级反转); hover 态一并重写. */
+  .app-solo__aside [class*="resize-handle-horizontal"]::before {
+    background-color: var(--editor-border, #ebebeb) !important;
+    width: var(--gutter-w, 2px) !important;
+    left: calc(50% - var(--gutter-w, 2px) / 2) !important;
+  }
+  .app-solo__aside [class*="resize-handle-horizontal"]:hover::before {
+    background-color: var(--sash-hoverBorder, var(--focusBorder, #6366f1)) !important;
+  }
 }
 .app-solo__aside-footer { flex: 0 0 auto; min-width: 0; }
 
