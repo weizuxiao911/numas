@@ -121,8 +121,8 @@ export const styles = `
 }
 .app-action__pick {
   flex: 0 0 auto;
-  min-width: 120px;
-  max-width: 200px;
+  /* 宽度适配内容 (不固定): 短名不撑宽, 长名到 max-width 后省略号截断 */
+  max-width: 260px;
   height: 32px;
   padding: 0 8px 0 12px;
   display: inline-flex;
