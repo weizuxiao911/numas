@@ -14,8 +14,9 @@
  */
 
 import { Injectable, Autowired } from '@opensumi/di';
-import { Domain, CommandContribution, CommandRegistry, BrowserModule, ClientAppContribution, EDITOR_COMMANDS } from '@opensumi/ide-core-browser';
-import { Disposable, URI, FileStat, CommandService } from '@opensumi/ide-core-common';
+import { Domain, CommandContribution, CommandRegistry, BrowserModule, ClientAppContribution } from '@opensumi/ide-core-browser';
+import { Disposable, URI, FileStat } from '@opensumi/ide-core-common';
+import { WorkbenchEditorService } from '@opensumi/ide-editor';
 import { IWorkspaceService } from '@opensumi/ide-workspace/lib/common/workspace.interface';
 import { IFileTreeService } from '@opensumi/ide-file-tree-next/lib/common';
 
@@ -29,8 +30,8 @@ export class WorkspaceContribution implements CommandContribution, ClientAppCont
   workspaceService: IWorkspaceService;
   @Autowired(IFileTreeService)
   fileTreeService: IFileTreeService;
-  @Autowired(CommandService)
-  commandService: CommandService;
+  @Autowired(WorkbenchEditorService)
+  editorService: WorkbenchEditorService;
 
   private readonly toDispose = new Disposable();
 
@@ -45,13 +46,23 @@ export class WorkspaceContribution implements CommandContribution, ClientAppCont
     this.toDispose.addDispose({ dispose: subscribeWorkdir((next) => void this.switchWorkspace(next)) });
   }
 
-  /** 项目切换: 同步根 + 关闭旧项目打开的编辑器 (workbench 状态跟随切换重置). */
+  /** 项目切换: 同步根 + 关闭旧项目打开的编辑器 (workbench 状态跟随切换重置).
+   *  ⚠️ 保留 welcome 引导页 tab (2026-09-23 修复): 它是引导 hub (步骤按钮), 不能被切项目带走;
+   *  用定向 close 替代官方 CLOSE_ALL (后者会把 welcome 一起关掉). */
   private async switchWorkspace(dir: string): Promise<void> {
     await this.applyWorkspace(dir);
     try {
-      await this.commandService.executeCommand(EDITOR_COMMANDS.CLOSE_ALL.id);
+      const groups = (this.editorService as any).editorGroups || [];
+      for (const g of groups) {
+        for (const r of [...(g.resources || [])]) {
+          try {
+            if (r?.uri?.scheme === 'welcome') continue;
+            await g.close(r.uri, { force: true });
+          } catch { /* 单个 close 失败忽略 */ }
+        }
+      }
     } catch (e) {
-      console.warn('[workspace] close all editors 失败:', e);
+      console.warn('[workspace] close editors 失败:', e);
     }
   }
 
