@@ -139,3 +139,15 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
 - 端口 404 排查先查**残留进程占用**: 已删除目录的 dev server 可能仍在监听 (如旧 `test/poc-opencode-ide`
   的 vite 占 5173), 新起服务 bind 不到 → 返回旧进程的 404. 用 `lsof -iTCP:<port> -sTCP:LISTEN -n -P`
   看 PID, 确认对应已删除目录后 `kill` 再验.
+- **welcome 引导步骤 ↔ 远程 skill 名必须精确一致** (2026-09-23): 前端按钮经 `chatbot.send` 发
+  `请执行「<技能名>」技能。`, 该名字**必须逐字等于** numas-skills 仓库的 skill 目录名 / `index.json` 的
+  `name` / SKILL.md frontmatter `name` 三者 (含空格/中英混排). 任一处不一致 → AI 找不到 skill, 引导断链.
+  改动步骤文案 (如 `fork并clone` → `Fork克隆`) 时, 四处同步: `WelcomeView.tsx` 的 `SKILL_*` 常量 +
+  按钮 JSX 文案 + 远程仓库目录/index.json/frontmatter + `IdeLayout.tsx` 顶部按钮的触发串.
+- **改远程 skill 内容必须递增 `index.json` 的 `version`** (2026-09-23): 客户端按 version 比对缓存
+  (`~/.cache/opencode/skills/<name>/`), 内容改了但 version 未变 → 不会重新拉取, 用户看到的还是旧 skill.
+  端到端验收 skill 前先重启 numas (拉取新 version).
+- **切工作区不能无条件 `CLOSE_ALL`** (2026-09-23): `extensions/workspace/module.ts` 的 `switchWorkspace`
+  原本执行官方 `EDITOR_COMMANDS.CLOSE_ALL`, 会把 welcome 引导页 tab (`welcome://`) 一起关掉 →
+  切项目后引导页消失. 修复: 改为**定向 close**(遍历 editorGroups, 跳过 `scheme === 'welcome'` 的资源).
+  凡是"切项目重置编辑器"的逻辑都要保留 welcome tab.
