@@ -165,3 +165,7 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   进 DOM, SOLO 模式下不渲染 → 规则失效. 跨模式通用规则 (`--gutter-w` / resize-handle 样式) 必须放
   **全局 CSS** (`app-shell.css` / `overrides.css`); SOLO aside 内 explorer↔编辑器 的 gutter 就因此放在
   `app-shell.css` 的 `@layer numas-override`.
+- **SOLO aside 默认宽度受持久化覆盖** (2026-09-23): `layout.service.ts` 的 `ASIDE_RATIO` (打开时视口占比)
+  只在**无持久化宽度**时生效 — `openAside()` 优先用 `cur.width` (来自 `NUMAS_SOLO_LAYOUT_V1`), 且
+  `asideWidthManual` 标记拖拽后 resize 不再按比例重置. 改 `ASIDE_RATIO` 后, 已有持久化的用户看不到变化
+  → 验证时先 `localStorage.removeItem('NUMAS_SOLO_LAYOUT_V1')`; 线上要让默认生效需用户拖动/清 key.
