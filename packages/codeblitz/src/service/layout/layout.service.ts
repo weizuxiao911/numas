@@ -11,7 +11,7 @@
  *   - aside 打开 → 自动折叠 sidebar 让出空间 (并记下展开宽度)
  *   - sidebar 展开 → 自动折叠 aside (两列互斥, 同一时间只展开一列)
  *   - 关闭 aside 不自动恢复 sidebar (用户自己 expand)
- *   - aside 打开时视口 resize → 未手动拖过宽度才同步 60%; 手动拖过则保留 (只做上限收敛)
+ *   - aside 打开时视口 resize → 未手动拖过宽度才同步 65%; 手动拖过则保留 (只做上限收敛)
  *   - 全量状态持久化到 localStorage (刷新恢复上次布局; 手动宽度标记一并持久化)
  */
 
@@ -25,8 +25,8 @@ import { LayoutToken, LAYOUT_COMMANDS } from './layout.interface';
 const MIN_SIDEBAR_W = 200;
 const MAX_SIDEBAR_W = 480;
 const MIN_ASIDE_W = 120;
-/** aside 打开时宽度 = viewport 60% */
-const ASIDE_RATIO = 0.6;
+/** aside 打开时宽度 = viewport 65% */
+const ASIDE_RATIO = 0.65;
 /** sidebar 默认宽度 = 固定 300px */
 const SIDEBAR_DEFAULT_W = 300;
 
@@ -65,7 +65,7 @@ export class LayoutServiceImpl implements ILayoutService {
   };
   /** 折叠时记住展开态宽度, 展开时恢复 */
   private expandedSidebarW = SIDEBAR_DEFAULT_W;
-  /** aside 宽度是否被手动拖过 (拖过则 resize 不再按 60% 重置) */
+  /** aside 宽度是否被手动拖过 (拖过则 resize 不再按 65% 重置) */
   private asideWidthManual = false;
   private listeners = new Set<(s: LayoutState) => void>();
 
@@ -203,7 +203,7 @@ export class LayoutServiceImpl implements ILayoutService {
     this.emit();
   }
 
-  /** aside 打开时视口变化 → 未手动拖过宽度才同步 60%; 手动宽度只做上限收敛 (不重置) */
+  /** aside 打开时视口变化 → 未手动拖过宽度才同步 65%; 手动宽度只做上限收敛 (不重置) */
   syncAsideToViewport(): void {
     if (!this._state.aside.open) return;
     const next = this.asideWidthManual ? clampAsideW(this._state.aside.width) : viewportRatioWidth();
