@@ -151,3 +151,13 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   原本执行官方 `EDITOR_COMMANDS.CLOSE_ALL`, 会把 welcome 引导页 tab (`welcome://`) 一起关掉 →
   切项目后引导页消失. 修复: 改为**定向 close**(遍历 editorGroups, 跳过 `scheme === 'welcome'` 的资源).
   凡是"切项目重置编辑器"的逻辑都要保留 welcome tab.
+- **`--editor-border` 全局从未定义** (2026-09-23): 代码里多处写 `var(--editor-border)` (app-shell.css
+  的 aside resizer / IdeLayout 右栏 resizer), 但 CSS/主题/opensumi 都**没有**定义该变量 → 该声明
+  **在计算值阶段整条失效**, 边框/分隔线实际不可见 (不是继承默认色). 用到它必须写兜底
+  (`var(--editor-border, #ebebeb)`), 或改用真正被定义的主题 token (`--panel-border` / `--app-border`).
+- **IDE 三栏间 gutter 分隔** (2026-09-23): `IdeLayout.tsx` 用 `--gutter-w` (2px) 在拖动条中间画窄灰带
+  (`resize-handle-horizontal/vertical::before` + 自绘 `.app-ide__right-resizer::before`), 命中区保持
+  `--resizer-w` (6px) 不变. 关键坑: overrides.css 的 `[class*="resize-handle"]::before` 透明/hover
+  高亮是 **unlayered `!important`**, 必须放进 `@layer numas-override { ... !important }` 才盖得住
+  (CSS 层叠层对 `!important` 的优先级反转); 且**要连 `:hover` 态一并重写**, 否则 layer 里的静态色会
+  把 hover 高亮顶掉.
