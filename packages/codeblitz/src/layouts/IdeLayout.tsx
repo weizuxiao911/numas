@@ -31,6 +31,7 @@ import { IdeRightTopbar } from './IdeRightTopbar';
 const styles = `
 .app-ide {
   --resizer-w: 6px;
+  --gutter-w: 2px;
   width: 100%; height: 100%;
   display: flex; flex-direction: column;
   min-width: 0; min-height: 0;
@@ -145,7 +146,7 @@ const styles = `
 .app-ide__right.is-collapsed { flex-basis: 0; width: 0; border-left: none; }
 /* 拖拽中关闭过渡, 避免宽度跳动跟随滞后 */
 .app-ide__right.is-dragging { transition: none; }
-/* 右栏 resizer: 6px 命中区 + 1px 主线, 对齐 SplitPanel resizer (--resizer-w) */
+/* 右栏 resizer: 6px 命中区, 中间画窄灰带 (栏间 gutter, 宽 --gutter-w) */
 .app-ide__right-resizer {
   flex: 0 0 var(--resizer-w, 6px);
   width: var(--resizer-w, 6px);
@@ -158,14 +159,14 @@ const styles = `
   content: '';
   position: absolute;
   top: 0; bottom: 0; left: 50%;
-  width: 1px;
-  background: var(--editor-border);
-  transform: translateX(-0.5px);
+  width: var(--gutter-w, 2px);
+  background: var(--editor-border, #ebebeb);
+  transform: translateX(-50%);
 }
 .app-ide__right-resizer:hover::before,
 .app-ide__right-resizer.is-dragging::before {
-  background: var(--button-background, #6366f1);
-  width: 2px;
+  background: var(--sash-hoverBorder, var(--focusBorder, #6366f1));
+  width: var(--gutter-w, 2px);
 }
 /* SlotRenderer 的 wrapper 默认 block, 会让内部 chatbot 的 flex 高度失效 (内容撑高顶出 composer);
    这里把它变成受约束的 flex 列容器. 注意排除 topbar 内的 <style> 标签 (否则会被当 flex 项占高) */
@@ -189,6 +190,24 @@ const styles = `
   }
   /* 面板内容区用 #fff token (主题默认透明, 会透出左侧灰底) */
   .app-ide .kt-tab-panel { background: var(--editor-background, #ffffff) !important; }
+  /* 栏间 gutter (灰底留白): SplitPanel 拖动条中间画窄灰带 (宽 --gutter-w, 命中区仍 --resizer-w),
+     分隔 left ↔ main ↔ right. overrides.css 的 resize-handle::before 透明 + hover 高亮是
+     unlayered !important, 必须在本 @layer 的 !important 里才盖得住 (层叠层 important 优先级反转),
+     故此处连 hover 态一并重写. */
+  .app-ide [class*="resize-handle-horizontal"]::before {
+    background-color: var(--editor-border, #ebebeb) !important;
+    width: var(--gutter-w, 2px) !important;
+    left: calc(50% - var(--gutter-w, 2px) / 2) !important;
+  }
+  .app-ide [class*="resize-handle-vertical"]::before {
+    background-color: var(--editor-border, #ebebeb) !important;
+    height: var(--gutter-w, 2px) !important;
+    top: calc(50% - var(--gutter-w, 2px) / 2) !important;
+  }
+  .app-ide [class*="resize-handle-horizontal"]:hover::before,
+  .app-ide [class*="resize-handle-vertical"]:hover::before {
+    background-color: var(--sash-hoverBorder, var(--focusBorder, #6366f1)) !important;
+  }
 }
 `;
 
