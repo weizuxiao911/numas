@@ -161,3 +161,7 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   高亮是 **unlayered `!important`**, 必须放进 `@layer numas-override { ... !important }` 才盖得住
   (CSS 层叠层对 `!important` 的优先级反转); 且**要连 `:hover` 态一并重写**, 否则 layer 里的静态色会
   把 hover 高亮顶掉.
+- **布局规则别写在组件内 `<style>`** (2026-09-23): `IdeLayout.tsx` 的样式串只在 **IDE 模式组件挂载**时
+  进 DOM, SOLO 模式下不渲染 → 规则失效. 跨模式通用规则 (`--gutter-w` / resize-handle 样式) 必须放
+  **全局 CSS** (`app-shell.css` / `overrides.css`); SOLO aside 内 explorer↔编辑器 的 gutter 就因此放在
+  `app-shell.css` 的 `@layer numas-override`.
