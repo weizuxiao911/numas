@@ -85,6 +85,7 @@ export const WelcomeView: React.FC = () => {
   const bodyRef = React.useRef<HTMLDivElement | null>(null);
 
   // 拉取 issue 结构化数据 (GitHub API 直连; CORS 允许, 未鉴权 60/hr)
+  // 兜底 (2026-09-22): API 失败/限流 → 走本地 gh 读取 (session.shell 临时会话, 用完即删)
   React.useEffect(() => {
     if (!task?.ownerRepo || !task.issueNumber) return;
     let alive = true;
@@ -96,13 +97,70 @@ export const WelcomeView: React.FC = () => {
       .then((d: IssueInfo) => {
         if (alive) setInfo(d);
       })
-      .catch((e) => {
-        if (alive) setError(String(e?.message || e));
+      .catch(async (e) => {
+        // 兜底: GitHub API 失败 (限流/网络) → 本地 gh 读取
+        const viaGh = await readIssueViaGh(task.ownerRepo, task.issueNumber);
+        if (!alive) return;
+        if (viaGh) {
+          setInfo(viaGh);
+          setError('');
+          return;
+        }
+        setError(`${String(e?.message || e)} (gh 兜底读取也失败, 可先执行「${SKILL_ENV}」技能检查 gh 安装/授权)`);
       });
     return () => {
       alive = false;
     };
   }, [task]);
+
+  /**
+   * 兜底读取: 本地 gh 读 issue (GitHub API 限流/失败时).
+   * 走 opencode session.shell: 建临时会话跑 `gh issue view ... --json` → 取输出 → 删会话.
+   * (不污染项目会话; gh 用用户本机登录态, 不受 API 未鉴权限流影响)
+   */
+  async function readIssueViaGh(ownerRepo: string, issueNumber: string): Promise<IssueInfo | null> {
+    const base = appBaseUrl();
+    if (!base) return null;
+    const api = (path: string, init?: RequestInit) =>
+      fetch(`${base.replace(/\/+$/, '')}${path}`, {
+        ...init,
+        headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+      });
+    let sid = '';
+    try {
+      const created = await api('/session', { method: 'POST', body: '{}' }).then((r) => r.json());
+      sid = created?.id || created?.data?.id || '';
+      if (!sid) return null;
+      const cmd = `gh issue view ${issueNumber} --repo ${ownerRepo} --json number,title,body,state,url,labels,author`;
+      const res = await api(`/session/${sid}/shell`, {
+        method: 'POST',
+        body: JSON.stringify({ command: cmd, agent: 'build' }),
+      }).then((r) => r.json());
+      const part = (res?.parts || []).find((p: any) => p?.type === 'tool');
+      const out = String(part?.state?.output || '');
+      const start = out.indexOf('{');
+      const end = out.lastIndexOf('}');
+      if (start === -1 || end <= start) return null;
+      const d = JSON.parse(out.slice(start, end + 1));
+      return {
+        number: d.number,
+        title: d.title,
+        body: d.body,
+        state: d.state,
+        html_url: d.url,
+        user: { login: d.author?.login },
+        labels: (d.labels || []).map((l: any) => ({ name: typeof l === 'string' ? l : l?.name })),
+      };
+    } catch {
+      return null;
+    } finally {
+      if (sid) {
+        try {
+          await api(`/session/${sid}`, { method: 'DELETE' });
+        } catch { /* 清理失败忽略 */ }
+      }
+    }
+  }
 
   // issue 正文 Markdown 渲染 (与 markdown 预览同一套栈; mermaid 懒渲染)
   React.useEffect(() => {

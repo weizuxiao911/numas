@@ -22,7 +22,7 @@ import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/inject
 import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 
 import { SOLO_SLOTS } from '../config/slots';
-import { isWorkdirSelected, setWorkdir, subscribeWorkdir } from '../infra/url';
+import { isWorkdirSelected, subscribeWorkdir } from '../infra/url';
 import { WorkspacePicker } from '../extensions/workspace/WorkspacePicker';
 import { FilePicker } from '../extensions/file';
 import { IdeRightTopbar } from './IdeRightTopbar';
@@ -207,23 +207,6 @@ const HelpButton: React.FC = () => {
         <path d="M9.6 9.2a2.4 2.4 0 1 1 3.4 2.2c-.8.4-1 .9-1 1.8" />
         <circle cx="12" cy="16.6" r="0.6" fill="currentColor" stroke="none" />
       </svg>
-    </button>
-  );
-};
-
-/** 关闭项目按钮: 仅选择项目后显示; 清空 workdir 恢复默认状态 (无项目 → welcome) */
-const CloseProjectButton: React.FC = () => {
-  const [selected, setSelected] = React.useState<boolean>(() => isWorkdirSelected());
-  React.useEffect(() => subscribeWorkdir((dir) => setSelected(!!dir)), []);
-  if (!selected) return null;
-  const onClick = () => {
-    // 清空项目选择 → 回默认状态 (welcome 引导页; 刷新保证资源管理器/编辑器/chat 全部重置干净)
-    setWorkdir('');
-    window.location.reload();
-  };
-  return (
-    <button type="button" className="app-ide__text-btn" title="关闭项目 (恢复未选择项目状态)" onClick={onClick}>
-      关闭项目
     </button>
   );
 };
@@ -517,7 +500,6 @@ export function IdeLayout(): React.ReactElement {
           <div className="app-ide__top-left">
             <SlotRenderer slot={SOLO_SLOTS.SidebarAction} />
             <SlotRenderer slot={SOLO_SLOTS.MainAction} />
-            <CloseProjectButton />
           </div>
           <div className="app-ide__top-right">
             <PrButton />

@@ -103,19 +103,32 @@ export const styles = `
   color: var(--ai-fg);
 }
 
-/* 项目选择按钮: 带文字的开关按钮 (📁 {项目名} ⌄)
-   - 浅色底 (前景色 7% 混) + hover 加深; 展开态 is-open 维持
-   - 文字 = 当前 workspace basename, 自动截断 (max-width) */
+/* 项目选择按钮: 带文字的开关按钮 (📁 {项目名} ⌄ ✕)
+   - 胶囊容器 (wrap) 承载浅色底 (前景色 7% 混) + hover 加深; 内部按钮/关闭 ✕ 透明融合
+   - 文字 = 当前 workspace basename, 自动截断 (max-width); ✕ 仅选中项目后渲染 */
+.app-action__pick-wrap {
+  position: relative;
+  flex: 0 0 auto;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  background: color-mix(in srgb, var(--ai-fg) 7%, transparent);
+  border-radius: 9px;
+  transition: background 0.12s;
+}
+.app-action__pick-wrap:hover {
+  background: color-mix(in srgb, var(--ai-fg) 12%, transparent);
+}
 .app-action__pick {
   flex: 0 0 auto;
   min-width: 120px;
   max-width: 200px;
   height: 32px;
-  padding: 0 10px 0 12px;
+  padding: 0 8px 0 12px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: color-mix(in srgb, var(--ai-fg) 7%, transparent);
+  background: transparent;
   color: var(--ai-fg);
   border: 0;
   border-radius: 9px;
@@ -124,15 +137,6 @@ export const styles = `
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  transition: background 0.12s, color 0.12s;
-}
-.app-action__pick:hover {
-  background: color-mix(in srgb, var(--ai-fg) 12%, transparent);
-  color: var(--ai-fg);
-}
-.app-action__pick.is-open {
-  background: color-mix(in srgb, var(--ai-fg) 12%, transparent);
-  color: var(--ai-fg);
 }
 .app-action__pick-label {
   flex: 1 1 auto;
@@ -142,6 +146,93 @@ export const styles = `
   text-overflow: ellipsis;
 }
 .app-action__pick > svg { flex: 0 0 auto; }
+/* ✕ 关闭项目: 融合同一胶囊 (仅选中项目后渲染, 替代箭头位置) */
+.app-action__pick-close {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  margin-right: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ai-fg-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.app-action__pick-close:hover {
+  background: color-mix(in srgb, #e5484d 20%, transparent);
+  color: #e5484d;
+}
+/* 关闭项目确认 modal — 风格对齐 chat 历史会话列表 modal (玻璃底 + 16px 圆角 + 遮罩)
+   (portal 到 body, 用通用主题 token; 不依赖 .app-action 的 --ai-*) */
+.app-action__modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: var(--vscode-overlay-background, rgba(0, 0, 0, 0.45));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.app-action__modal {
+  width: 380px;
+  max-width: 100%;
+  padding: 20px 22px 16px;
+  /* 近不透明玻璃 (对齐 chat 历史会话列表: 96% 底 + blur) */
+  background: color-mix(in srgb, var(--editorWidget-background, #fff) 96%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px color-mix(in srgb, #000 55%, transparent), 0 0 0 1px var(--panel-border, rgba(255, 255, 255, 0.08)) inset;
+  color: var(--editor-foreground, #1f2328);
+  font-family: var(--font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif);
+  font-size: 13px;
+}
+.app-action__modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.app-action__modal-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--descriptionForeground, #8f8f8f);
+}
+.app-action__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+.app-action__modal-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--panel-border, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  background: none;
+  color: var(--descriptionForeground, #8f8f8f);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.app-action__modal-btn:hover {
+  background: color-mix(in srgb, var(--editor-foreground, #1f2328) 8%, transparent);
+  color: var(--editor-foreground, #1f2328);
+}
+.app-action__modal-btn.is-primary {
+  background: #e5484d;
+  border-color: #e5484d;
+  color: #fff;
+  font-weight: 600;
+}
+.app-action__modal-btn.is-primary:hover {
+  background: #d13438;
+  color: #fff;
+}
 
 /* 抽屉开关按钮: 36x36 裸 icon, 跟 sideTopbar 的 .app-side-topbar__icon-btn 同款
    (透明 bg, muted fg, hover 浅色 + 加深 fg), 仅通过内部 icon 方向

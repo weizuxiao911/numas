@@ -783,6 +783,8 @@ export const ChatbotView: React.FC = () => {
 
   // 启动恢复 (session 级): 有持久化的 sessionID 才加载该会话; 没有则不加载, 保持空态 (打字机问候).
   // 会话已被删除 → 清掉持久化, 保持空态. (历史行为: 默认恢复最新非空会话 — 已按需求移除)
+  // 归属校验 (2026-09-22): 无项目 / 会话不属于当前项目 (workdir 已切换或关闭) → 不恢复并清指针,
+  //   避免「已关闭项目但 chat 仍显示旧项目会话」.
   const restoredRef = useRef(false);
   useEffect(() => {
     if (!ready || !client || restoredRef.current) return;
@@ -792,6 +794,18 @@ export const ChatbotView: React.FC = () => {
     if (!sid) return;
     (async () => {
       try {
+        // 1) 无项目 → 不恢复 (关闭项目后 chat 回空态)
+        if (!state.getWorkdir()) {
+          try { localStorage.removeItem(CHAT_SESSION_KEY); } catch { /* ignore */ }
+          return;
+        }
+        // 2) 会话不属于当前项目 (workdir 已切换) → 不恢复
+        const list = await aiListSessions();
+        const belongs = Array.isArray(list) && list.some((s: any) => s?.id === sid);
+        if (!belongs) {
+          try { localStorage.removeItem(CHAT_SESSION_KEY); } catch { /* ignore */ }
+          return;
+        }
         const m = await aiListMessages(sid);
         if (Array.isArray(m)) {
           sessionIDRef.current = sid;

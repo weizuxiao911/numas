@@ -113,6 +113,8 @@ const AsideToggle: React.FC<{ layout: ILayoutService; commandService: CommandSer
 };
 
 const ProjectPickButton: React.FC<{ label: string; project: string; commandService: CommandService; state: IStateService }> = ({ label, project, commandService, state }) => {
+  const [confirming, setConfirming] = useState(false);
+
   const onClick = () => {
     // 单 workdir 模型: 点击直接弹 filepicker 自由选任意目录 (即 workdir 根).
     const start = state.getWorkdir() || '';
@@ -127,19 +129,63 @@ const ProjectPickButton: React.FC<{ label: string; project: string; commandServi
       },
     });
   };
+
+  /** 关闭项目: 清空选择 + 刷新恢复默认态 (无项目 → welcome); 刷新保证资源管理器/编辑器/chat 重置干净 */
+  const closeProject = () => {
+    state.setWorkdir('');
+    window.location.reload();
+  };
+
   return (
-    <button
-      type="button"
-      className="app-action__pick"
-      title={project || '选择项目'}
-      onClick={onClick}
-    >
-      <span className="app-action__pick-label">{label}</span>
-      {/* 下拉指示箭头: 点击弹目录选择器 */}
-      <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <polyline points="6 9 12 15 18 9" />
-      </svg>
-    </button>
+    <span className="app-action__pick-wrap">
+      <button
+        type="button"
+        className="app-action__pick"
+        title={project || '选择项目'}
+        onClick={onClick}
+      >
+        <span className="app-action__pick-label">{label}</span>
+        {/* 下拉箭头: 仅未选项目时显示 (选中时该位置换成 ✕ 关闭) */}
+        {!project && (
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        )}
+      </button>
+      {/* ✕ 关闭项目: 与选择项目按钮融合同一胶囊内; 仅选中项目后渲染 (替代箭头位置) */}
+      {project && (
+        <button
+          type="button"
+          className="app-action__pick-close"
+          title="关闭项目 (恢复未选择项目状态)"
+          onClick={(e) => { e.stopPropagation(); setConfirming(true); }}
+        >
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" />
+          </svg>
+        </button>
+      )}
+      {/* 关闭确认 modal */}
+      {confirming && createPortal(
+        <div
+          className="app-action__modal-overlay"
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setConfirming(false); }}
+        >
+          <div className="app-action__modal" role="dialog" aria-modal="true">
+            <div className="app-action__modal-title">关闭项目</div>
+            <div className="app-action__modal-desc">
+              确认关闭当前项目「{label}」? 关闭后将回到未选择项目状态。
+            </div>
+            <div className="app-action__modal-actions">
+              <button type="button" className="app-action__modal-btn is-primary" onClick={closeProject}>确认关闭</button>
+              <button type="button" className="app-action__modal-btn" onClick={() => setConfirming(false)}>取消</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </span>
   );
 };
 

@@ -272,6 +272,14 @@ export const FilePicker: React.FC = () => {
               );
             })}
           </div>
+          <button
+            type="button"
+            className="fp-mkdir"
+            title="在当前目录新建目录"
+            onClick={() => setNewDir((v) => (v === null ? '' : null))}
+          >
+            ＋ 新建目录
+          </button>
           <div className="fp-search">
             <svg className="fp-search-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /></svg>
             <input
@@ -286,14 +294,6 @@ export const FilePicker: React.FC = () => {
               <button className="fp-search-clear" title="清空搜索" onClick={() => setQuery('')}>✕</button>
             )}
           </div>
-          <button
-            type="button"
-            className="fp-mkdir"
-            title="在当前目录新建文件夹"
-            onClick={() => setNewDir((v) => (v === null ? '' : null))}
-          >
-            ＋ 新建文件夹
-          </button>
         </div>
         {newDir !== null && (
           <div className="fp-mkdir-row">
@@ -301,7 +301,7 @@ export const FilePicker: React.FC = () => {
               className="fp-mkdir-input"
               type="text"
               autoFocus
-              placeholder="新文件夹名称"
+              placeholder="新目录名称"
               value={newDir}
               spellCheck={false}
               onChange={(e) => setNewDir(e.target.value)}
