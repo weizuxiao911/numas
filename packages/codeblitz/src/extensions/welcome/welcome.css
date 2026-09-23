@@ -11,6 +11,9 @@
   padding: 40px 24px 0;
   color: var(--foreground, var(--editor-foreground, #151b21));
   background: var(--welcomePage-background, var(--editor-background, #f1f2f3));
+  /* 底部步骤条阴影 (淡, 泛化): 与 issue 内容做视觉区隔.
+     泛化定义供 IdeLayout 的 @layer 例外复用 (IDE flat 规则 `.app-ide *` 会清掉阴影). */
+  --numas-welcome-steps-shadow: 0 -6px 18px color-mix(in srgb, var(--editor-foreground, #151b21) 5%, transparent);
 }
 
 .numas-welcome__card {
@@ -180,14 +183,17 @@
   color: #6d5ef5;
 }
 
-/* 底部悬浮步骤按钮组 (sticky 贴底; 内容滚动时始终可见; 单行居中分布, 按时序展开, 点击行为交给用户) */
+/* 底部悬浮步骤按钮组 (sticky 贴底; 内容滚动时始终可见; 通栏整宽, 按钮居中; 按时序展开, 点击行为交给用户) */
 .numas-welcome__steps {
   position: sticky;
   bottom: 0;
   z-index: 10;
   margin-top: auto;
-  width: 100%;
-  max-width: 780px;
+  /* 通栏: 抵消 .numas-welcome 的 24px 左右 padding, 让底栏与阴影横跨整个编辑器宽度 */
+  width: calc(100% + 48px);
+  margin-left: -24px;
+  margin-right: -24px;
+  box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -195,6 +201,7 @@
   gap: 8px;
   padding: 14px 4px 18px;
   background: var(--welcomePage-background, var(--editor-background, #f1f2f3));
+  box-shadow: var(--numas-welcome-steps-shadow);
 }
 
 .numas-welcome__step {

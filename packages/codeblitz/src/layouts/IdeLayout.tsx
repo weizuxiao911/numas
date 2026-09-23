@@ -182,6 +182,8 @@ const styles = `
   .app-ide * { box-shadow: none !important; }
   /* 例外: chat 设置 popover 保留弹层阴影 (与 chat modal 一致; 在 .chat 内可解析 --ai-pop-shadow) */
   .app-ide .chat__settings-pop { box-shadow: var(--ai-pop-shadow) !important; }
+  /* 例外: welcome 底部步骤条保留淡阴影, 与 issue 内容区隔 (变量在 welcome.css 定义, 泛化复用) */
+  .app-ide .numas-welcome__steps { box-shadow: var(--numas-welcome-steps-shadow) !important; }
   /* top + activity bar 背景跟 SOLO sidebar 一致 (偏灰 token; 主题默认半透明白) */
   .app-ide .left-slot,
   .app-ide [class*="left_tab"],
