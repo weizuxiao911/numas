@@ -169,3 +169,13 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   只在**无持久化宽度**时生效 — `openAside()` 优先用 `cur.width` (来自 `NUMAS_SOLO_LAYOUT_V1`), 且
   `asideWidthManual` 标记拖拽后 resize 不再按比例重置. 改 `ASIDE_RATIO` 后, 已有持久化的用户看不到变化
   → 验证时先 `localStorage.removeItem('NUMAS_SOLO_LAYOUT_V1')`; 线上要让默认生效需用户拖动/清 key.
+- **IDE 布局里加阴影必须在 `@layer numas-override` 开例外** (2026-09-23): `IdeLayout.tsx` 的
+  `.app-ide, .app-ide * { box-shadow: none !important }` (flat 布局) 会清掉**所有**后代阴影, welcome
+  引导页在 `.app-ide` 内 → 其步骤条阴影被清. 解法: 把阴影值定义为 CSS 变量 (如 welcome.css 的
+  `--numas-welcome-steps-shadow`), 再在 `@layer numas-override` 写
+  `.app-ide .numas-welcome__steps { box-shadow: var(--numas-welcome-steps-shadow) !important }` (同层内
+  比 `.app-ide *` specificity 高, 可盖过). 同类例: `.app-ide .chat__settings-pop`.
+- **welcome 底部步骤条通栏** (2026-09-23): `.numas-welcome__steps` 原 `max-width: 780px` (对齐 issue
+  内容列) 会让贴底栏/阴影两侧留白. 要通栏整宽 = 对齐编辑器 tab 容器: 去 `max-width` + `width:
+  calc(100% + 48px)` + `margin-left/right: -24px` 抵消 `.numas-welcome` 的 24px 左右 padding (二者同在
+  welcome.css, 改 padding 时需同步这里).
