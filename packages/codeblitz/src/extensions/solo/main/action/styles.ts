@@ -146,6 +146,8 @@ export const styles = `
   text-overflow: ellipsis;
 }
 .app-action__pick > svg { flex: 0 0 auto; }
+/* 前置 repo 图标: 略淡, 与项目名形成 "仓库 名称" 语义 */
+.app-action__pick-icon { flex: 0 0 auto; opacity: 0.72; margin-right: -1px; }
 /* ✕ 关闭项目: 融合同一胶囊 (仅选中项目后渲染, 替代箭头位置) */
 .app-action__pick-close {
   width: 22px;
