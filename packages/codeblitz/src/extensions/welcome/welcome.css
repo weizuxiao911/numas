@@ -180,7 +180,7 @@
   color: #6d5ef5;
 }
 
-/* 底部悬浮步骤按钮组 (sticky 贴底; 内容滚动时始终可见; 居中分布, 按时序展开, 点击行为交给用户) */
+/* 底部悬浮步骤按钮组 (sticky 贴底; 内容滚动时始终可见; 单行居中分布, 按时序展开, 点击行为交给用户) */
 .numas-welcome__steps {
   position: sticky;
   bottom: 0;
@@ -192,7 +192,7 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
   padding: 14px 4px 18px;
   background: var(--welcomePage-background, var(--editor-background, #f1f2f3));
 }
@@ -200,13 +200,14 @@
 .numas-welcome__step {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
+  gap: 5px;
+  padding: 6px 11px;
   border: none;
   border-radius: 8px;
   background: var(--editorWidget-background, rgba(21, 27, 33, 0.06));
   color: inherit;
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
@@ -219,12 +220,12 @@
 .numas-welcome__step-num {
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #6d5ef5;
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 

@@ -10,7 +10,7 @@
  *
  * 欢迎页 (2026-09-22 重启并改造为任务引导页): `startupEditor: 'welcomePage'` +
  * `WelcomePage: WelcomeView` (extensions/welcome) 注入官方 WelcomeContribution 的 welcome:// tab;
- * 未选项目 / 无打开文件时显示: 读 URL ?repo=&issue= 展示 issue 卡片 + 按钮触发「开发环境检查」skill.
+ * 未选项目 / 无打开文件时显示: 读 URL ?repo=&issue= 展示 issue 卡片 + 6 步按钮触发对应 skill.
  * (2026-09 曾关闭欢迎页; 现按开源贡献引导需求重启, 组件为全新实现, 见 docs/AI工作台适配开源项目贡献 SPEC.md §5)
  */
 

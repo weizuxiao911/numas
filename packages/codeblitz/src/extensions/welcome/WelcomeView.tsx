@@ -8,7 +8,7 @@
  *   ?repo=<原仓库 URL>&issue=<issue URL>
  *   1. 读 repo/issue → fetch GitHub API 拿 issue 结构化数据 → 大屏展示
  *   2. 点击 issue 标题/链接 → 新标签页打开 issue 页面
- *   3. 底部按钮 → 触发 chat 执行「开发环境检查」技能
+ *   3. 底部按钮 → 触发 chat 执行「开发准备」技能
  *      (只发触发消息 + 任务上下文; 引导流程在远程 skill 里, 不在按钮上捆绑)
  *   4. 无 repo 参数 → 通用欢迎空态 (非任务场景)
  *
@@ -25,10 +25,12 @@ import './welcome.css';
 /** 触发 chat 执行 skill 的跨拓展命令 id (chat 拓展注册, 见 extensions/chat/module.ts) */
 const CHAT_SEND_COMMAND = 'chatbot.send';
 /** 引导流程技能名 (远程分发, 见 numas-skills 仓库) */
-const SKILL_ENV = '开发环境检查';
-const SKILL_LOAD = '载入工程';
-const SKILL_FIX = '修复问题';
-const SKILL_PR = '提交 PR';
+const SKILL_ENV = '开发准备';
+const SKILL_LOAD = 'Fork克隆';
+const SKILL_LOCATE = '排查定位';
+const SKILL_DESIGN = '方案设计';
+const SKILL_FIX = '执行修复';
+const SKILL_PR = '提交PR';
 
 interface IssueInfo {
   number: number;
@@ -196,14 +198,14 @@ export const WelcomeView: React.FC = () => {
     return lines;
   }
 
-  /** step1 环境准备 → 「开发环境检查」技能 */
+  /** step1 开发准备 → 「开发准备」技能 (gh 安装/授权检查) */
   function stepEnv() {
     sendToChat([`请执行「${SKILL_ENV}」技能。`, ...taskLines()]);
   }
 
   /**
-   * step2 载入工程 → 先弹 FilePicker 选 clone 父目录 (方案 A: 用户先选, 再交给 AI) →
-   * 触发「载入工程」技能 (含目标目录) → 等 clone 完成 → 走 chat 切项目流程.
+   * step2 Fork克隆 → 先弹 FilePicker 选 clone 父目录 (方案 A: 用户先选, 再交给 AI) →
+   * 触发「Fork克隆」技能 (含目标目录) → 等 clone 完成 → 走 chat 切项目流程.
    */
   function stepLoad() {
     if (!task?.repo) return;
@@ -269,12 +271,22 @@ export const WelcomeView: React.FC = () => {
     }
   }
 
-  /** step3 修复问题 → 「修复问题」技能 */
+  /** step3 排查定位 → 「排查定位」技能 (AI 解释 issue + 引导分析, 不替用户处理) */
+  function stepLocate() {
+    sendToChat([`请执行「${SKILL_LOCATE}」技能。`, ...taskLines()]);
+  }
+
+  /** step4 方案设计 → 「方案设计」技能 (question 确认 + AI 代笔方案文档) */
+  function stepDesign() {
+    sendToChat([`请执行「${SKILL_DESIGN}」技能。`, ...taskLines()]);
+  }
+
+  /** step5 执行修复 → 「执行修复」技能 (按方案执行 + question 决策 + 用户授权) */
   function stepFix() {
     sendToChat([`请执行「${SKILL_FIX}」技能。`, ...taskLines()]);
   }
 
-  /** step4 提交 PR → 「提交 PR」技能 */
+  /** step6 提交PR → 「提交PR」技能 (验收 + 授权后才提交) */
   function stepPr() {
     sendToChat([`请执行「${SKILL_PR}」技能。`, ...taskLines()]);
   }
@@ -337,16 +349,22 @@ export const WelcomeView: React.FC = () => {
       {/* 底部悬浮步骤按钮组 (按时序展开; 点击行为交给用户; 每个按钮触发 chat 执行技能) */}
       <div className="numas-welcome__steps">
         <button type="button" className="numas-welcome__step" onClick={stepEnv}>
-          <span className="numas-welcome__step-num">1</span>环境检查
+          <span className="numas-welcome__step-num">1</span>开发准备
         </button>
         <button type="button" className="numas-welcome__step" onClick={stepLoad}>
-          <span className="numas-welcome__step-num">2</span>载入工程
+          <span className="numas-welcome__step-num">2</span>Fork克隆
+        </button>
+        <button type="button" className="numas-welcome__step" onClick={stepLocate}>
+          <span className="numas-welcome__step-num">3</span>排查定位
+        </button>
+        <button type="button" className="numas-welcome__step" onClick={stepDesign}>
+          <span className="numas-welcome__step-num">4</span>方案设计
         </button>
         <button type="button" className="numas-welcome__step" onClick={stepFix}>
-          <span className="numas-welcome__step-num">3</span>修复问题
+          <span className="numas-welcome__step-num">5</span>执行修复
         </button>
         <button type="button" className="numas-welcome__step" onClick={stepPr}>
-          <span className="numas-welcome__step-num">4</span>提交 PR
+          <span className="numas-welcome__step-num">6</span>提交PR
         </button>
       </div>
     </div>

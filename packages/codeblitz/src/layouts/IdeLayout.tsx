@@ -211,14 +211,14 @@ const HelpButton: React.FC = () => {
   );
 };
 
-/** 提交 PR 按钮: 仅选择项目后显示; 触发 chat 执行「提交 PR」技能 (跨拓展命令 chatbot.send) */
+/** 提交 PR 按钮: 仅选择项目后显示; 触发 chat 执行「提交PR」技能 (跨拓展命令 chatbot.send) */
 const PrButton: React.FC = () => {
   const commandService = useInjectable<CommandService>(CommandService);
   const [selected, setSelected] = React.useState<boolean>(() => isWorkdirSelected());
   React.useEffect(() => subscribeWorkdir((dir) => setSelected(!!dir)), []);
   if (!selected) return null;
   const onClick = () => {
-    const lines = ['请执行「提交 PR」技能。'];
+    const lines = ['请执行「提交PR」技能。'];
     try {
       const issue = new URL(window.location.href).searchParams.get('issue');
       if (issue) lines.push(`任务 issue: ${issue}`);
