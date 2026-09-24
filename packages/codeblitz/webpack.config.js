@@ -354,6 +354,9 @@ const config = {
             // dev/容器一致无跨源; 运行时 --registry 注入覆盖 (外部自建市场 URL 亦可).
             __APP_REGISTRY_BASE_URL__: JSON.stringify(getEnv('REGISTRY_BASE_URL', '/extensions')),
             __APP_DEPLOY_ENV__: JSON.stringify(process.env.DEPLOY_ENV || 'development'),
+            // 登录门槛 (仅独立部署生效): 未登录 → 跳 {LOGIN_REDIRECT}{encodeURIComponent(当前URL)}&needToken=true
+            // 空 = 不门槛 (桌面/CLI/内嵌/本地 dev 不受影响)
+            __APP_LOGIN_REDIRECT__: JSON.stringify(getEnv('LOGIN_REDIRECT', '')),
         }),
         // 第三方库（opensumi/codeblitz）浏览器 fallback: 构建期 polyfill, src 本身零 node 依赖
         new node_polyfill_webpack_plugin_1.default({ includeAliases: ['process', 'Buffer'] }),
