@@ -185,3 +185,7 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   `{LOGIN_REDIRECT}{encodeURIComponent(当前URL)}`. **未注入 `LOGIN_REDIRECT` → 不门槛**
   (桌面/CLI/内嵌/本地 dev 不受影响). env: `.env.site`(生产→beta.cloudlab.top) / `.env.site-test`(测试).
   前端**读不到请求的 `Authorization` 头**, 只能靠 cookie/注入 (这是 gate 用 cookie 的原因).
+- **chat 默认模型不再本地记忆** (2026-09-24): `modelPrefs` 曾把"最后选过的模型"写进 localStorage
+  (`chat.modelPrefs.v1` 的 `default/defaultProvider`) → 打开就是上次选的模型 (如 MiniMax, 而非
+  `config.model`) — 这是错误行为, 已移除. 现在模型选择只改内存态 (`currentModel/currentProvider`),
+  未选时回落 `config.model` → 列表第一个. **切换模型功能不受影响** (`onSelect` 仍设 state).

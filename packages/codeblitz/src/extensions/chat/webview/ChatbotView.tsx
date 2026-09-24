@@ -506,42 +506,25 @@ export const ChatbotView: React.FC = () => {
         // 避免覆盖 session sync (applySessionToUI) 写入的真实 model
         setCurrentModel((cur) => {
           if (cur && m.find((x: any) => x.id === cur)) return cur;
-          const prefs = modelPrefs.get();
-          // 1. modelPrefs.default (用户本地的 chat 默认)
-          if (prefs.default) {
-            const def = m.find((x: any) => x.id === prefs.default && x.providerID === prefs.defaultProvider);
-            if (def) return def.id;
-            const anyProvider = m.find((x: any) => x.id === prefs.default);
-            if (anyProvider) return anyProvider.id;
-          }
-          // 2. opencode 全局 config.model (用户在 ~/.config/opencode/opencode.json 配的)
+          // 1. opencode 全局 config.model (用户在 ~/.config/opencode/opencode.json 配的)
           if (globalDefault) {
             const def = m.find((x: any) => x.id === globalDefault && x.providerID === globalDefaultProvider);
             if (def) return def.id;
             const anyProvider = m.find((x: any) => x.id === globalDefault);
             if (anyProvider) return anyProvider.id;
           }
-          // 3. 兜底: 列表第一个
+          // 2. 兜底: 列表第一个
           return m[0].id;
         });
         // 同步推导 currentProvider: 优先用 currentProvider 对应 model,
-        // 否则回退到 default/defaultProvider 对应 model
+        // 否则回退到 config.model 对应 provider (不再读本地默认 —— 已去掉 localStorage 记忆)
         setCurrentProvider((curP) => {
           if (curP && m.find((x: any) => x.providerID === curP)) return curP;
-          const prefs = modelPrefs.get();
-          if (prefs.defaultProvider) {
-            const def = m.find((x: any) => x.id === prefs.default && x.providerID === prefs.defaultProvider);
-            if (def) return def.providerID;
-          }
           if (globalDefaultProvider) {
             const def = m.find((x: any) => x.id === globalDefault && x.providerID === globalDefaultProvider);
             if (def) return def.providerID;
           }
-          const target = prefs.default
-            ? m.find((x: any) => x.id === prefs.default)
-            : globalDefault
-              ? m.find((x: any) => x.id === globalDefault)
-              : m[0];
+          const target = globalDefault ? m.find((x: any) => x.id === globalDefault) : m[0];
           return target?.providerID || curP;
         });
       }
@@ -2708,7 +2691,6 @@ export const ChatbotView: React.FC = () => {
                       onSelect={(id, providerID) => {
                         setCurrentModel(id);
                         setCurrentProvider(providerID);
-                         modelPrefs.setDefault(id, providerID);
                          // 换模型 → variant 重置 (不同 model 的 variants 不同, 旧档位可能无效)
                          setCurrentVariantPersist('');
                          setShowModels(false);

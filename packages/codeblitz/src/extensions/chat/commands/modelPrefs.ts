@@ -6,8 +6,9 @@
  *   - hidden: ModelID[]       隐藏不展示的模型
  *   - customNames: {[id]: name} 重命名 (本地别名, 不影响后端)
  *   - groups: { [groupID]: ModelID[] } 自定义分组
- *   - default: ModelID         默认模型 (无 currentModel 时用)
  *   - providerLabels: { [providerID]: string } 覆盖 provider 标题 (如 'opencode' → 'OpenCode Zen')
+ *
+ * 注: 不再记忆"默认模型" (default/defaultProvider 已移除) —— 未选模型时统一回退全局 config.model.
  */
 
 const STORAGE_KEY = 'chat.modelPrefs.v1';
@@ -19,8 +20,6 @@ export interface ModelPrefs {
   groups: Record<string, string[]>; // groupID -> modelIDs
   groupOrder: string[];      // 自定义分组顺序
   groupLabels: Record<string, string>;
-  default: string;
-  defaultProvider: string;   // 默认模型所在 provider (同名模型跨 provider 精确定位)
   providerLabels: Record<string, string>;
 }
 
@@ -31,8 +30,6 @@ const DEFAULTS: ModelPrefs = {
   groups: {},
   groupOrder: [],
   groupLabels: {},
-  default: '',
-  defaultProvider: '',
   providerLabels: {},
 };
 
@@ -41,6 +38,9 @@ function load(): ModelPrefs {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULTS };
     const parsed = JSON.parse(raw);
+    // 兼容旧数据: 丢弃已废弃的"默认模型"字段
+    delete parsed.default;
+    delete parsed.defaultProvider;
     return { ...DEFAULTS, ...parsed };
   } catch {
     return { ...DEFAULTS };
@@ -93,13 +93,6 @@ export const modelPrefs = {
   setName(modelID: string, name: string) {
     const p = { ...get() };
     p.customNames = { ...p.customNames, [modelID]: name };
-    set(p);
-  },
-
-  setDefault(modelID: string, providerID?: string) {
-    const p = { ...get() };
-    p.default = modelID;
-    if (providerID) p.defaultProvider = providerID;
     set(p);
   },
 
