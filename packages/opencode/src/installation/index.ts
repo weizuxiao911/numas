@@ -11,7 +11,7 @@ import { AppProcess } from "@opencode-ai/core/process"
 import path from "path"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
 import semver from "semver"
-import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
+import { InstallationChannel, InstallationVersion, InstallationAppVersion } from "@opencode-ai/core/installation/version"
 import { NpmConfig } from "@opencode-ai/core/npm-config"
 import { InstallationEvent } from "@opencode-ai/schema/installation-event"
 
@@ -62,6 +62,8 @@ export class UpgradeFailedError extends Schema.TaggedErrorClass<UpgradeFailedErr
 
 // Response schemas for external version APIs
 const GitHubRelease = Schema.Struct({ tag_name: Schema.String })
+/** numas fork: 我们自己仓库的 release (name 形如 'v0.1.17', tag 形如 'numas-v0.1.17-<ts>') */
+const NumasRelease = Schema.Struct({ tag_name: Schema.String, name: Schema.optional(Schema.String) })
 const NpmPackage = Schema.Struct({ version: Schema.String })
 const BrewFormula = Schema.Struct({ versions: Schema.Struct({ stable: Schema.String }) })
 const BrewInfoV2 = Schema.Struct({
@@ -206,6 +208,27 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
         return "unknown" as Method
       }),
       latest: Effect.fn("Installation.latest")(function* (installMethod?: Method) {
+        // numas fork: 有 app 版本 (构建注入) → 升级判断源 = 我们自己仓库的 release:latest。
+        //   绝不查官方 upstream dist-tag, 避免把 numas 自升级成 opencode。
+        if (InstallationAppVersion) {
+          const response = yield* httpOk
+            .execute(
+              HttpClientRequest.get("https://api.github.com/repos/weizuxiao911/numas/releases/latest").pipe(
+                HttpClientRequest.acceptJson,
+              ),
+            )
+            .pipe(Effect.orElseSucceed(() => undefined))
+          if (!response) return ""
+          const data = yield* HttpClientResponse.schemaBodyJson(NumasRelease)(response).pipe(
+            Effect.orElseSucceed(() => undefined),
+          )
+          if (!data) return ""
+          const fromName = (data.name ?? "").replace(/^v/, "")
+          if (/^\d+\.\d+\.\d+/.test(fromName)) return fromName
+          const matched = data.tag_name.match(/^numas-v(\d+\.\d+\.\d+)/)
+          return matched ? matched[1] : ""
+        }
+
         const detectedMethod = installMethod || (yield* result.method())
 
         if (detectedMethod === "brew") {

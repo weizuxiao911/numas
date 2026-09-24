@@ -39,23 +39,19 @@ const IS_PREVIEW = CHANNEL !== "latest"
 const NUMAS_VERSION = "1.18.30"
 
 const VERSION = await (async () => {
+  // numas fork: 版本生成按我们自己的规则 —— UA 声称的版本由我们固定 (NUMAS_VERSION),
+  //   不再拉上游 npm / 不按上游 bump (避免网络依赖 + 上游变动影响构建 + 自升级到上游).
+  //   我们自己的应用版本见 APP_VERSION (packages/tauri/version.json), 用于升级判断/展示.
   if (env.OPENCODE_VERSION) return env.OPENCODE_VERSION
-  if (IS_PREVIEW) {
-    // numas: 非 release 构建统一用官方版本号 (UA 需呈官方形态)
-    return NUMAS_VERSION
-  }
-  const version = await fetch("https://registry.npmjs.org/opencode-ai/latest")
-    .then((res) => {
-      if (!res.ok) throw new Error(res.statusText)
-      return res.json()
-    })
-    .then((data: any) => data.version)
-  const [major, minor, patch] = version.split(".").map((x: string) => Number(x) || 0)
-  const t = env.OPENCODE_BUMP?.toLowerCase()
-  if (t === "major") return `${major + 1}.0.0`
-  if (t === "minor") return `${major}.${minor + 1}.0`
-  return `${major}.${minor}.${patch + 1}`
+  return NUMAS_VERSION
 })()
+
+// numas fork: numas 应用版本 (读 packages/tauri/version.json), 与 UA 用的官方版本号分离.
+//   用途: 升级判断 (对比我们自己的 release), 不用官方 opencode 版本号 (避免自升级到上游).
+const APP_VERSION = await Bun.file(path.resolve(import.meta.dir, "../../tauri/version.json"))
+  .json()
+  .then((v: any) => (typeof v?.major === "number" ? `${v.major}.${v.minor}.${v.patch}` : ""))
+  .catch(() => "")
 
 const bot = ["actions-user", "opencode", "opencode-agent[bot]"]
 const teamPath = path.resolve(import.meta.dir, "../../../.github/TEAM_MEMBERS")
@@ -79,6 +75,10 @@ export const Script = {
   },
   get preview() {
     return IS_PREVIEW
+  },
+  /** numas 应用版本 (packages/tauri/version.json), 升级判断用; 空 = 非 numas 构建 */
+  get appVersion() {
+    return APP_VERSION
   },
   get release(): boolean {
     return !!env.OPENCODE_RELEASE

@@ -9,7 +9,7 @@ import { UpgradeCommand } from "./cli/cmd/upgrade"
 import { UninstallCommand } from "./cli/cmd/uninstall"
 import { ModelsCommand } from "./cli/cmd/models"
 import { UI } from "./cli/ui"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { InstallationVersion, InstallationAppVersion } from "@opencode-ai/core/installation/version"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
 import { DebugCommand } from "./cli/cmd/debug"
@@ -48,7 +48,12 @@ const cli = yargs(args)
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
-  .version("version", "show version number", InstallationVersion)
+  // numas fork: 显示我们自己的版本 (构建注入), 旁注 UA 声称的官方版本 (免费模型校验用, 不可改)
+  .version(
+    "version",
+    "show version number",
+    InstallationAppVersion ? `${InstallationAppVersion} (opencode ${InstallationVersion})` : InstallationVersion,
+  )
   .alias("version", "v")
   .option("print-logs", {
     describe: "print logs to stderr",

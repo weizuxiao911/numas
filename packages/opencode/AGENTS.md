@@ -215,4 +215,16 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
 - **构建 `packages/opencode` 需联网拉 models.dev** (`script/generate.ts`): 代理下 TLS 校验失败会中断
   build. 解法: 用本地快照 `MODELS_DEV_API_JSON=<api.json路径> bun run build ...` (快照可从
   `~/.cache/opencode/models.json` 取). 另: `--skip-install` 防 `bun run build` 改写 `bun.lock`.
+- **两个版本号必须分清** (2026-09-24): ① **UA 版本** `InstallationVersion` (构建注入 `OPENCODE_VERSION`,
+  现固定 `1.18.30`) — 用于发给 provider 的 `opencode/<channel>/<version>` UA, **绝不能改** (opencode Console
+  免费模型按 UA 校验来源, 非官方版本号会被拒). ② **numas 应用版本** `InstallationAppVersion` (构建注入
+  `OPENCODE_APP_VERSION`, 源 = `packages/tauri/version.json`, 如 `0.1.17`) — 用于升级判断 + `--version` 展示.
+  版本生成 (`packages/script/src/index.ts` 的 `Script.version`): numas 固定用 UA 版本, **不再拉上游 npm**
+  (避免网络依赖 + 上游变动). `Script.appVersion` = 我们自己的版本.
+- **自升级必须按我们自己的规则, 且只提示不安装** (2026-09-24): 曾经的 bug —— `InstallationChannel="dev"`
+  让自动升级去查 npm `opencode-ai@dev` (`0.0.0-dev-<ts>`), `getReleaseType` 只判断 `>` 对**更低**版本
+  落到 `"patch"` → 真执行 `npm i -g`, **把用户的 opencode 覆盖成上游 dev 版**. 现修:
+  `Installation.latest` 有 `InstallationAppVersion` 时取 `weizuxiao911/numas` 的 `releases/latest`
+  (`name` `v0.1.17` / tag `numas-v0.1.17-<ts>`); `cli/upgrade.ts` 对 numas 仅 `semver.gt(latest, appVersion)`
+  时发 update-available 事件, **绝不自动安装** (numas 无 npm 分发通道). 改动前务必确认不会再碰上游 dist-tag.
 
