@@ -182,6 +182,6 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
 - **访问门槛 (登录态) 内建在 `src/gate/login.ts`** (2026-09-23): 独立部署经 `.env.{DEPLOY_ENV}` 的
   `LOGIN_REDIRECT` (webpack DefinePlugin → `__APP_LOGIN_REDIRECT__`) 注入登录地址; `src/index.tsx`
   **渲染前**调 `enforceLogin()` — cookie 无 `token` 且无 `authorization` → 跳
-  `{LOGIN_REDIRECT}{encodeURIComponent(当前URL)}&needToken=true`. **未注入 `LOGIN_REDIRECT` → 不门槛**
+  `{LOGIN_REDIRECT}{encodeURIComponent(当前URL)}`. **未注入 `LOGIN_REDIRECT` → 不门槛**
   (桌面/CLI/内嵌/本地 dev 不受影响). env: `.env.site`(生产→beta.cloudlab.top) / `.env.site-test`(测试).
   前端**读不到请求的 `Authorization` 头**, 只能靠 cookie/注入 (这是 gate 用 cookie 的原因).
