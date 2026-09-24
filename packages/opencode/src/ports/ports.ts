@@ -23,6 +23,15 @@ import { Process } from "@/util/process"
 import os from "node:os"
 import path from "node:path"
 
+/**
+ * ports 调试日志: 默认静默.
+ * 本服务每 3s 周期 scan (见文件底部 setInterval), 且 TUI 内嵌 server 也会构建本服务 ──
+ * 直接 console.log 会持续往 stdout 刷屏、冲掉 TUI 画面. 需要排查端口问题时设 `NUMAS_PORTS_DEBUG=1`.
+ */
+function portsDebug(...args: unknown[]): void {
+  if (process.env.NUMAS_PORTS_DEBUG === "1") console.log(...args)
+}
+
 export class PortEntry extends Schema.Class<PortEntry>("Ports.Entry")({
   port: Schema.Number,
   pid: Schema.Number.pipe(Schema.optional),
@@ -323,7 +332,7 @@ export const layer = Layer.effect(
           }
           if (reaped.length > 0) {
             yield* Ref.set(trackedPids, survivors)
-            console.log(
+            portsDebug(
               `[ports] scan: 根进程退出, 回收 trackedPids=[${reaped.sort((a, b) => a - b).join(",")}]` +
                 (promoted.length > 0 ? `, 孤儿提升为新根=[${promoted.sort((a, b) => a - b).join(",")}]` : ""),
             )
@@ -359,7 +368,7 @@ export const layer = Layer.effect(
 
         const map = yield* Ref.get(entries)
         const isFirst = yield* Ref.get(firstScanDone)
-        console.log(
+        portsDebug(
           `[ports] scan: workspace=${workspaceDir ?? "(all)"} listenCands=${userAll.size} ` +
           `whitelist=[${[...wl].join(",")}] shown=[${[...next.keys()].sort((a, b) => a - b).join(",")}]` +
           `${isFirst ? "" : " (first)"}`,
@@ -372,13 +381,13 @@ export const layer = Layer.effect(
 
         for (const [port, e] of globalNext) {
           if (!map.has(port)) {
-            console.log(`[ports] emit detected port=${port} pid=${e.pid ?? "-"} process=${e.process ?? "-"} cwd=${e.cwd ?? "-"}`)
+            portsDebug(`[ports] emit detected port=${port} pid=${e.pid ?? "-"} process=${e.process ?? "-"} cwd=${e.cwd ?? "-"}`)
             emit("ports.detected", { port, pid: e.pid, process: e.process, cwd: e.cwd })
           }
         }
         for (const [port, e] of map) {
           if (!globalNext.has(port)) {
-            console.log(`[ports] emit closed port=${port} pid=${e.pid ?? "-"}`)
+            portsDebug(`[ports] emit closed port=${port} pid=${e.pid ?? "-"}`)
             emit("ports.closed", { port, pid: e.pid })
           }
         }
@@ -438,7 +447,7 @@ export const layer = Layer.effect(
           if (cur.has(pid)) return
           const next = new Set([...cur, pid])
           yield* Ref.set(trackedPids, next)
-          console.log(`[ports] registerPid pid=${pid} trackedRoots=[${[...next].sort((a, b) => a - b).join(",")}]`)
+          portsDebug(`[ports] registerPid pid=${pid} trackedRoots=[${[...next].sort((a, b) => a - b).join(",")}]`)
           // 注册即扫一次 (覆盖已 LISTEN 的端口, 不用等下次定时)
           void Effect.runPromise(doScan()).catch(() => {})
         }),
@@ -448,7 +457,7 @@ export const layer = Layer.effect(
           if (!cur.has(pid)) return
           const next = new Set([...cur].filter((p) => p !== pid))
           yield* Ref.set(trackedPids, next)
-          console.log(`[ports] unregisterPid pid=${pid} trackedRoots=[${[...next].sort((a, b) => a - b).join(",")}]`)
+          portsDebug(`[ports] unregisterPid pid=${pid} trackedRoots=[${[...next].sort((a, b) => a - b).join(",")}]`)
           // 反注册即扫一次 (该 PID 树关闭的端口立刻移除)
           void Effect.runPromise(doScan()).catch(() => {})
         }),
@@ -460,7 +469,7 @@ export const layer = Layer.effect(
           if (cur.has(n)) return
           const next = new Set([...cur, n])
           yield* Ref.set(projectRoots, next)
-          console.log(`[ports] registerWorkspace root=${n} roots=[${[...next].sort().join(",")}]`)
+          portsDebug(`[ports] registerWorkspace root=${n} roots=[${[...next].sort().join(",")}]`)
           // 注册即扫一次 (该目录下已 LISTEN 的服务立刻进面板)
           void Effect.runPromise(doScan()).catch(() => {})
         }),
@@ -469,7 +478,7 @@ export const layer = Layer.effect(
         Effect.gen(function* () {
           const pids = yield* Effect.promise(() => listenPidsForPort(port))
           if (pids.length === 0) {
-            console.log(`[ports] kill port=${port}: 无监听进程`)
+            portsDebug(`[ports] kill port=${port}: 无监听进程`)
             return
           }
           const cmd = process.platform === "win32" ? "taskkill" : "kill"
@@ -477,7 +486,7 @@ export const layer = Layer.effect(
           yield* Effect.promise(() =>
             Process.lines([cmd, ...args], { nothrow: true, timeout: 5000 }).then(() => undefined),
           )
-          console.log(`[ports] kill port=${port} pids=[${pids.join(",")}]`)
+          portsDebug(`[ports] kill port=${port} pids=[${pids.join(",")}]`)
           // 杀完立即扫一次: ports.closed diff 立刻发出 (不等 3s 周期)
           yield* doScan()
         }),

@@ -46,5 +46,16 @@ rm -rf "${DEST}"
 ditto "${MOUNT_POINT}/${APP_NAME}" "${DEST}"
 xattr -cr "${DEST}"
 
+# CLI 软链: app 内 CLI (Contents/MacOS/numas) 默认不在 PATH → 软链到 ~/.local/bin 让 `numas` 命令可用
+CLI_SRC="${DEST}/Contents/MacOS/numas"
+BIN_DIR="${HOME}/.local/bin"
+mkdir -p "${BIN_DIR}"
+ln -sf "${CLI_SRC}" "${BIN_DIR}/numas"
+echo "[numas] CLI 软链: ${BIN_DIR}/numas -> ${CLI_SRC}"
+case ":${PATH}:" in
+  *":${BIN_DIR}:"*) ;;
+  *) echo "[numas] 提示: ${BIN_DIR} 不在 PATH, 请加: export PATH=\"${BIN_DIR}:\$PATH\"" ;;
+esac
+
 echo "[numas] 已安装: ${DEST}"
 open "${DEST}"

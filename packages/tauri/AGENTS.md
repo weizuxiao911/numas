@@ -115,6 +115,9 @@ grep -n 'set_activation_policy' src/lib.rs   # 期望: 无输出
 - 托盘不显示 / Dock 闪现 → 检查 §2.1（是否误加 set_activation_policy）+ §2.2（id 是否被改）+ §2.3（注册表残留）
 - 24096 端口占用 → `lsof -iTCP:24096 -sTCP:LISTEN -n -P`; `pkill -9 -f 'numas serve --port 24096'`
 - 构建 404 / 端口残留 → 查残留进程（根 AGENTS.md §4.2）
+- **`numas: command not found`** → app 内 CLI 在 `/Applications/numas.app/Contents/MacOS/numas`, 默认**不在 PATH**;
+  `install-macos.sh` 会软链到 `~/.local/bin/numas` (该目录通常已在 PATH). 手动: `ln -sf /Applications/numas.app/Contents/MacOS/numas ~/.local/bin/numas`.
+  (CLI 与 app 同源: 同一二进制, app 内 `numas-tauri` 是壳, `numas` 是 CLI sidecar)
 
 ---
 
