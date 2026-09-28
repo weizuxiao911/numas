@@ -216,7 +216,7 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   build. 解法: 用本地快照 `MODELS_DEV_API_JSON=<api.json路径> bun run build ...` (快照可从
   `~/.cache/opencode/models.json` 取). 另: `--skip-install` 防 `bun run build` 改写 `bun.lock`.
 - **两个版本号必须分清** (2026-09-24): ① **UA 版本** `InstallationVersion` (构建注入 `OPENCODE_VERSION`,
-  现固定 `1.18.30`) — 用于发给 provider 的 `opencode/<channel>/<version>` UA, **绝不能改** (opencode Console
+  现固定 `1.18.32`) — 用于发给 provider 的 `opencode/<channel>/<version>` UA, **绝不能改** (opencode Console
   免费模型按 UA 校验来源, 非官方版本号会被拒). ② **numas 应用版本** `InstallationAppVersion` (构建注入
   `OPENCODE_APP_VERSION`, 源 = `packages/tauri/version.json`, 如 `0.1.17`) — 用于升级判断 + `--version` 展示.
   版本生成 (`packages/script/src/index.ts` 的 `Script.version`): numas 固定用 UA 版本, **不再拉上游 npm**
@@ -227,4 +227,15 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   `Installation.latest` 有 `InstallationAppVersion` 时取 `weizuxiao911/numas` 的 `releases/latest`
   (`name` `v0.1.17` / tag `numas-v0.1.17-<ts>`); `cli/upgrade.ts` 对 numas 仅 `semver.gt(latest, appVersion)`
   时发 update-available 事件, **绝不自动安装** (numas 无 npm 分发通道). 改动前务必确认不会再碰上游 dist-tag.
+- **TUI 白屏根因 = 依赖漂移 + 无超时网络请求** (2026-09-28): `numas` 进 TUI 在弱网/代理下白屏.
+  定位: 卡在实例 bootstrap (`client.call("checkUpgrade")` → `InstanceRuntime.load`); 卡住进程只有
+  一条发往 `api.github.com` 的死等 TLS 连接, 事件循环空转等一个永不 resolve 的 await.
+  对照实验 (关键): 同一份源码 + 官方 lock → 正常; + 我们重装后的 lock → 白屏 → 根因是 `bun.lock`
+  里的依赖版本, 与 numas 源码改动 / 终端 (DECRQM 等) 无关. 教训: ① 合并上游后 `bun install` 会把
+  lock 洗成新版依赖 (本次 588 个), 必须逐项甄别 (见上"提交前先看工作区全貌"), 不要直接提交重装后
+  的 lock; ② `Installation.latest` 已加 `Effect.timeout("10 seconds")` 兜底.
+- **默认入口改为 web, TUI 降为具名命令** (2026-09-28): `cli/cmd/tui.ts` 的 `$0 [project]` → `tui [project]`;
+  `cli/cmd/web.ts` 的 `"web"` → `["web","$0"]`. `numas` 无参数 = 起服务 + 开 Web UI (默认端口 24096);
+  `numas tui` / `numas web` / `numas serve` 均可用. ⚠️ 与上游默认不同, 合并上游时
+  `cli/index.ts` / `cli/cmd/tui.ts` / `cli/cmd/web.ts` 会有冲突, 务必保留我们的默认.
 

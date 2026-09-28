@@ -181,7 +181,7 @@ AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁
 
 ### 4.1 实践指南
 
-- `packages/tauri` 壳构建顺序: 先在 `packages/opencode` 跑 `bun run build --single` (内嵌 codeblitz 的 numas 二进制), 再 `packages/tauri` 的 `scripts/prepare.ts` 同步到 `binaries/numas-<triple>`, 最后 `tauri build`; 缺二进制时 `cargo check` 就会因 externalBin 校验失败. (桌面壳细节见 `packages/tauri/AGENTS.md`)
+- `packages/tauri` 壳构建顺序: 先在 `packages/opencode` 跑 `bun run build --single` (内嵌 codeblitz 的 numas 二进制), 再 `packages/tauri` 的 `scripts/prepare.ts` 同步到 `binaries/numas-<triple>`, 最后 `tauri build`; 产物在 `packages/tauri/target/release/bundle/{macos/numas.app,dmg/numas_<ver>_<arch>.dmg}` (注意是不带 triple 的 `target/release/` 路径, 别再找旧的 `target/aarch64-apple-darwin/...`); 缺二进制时 `cargo check` 就会因 externalBin 校验失败. (桌面壳细节见 `packages/tauri/AGENTS.md`)
 - **桌面发布规则** (固化在 `packages/tauri/scripts/release.ts`, 后续发版只改 `packages/tauri/version.json` + `CHANGELOG.md`):
   - 版本: 读 `packages/tauri/version.json` (不写死); Release title 只写版本号 `v<semver>`; notes 从 `packages/tauri/CHANGELOG.md` 对应 `## [<semver>]` 段读
   - tag: `numas-v<semver>-<YYYYMMDDHHMM>` (与既有 release 规律一致)
