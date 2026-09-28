@@ -36,7 +36,7 @@ const IS_PREVIEW = CHANNEL !== "latest"
 //   opencode Console 免费模型按 UA 判定请求来源, numas-v<...> 这类定制版本号会被拒:
 //   "OpenCode's free tier can only be used from within OpenCode".
 //   (原逻辑为 numas-v<仓库版本>-<UTC时间戳>, 便于 fork 产物识别/追溯; 如需回滚恢复该段即可.)
-const NUMAS_VERSION = "1.18.30"
+const NUMAS_VERSION = "1.18.32"
 
 const VERSION = await (async () => {
   // numas fork: 版本生成按我们自己的规则 —— UA 声称的版本由我们固定 (NUMAS_VERSION),
