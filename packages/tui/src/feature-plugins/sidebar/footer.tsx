@@ -3,6 +3,7 @@ import type { BuiltinTuiPlugin } from "../builtins"
 import { createMemo, Show } from "solid-js"
 import { abbreviateHome } from "../../runtime"
 import { useTuiPaths } from "../../context/runtime"
+import { BrandName } from "@opencode-ai/core/installation/brand"
 
 const id = "internal:sidebar-footer"
 
@@ -53,7 +54,7 @@ function View(props: { api: TuiPluginApi; sessionID: string }) {
                 ✕
               </text>
             </box>
-            <text fg={theme().textMuted}>OpenCode includes free models so you can start immediately.</text>
+            <text fg={theme().textMuted}>{BrandName} includes free models so you can start immediately.</text>
             <text fg={theme().textMuted}>
               Connect from 75+ providers to use other models, including Claude, GPT, Gemini etc
             </text>

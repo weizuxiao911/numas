@@ -37,7 +37,7 @@ export const WebCommand = effectCmd({
         "dev mode: do not auto-open the browser; caller (e.g. dev.js) opens it with a custom URL (e.g. ?directory=)",
       default: false,
     }),
-  describe: "start opencode server and open web interface",
+  describe: "start numas server and open web interface",
   // Server loads instances per-request via x-opencode-directory header — no
   // ambient project InstanceContext needed at startup.
   instance: false,

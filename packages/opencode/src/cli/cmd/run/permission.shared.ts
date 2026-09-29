@@ -16,6 +16,7 @@
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import type { PermissionReply } from "./types"
 import { toolPath, toolPermissionInfo } from "./tool"
+import { BrandName } from "@opencode-ai/core/installation/brand"
 
 type Dict = Record<string, unknown>
 
@@ -125,11 +126,11 @@ export function permissionInfo(request: PermissionRequest): PermissionInfo {
 
 export function permissionAlwaysLines(request: PermissionRequest): string[] {
   if (request.always.length === 1 && request.always[0] === "*") {
-    return [`This will allow ${request.permission} until OpenCode is restarted.`]
+    return [`This will allow ${request.permission} until ${BrandName} is restarted.`]
   }
 
   return [
-    "This will allow the following patterns until OpenCode is restarted.",
+    `This will allow the following patterns until ${BrandName} is restarted.`,
     ...request.always.map((item) => `- ${item}`),
   ]
 }
