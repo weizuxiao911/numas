@@ -29,7 +29,7 @@ function getNetworkIPs() {
 }
 
 export const WebCommand = effectCmd({
-  command: ["web", "$0"],
+  command: "web",
   builder: (yargs) =>
     withServeNetworkOptions(yargs).option("dev", {
       type: "boolean" as const,
