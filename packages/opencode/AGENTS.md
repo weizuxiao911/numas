@@ -216,7 +216,7 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   build. 解法: 用本地快照 `MODELS_DEV_API_JSON=<api.json路径> bun run build ...` (快照可从
   `~/.cache/opencode/models.json` 取). 另: `--skip-install` 防 `bun run build` 改写 `bun.lock`.
 - **两个版本号必须分清** (2026-09-24): ① **UA 版本** `InstallationVersion` (构建注入 `OPENCODE_VERSION`,
-  现固定 `1.18.32`) — 用于发给 provider 的 `opencode/<channel>/<version>` UA, **绝不能改** (opencode Console
+  现固定 `1.18.33`) — 用于发给 provider 的 `opencode/<channel>/<version>` UA, **绝不能改** (opencode Console
   免费模型按 UA 校验来源, 非官方版本号会被拒). ② **numas 应用版本** `InstallationAppVersion` (构建注入
   `OPENCODE_APP_VERSION`, 源 = `packages/tauri/version.json`, 如 `0.1.17`) — 用于升级判断 + `--version` 展示.
   版本生成 (`packages/script/src/index.ts` 的 `Script.version`): numas 固定用 UA 版本, **不再拉上游 npm**
@@ -234,10 +234,22 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   里的依赖版本, 与 numas 源码改动 / 终端 (DECRQM 等) 无关. 教训: ① 合并上游后 `bun install` 会把
   lock 洗成新版依赖 (本次 588 个), 必须逐项甄别 (见上"提交前先看工作区全貌"), 不要直接提交重装后
   的 lock; ② `Installation.latest` 已加 `Effect.timeout("10 seconds")` 兜底.
-- **默认入口改为 web, TUI 降为具名命令** (2026-09-28): `cli/cmd/tui.ts` 的 `$0 [project]` → `tui [project]`;
-  `cli/cmd/web.ts` 的 `"web"` → `["web","$0"]`. `numas` 无参数 = 起服务 + 开 Web UI (默认端口 24096);
-  `numas tui` / `numas web` / `numas serve` 均可用. ⚠️ 与上游默认不同, 合并上游时
-  `cli/index.ts` / `cli/cmd/tui.ts` / `cli/cmd/web.ts` 会有冲突, 务必保留我们的默认.
+- **默认入口 = TUI** (2026-09-30 改回, 原 2026-09-28 曾改 web): `cli/cmd/tui.ts` 的 `$0 [project]`,
+  `cli/cmd/web.ts` 的 `command: "web"`. `numas` 无参数 = 进 TUI (白屏已修, 见下);
+  `numas web` = 起服务 + 开 Web UI; `numas serve` = 仅服务. ⚠️ 与上游默认不同, 合并上游时
+  `cli/index.ts` / `cli/cmd/tui.ts` / `cli/cmd/web.ts` 会有冲突, 务必保留我们的默认 = TUI.
+- **TUI 白屏真正根因 = 陈旧 `.gen.js` 覆盖 SDK** (2026-09-30): TUI 进去全屏空白 (连 StartupLoading
+  都没有)。链路: `packages/sdk/js/src/v2/client.ts` 按 TS nodenext 用 `.js` 后缀 import
+  (`./gen/sdk.gen.js`), 而仓库里误提交了一套**陈旧**的 `packages/sdk/js/src/v2/gen/*.gen.js`
+  (`ec8cd1fd14`, 原本为 codeblitz webpack 无 extensionAlias 而加) → Bun 优先加载真实 `.js`,
+  SDK 缺 `sdk.client.experimental.capabilities` → `SyncProvider.bootstrap` **同步抛 TypeError**
+  → `sync.status` 永远 `loading` → `SyncProvider.ready=false` → `createSimpleContext` 的
+  `<Show when={init.ready}>` 挡住**整棵子树**(含 `<App>` 与 `StartupLoading`) → 全屏空.
+  修复: 删除那批 `.gen.js` + 给 `packages/codeblitz/webpack.config.js` 加
+  `resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }` (webpack 也能解析到 `.gen.ts`).
+  **教训**: 生成物 `.js` 不要入库; 排查 TUI 白屏先开 `DEBUG` 看 `sdk.client.experimental` 是否存在 +
+  `sync.status` 是否停在 `loading` (旧 AGENTS 记的"依赖漂移"是表象之一, 真因是这套陈旧 `.js`).
+
 - **内置 vsix 扩展内嵌进二进制** (2026-09-29): `packages/extensions` (docx/html/paper/pdf) 由
   `script/build.ts` 的 `createEmbeddedExtensionsBundle` 构建并内嵌 (仿 web UI 内嵌范式, 生成虚拟模块
   `numas-extensions.gen.ts`, 每个 `*.vsix` 以 `type:"file"` 导入). 运行时 `server/extensions-route.ts`

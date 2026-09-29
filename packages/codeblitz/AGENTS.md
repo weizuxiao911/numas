@@ -189,3 +189,10 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   (`chat.modelPrefs.v1` 的 `default/defaultProvider`) → 打开就是上次选的模型 (如 MiniMax, 而非
   `config.model`) — 这是错误行为, 已移除. 现在模型选择只改内存态 (`currentModel/currentProvider`),
   未选时回落 `config.model` → 列表第一个. **切换模型功能不受影响** (`onSelect` 仍设 state).
+- **webpack 必须配 `extensionAlias` (`.js`→`.ts`), 生成物 `.gen.js` 禁止入库** (2026-09-30):
+  `@opencode-ai/sdk/v2` 按 TS nodenext 用 `.js` 后缀 import (如 `./gen/sdk.gen.js`), webpack 默认
+  会去找真实 `.js`. 曾为绕过此问题提交了一套 `packages/sdk/js/src/v2/gen/**/*.gen.js`
+  (`ec8cd1fd14`), 结果 **Bun/opencode/TUI 等 `.ts` 消费方也优先加载了这批陈旧 `.js`**, SDK 缺
+  `experimental.capabilities`, 直接把 TUI 干成白屏. 现已在 `webpack.config.js` 加
+  `resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }` 并删除该批 `.gen.js`.
+  后续: 只生成 `.gen.ts`; 若 webpack 报 `.gen.js` not found, 检查 extensionAlias 是否被删.

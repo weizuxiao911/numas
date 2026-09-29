@@ -131,6 +131,11 @@ const config = {
     },
     resolve: {
         extensions: ['.ts', '.tsx', '.js', '.json'],
+        // TS nodenext 约定: import 带 .js 后缀实际指向 .ts 源 (如 @opencode-ai/sdk/v2 的 ./gen/*.gen.js).
+        // 无此映射 webpack 会去找真实 .js (需提交陈旧 .gen.js 副本, 会让 TUI 等 .ts 消费方拿到旧代码).
+        extensionAlias: {
+            '.js': ['.ts', '.tsx', '.js'],
+        },
         alias: {
             '@': path_1.default.resolve(WEB, 'src'),
             '@/': path_1.default.resolve(WEB, 'src') + path_1.default.sep,
