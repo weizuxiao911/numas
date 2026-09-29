@@ -238,4 +238,16 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   `cli/cmd/web.ts` 的 `"web"` → `["web","$0"]`. `numas` 无参数 = 起服务 + 开 Web UI (默认端口 24096);
   `numas tui` / `numas web` / `numas serve` 均可用. ⚠️ 与上游默认不同, 合并上游时
   `cli/index.ts` / `cli/cmd/tui.ts` / `cli/cmd/web.ts` 会有冲突, 务必保留我们的默认.
+- **内置 vsix 扩展内嵌进二进制** (2026-09-29): `packages/extensions` (docx/html/paper/pdf) 由
+  `script/build.ts` 的 `createEmbeddedExtensionsBundle` 构建并内嵌 (仿 web UI 内嵌范式, 生成虚拟模块
+  `numas-extensions.gen.ts`, 每个 `*.vsix` 以 `type:"file"` 导入). 运行时 `server/extensions-route.ts`
+  懒加载该模块, 把内嵌 vsix 与 `--extensions-dir` 磁盘目录**合并**索引; 无参数也能服务内置扩展
+  (实测日志 `[extensions] loaded … <- /$bunfs/root/<name>.vsix`).
+  - 跳过内嵌: `--skip-embed-extensions`; 用预构建产物: `NUMAS_EXTENSIONS_VSIX=<dir>`.
+  - vsix 构建入口 `packages/extensions/scripts/build.mjs` (`bun run --cwd packages/extensions build`),
+    产物落 `packages/extensions/dist-vsix` (gitignored), 可 `NUMAS_VSIX_OUT` 覆盖.
+  - npm 装依赖必须 `--workspaces=false` (否则读 root package.json 的 `catalog:` protocol 报
+    `EUNSUPPORTEDPROTOCOL`); `adm-zip` 装在 `packages/extensions` 级, 各扩展 `scripts/package.js`
+    用 `require('adm-zip')` 沿 node_modules 向上解析 (不再依赖已删除的 `packages/registry`).
+
 

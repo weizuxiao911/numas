@@ -23,6 +23,7 @@ const skipInstall = process.argv.includes("--skip-install")
 const sourcemapsFlag = process.argv.includes("--sourcemaps")
 const plugin = createSolidTransformPlugin()
 const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+const skipEmbedExtensions = process.argv.includes("--skip-embed-extensions")
 const webUiName = (() => {
   const i = process.argv.indexOf("--web-ui")
   if (i === -1) return "codeblitz"
@@ -74,6 +75,32 @@ const createEmbeddedWebUIBundle = async () => {
 }
 
 const embeddedFileMap = skipEmbedWebUi ? null : await createEmbeddedWebUIBundle()
+
+// numas: 把 packages/extensions 构建出的 vsix 内嵌进二进制, 运行时 /extensions 内置市场直接可服务.
+//   - NUMAS_EXTENSIONS_VSIX 指定已构建的 vsix 目录 (跳过构建); 否则构建 packages/extensions → dist-vsix
+//   - 目录内每个 *.vsix 以 type:"file" 导入, 生成 id → 文件路径 映射 (生成的虚拟模块见 files/entrypoints)
+const createEmbeddedExtensionsBundle = async () => {
+  const provided = process.env.NUMAS_EXTENSIONS_VSIX
+  const vsixDir = provided
+    ? path.resolve(provided)
+    : path.join(import.meta.dirname, "../../extensions/dist-vsix")
+  if (!provided) {
+    console.log("Building extensions to embed in the binary (packages/extensions)")
+    await $`bun run --cwd ${path.join(import.meta.dirname, "../../extensions")} build`
+  }
+  const files = (await Array.fromAsync(new Bun.Glob("*.vsix").scan({ cwd: vsixDir })))
+    .map((file) => file.replaceAll("\\", "/"))
+    .sort()
+  if (files.length === 0) throw new Error(`[numas] 未找到任何 vsix: ${vsixDir} (先构建 packages/extensions 或设置 NUMAS_EXTENSIONS_VSIX)`)
+  const imports = files.map((file, i) => {
+    const spec = path.relative(dir, path.join(vsixDir, file)).replaceAll("\\", "/")
+    return `import file_${i} from ${JSON.stringify(spec.startsWith(".") ? spec : `./${spec}`)} with { type: "file" };`
+  })
+  const entries = files.map((file, i) => `  ${JSON.stringify(file)}: file_${i},`)
+  return [...imports, `export default {`, ...entries, `}`].join("\n")
+}
+
+const embeddedExtensionsFileMap = skipEmbedExtensions ? null : await createEmbeddedExtensionsBundle()
 const treeSitterWorker = await Bun.file(fileURLToPath(import.meta.resolve("@opentui/core/parser.worker"))).text()
 
 const allTargets: {
@@ -230,12 +257,14 @@ for (const item of targets) {
     files: {
       [treeSitterWorkerPath]: treeSitterWorker,
       ...(embeddedFileMap ? { "opencode-web-ui.gen.ts": embeddedFileMap } : {}),
+      ...(embeddedExtensionsFileMap ? { "numas-extensions.gen.ts": embeddedExtensionsFileMap } : {}),
     },
     entrypoints: [
       "./src/index.ts",
       workerPath,
       treeSitterWorkerPath,
       ...(embeddedFileMap ? ["opencode-web-ui.gen.ts"] : []),
+      ...(embeddedExtensionsFileMap ? ["numas-extensions.gen.ts"] : []),
     ],
     define: {
       FFF_LIBC: JSON.stringify(item.abi === "musl" ? "musl" : "gnu"),

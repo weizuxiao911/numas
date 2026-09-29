@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/package",
+  "name": "@numas/extensions",
+  "version": "0.0.0",
+  "private": true,
+  "description": "numas 内置 vsix 扩展 (docx/html/paper/pdf) 聚合构建 — 产出 dist-vsix/*.vsix 供 numas 二进制内嵌",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "adm-zip": "^0.6.0"
+  }
+}

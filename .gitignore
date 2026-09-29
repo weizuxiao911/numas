@@ -79,3 +79,6 @@ screenshot-uk.png
 
 .logs/
 .tmp/
+
+# numas 内置 vsix 扩展聚合构建产物 (packages/extensions → 内嵌进 numas 二进制)
+packages/extensions/dist-vsix/

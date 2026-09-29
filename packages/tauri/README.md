@@ -133,12 +133,16 @@ flowchart TD
 
 ## 4. 本地构建
 
-先构建当前平台的 numas CLI（内嵌 codeblitz）：
+先构建当前平台的 numas CLI（内嵌 codeblitz + 内置 vsix 扩展）：
 
 ```bash
 cd packages/opencode
 bun run build --single
 ```
+
+> `script/build.ts` 默认会构建 `packages/extensions`（docx/html/paper/pdf → `dist-vsix/*.vsix`）
+> 并内嵌进二进制，运行时 `/extensions` 内置市场直接可服务，无需 `--extensions-dir`。
+> 想跳过或用预构建产物：`--skip-embed-extensions` / `NUMAS_EXTENSIONS_VSIX=<vsix目录>`。
 
 再构建壳（自动把二进制同步到 `binaries/numas-<target-triple>`）：
 

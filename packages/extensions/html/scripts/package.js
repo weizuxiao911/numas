@@ -8,18 +8,18 @@
  */
 const fs = require('fs')
 const path = require('path')
-const AdmZip = require('../../../registry/node_modules/adm-zip')
+// adm-zip 由 packages/extensions 聚合构建安装 (scripts/build.mjs), 沿 node_modules 向上解析
+const AdmZip = require('adm-zip')
 
 const ROOT = path.resolve(__dirname, '..')
 const SRC_DIST = path.join(ROOT, 'dist')           // 源 dist
 const PKG_PATH = path.join(ROOT, 'package.json')
 const STAGE = path.join(ROOT, '.vsix-stage')       // 临时打包目录
 const PKG = JSON.parse(fs.readFileSync(PKG_PATH, 'utf-8'))
-const OUT = path.resolve(
-  __dirname,
-  '../../../registry/vsix',  // extensions/html/scripts → extensions/html → extensions → registry/vsix
-  `${PKG.publisher || 'weizuxiao911'}.${PKG.name}-${PKG.version}.vsix`,
-)
+const OUT_DIR = process.env.NUMAS_VSIX_OUT
+  ? path.resolve(process.env.NUMAS_VSIX_OUT)
+  : path.resolve(__dirname, '../../dist-vsix')
+const OUT = path.join(OUT_DIR, `${PKG.publisher || 'weizuxiao911'}.${PKG.name}-${PKG.version}.vsix`)
 
 console.log('[html] packaging:', OUT)
 

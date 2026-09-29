@@ -54,6 +54,8 @@ function mergeContributes(pkg: Record<string, unknown>): Record<string, unknown>
 
 interface Index {
   ensure(): void
+  /** 注入构建期内嵌的 vsix 文件路径 (numas 二进制内置扩展); 与 --extensions-dir 磁盘目录合并 */
+  setEmbedded(files: string[]): void
   metas(): Meta[]
   has(id: string): boolean
   /** vsix 内 extension/ 下的相对文件清单 */
@@ -65,15 +67,22 @@ interface Index {
 function createIndex(vsixDir: string): Index {
   let sig = ""
   let metas: Meta[] = []
+  let embedded: string[] = []
   const zips = new Map<string, AdmZip>()
 
+  const diskFiles = () => {
+    if (!fs.existsSync(vsixDir)) return [] as string[]
+    return fs
+      .readdirSync(vsixDir)
+      .filter((f) => f.endsWith(".vsix"))
+      .map((f) => path.join(vsixDir, f))
+  }
+
   const calcSig = () => {
-    if (!fs.existsSync(vsixDir)) return ""
-    let s = ""
-    for (const f of fs.readdirSync(vsixDir)) {
-      if (!f.endsWith(".vsix")) continue
+    let s = `embedded:${embedded.length};`
+    for (const f of diskFiles()) {
       try {
-        const st = fs.statSync(path.join(vsixDir, f))
+        const st = fs.statSync(f)
         s += `${f}|${st.mtimeMs}|${st.size};`
       } catch {
         // 文件竞争删除, 忽略
@@ -82,45 +91,45 @@ function createIndex(vsixDir: string): Index {
     return s
   }
 
+  const loadOne = (file: string) => {
+    try {
+      const zip = new AdmZip(file)
+      const pkgEntry = zip.getEntry("extension/package.json")
+      if (!pkgEntry) {
+        console.warn(`[extensions] skip ${file}: no extension/package.json`)
+        return
+      }
+      const pkg = JSON.parse(pkgEntry.getData().toString("utf-8")) as Record<string, unknown>
+      if (!pkg.name || !pkg.publisher || !pkg.version) {
+        console.warn(`[extensions] skip ${file}: missing name/publisher/version`)
+        return
+      }
+      const id = `${pkg.publisher}.${pkg.name}-${pkg.version}`
+      const picked = pick(pkg)
+      picked.contributes = mergeContributes(pkg)
+      // 不带 authority 的 kt-ext uri: 前端分流到 registryBaseUrl (同源 /extensions 或外部)
+      metas.push({
+        extension: { publisher: pkg.publisher, name: pkg.name, version: pkg.version },
+        packageJSON: picked,
+        defaultPkgNlsJSON: {},
+        pkgNlsJSON: {},
+        nlsList: [],
+        extendConfig: {},
+        webAssets: [],
+        mode: "local",
+        uri: `kt-ext:///${id}`,
+      })
+      zips.set(id, zip)
+      console.log(`[extensions] loaded ${id} <- ${file}`)
+    } catch (e) {
+      console.warn(`[extensions] skip ${file}:`, e instanceof Error ? e.message : String(e))
+    }
+  }
+
   const rebuild = () => {
     metas = []
     zips.clear()
-    if (!fs.existsSync(vsixDir)) return
-    for (const file of fs.readdirSync(vsixDir)) {
-      if (!file.endsWith(".vsix")) continue
-      try {
-        const zip = new AdmZip(path.join(vsixDir, file))
-        const pkgEntry = zip.getEntry("extension/package.json")
-        if (!pkgEntry) {
-          console.warn(`[extensions] skip ${file}: no extension/package.json`)
-          continue
-        }
-        const pkg = JSON.parse(pkgEntry.getData().toString("utf-8")) as Record<string, unknown>
-        if (!pkg.name || !pkg.publisher || !pkg.version) {
-          console.warn(`[extensions] skip ${file}: missing name/publisher/version`)
-          continue
-        }
-        const id = `${pkg.publisher}.${pkg.name}-${pkg.version}`
-        const picked = pick(pkg)
-        picked.contributes = mergeContributes(pkg)
-        // 不带 authority 的 kt-ext uri: 前端分流到 registryBaseUrl (同源 /extensions 或外部)
-        metas.push({
-          extension: { publisher: pkg.publisher, name: pkg.name, version: pkg.version },
-          packageJSON: picked,
-          defaultPkgNlsJSON: {},
-          pkgNlsJSON: {},
-          nlsList: [],
-          extendConfig: {},
-          webAssets: [],
-          mode: "local",
-          uri: `kt-ext:///${id}`,
-        })
-        zips.set(id, zip)
-        console.log(`[extensions] loaded ${id} <- ${file}`)
-      } catch (e) {
-        console.warn(`[extensions] skip ${file}:`, e instanceof Error ? e.message : String(e))
-      }
-    }
+    for (const file of [...diskFiles(), ...embedded]) loadOne(file)
   }
 
   return {
@@ -130,6 +139,10 @@ function createIndex(vsixDir: string): Index {
         sig = next
         rebuild()
       }
+    },
+    setEmbedded: (files) => {
+      embedded = files
+      sig = "" // 触发下一次 ensure 重建
     },
     metas: () => metas,
     has: (id) => zips.has(id),
@@ -179,11 +192,29 @@ function notFound() {
 }
 
 /** /extensions 控制器路由 (vsixDir 为空时注册空索引: metadata=[] 优雅降级). */
+let embeddedExtensionsPromise: Promise<Record<string, string> | null> | undefined
+
+/** 构建期内嵌的 vsix (numas-extensions.gen.ts): 文件名 → 二进制内文件路径.
+ *  dev / 未内嵌构建时为 null (此时仅扫 --extensions-dir 磁盘目录). */
+function embeddedExtensions() {
+  return (embeddedExtensionsPromise ??=
+    // @ts-expect-error - generated file at build time
+    import("numas-extensions.gen.ts").then((module) => module.default as Record<string, string>).catch(() => null))
+}
+
+/** /extensions 控制器路由 (vsixDir 为空时注册空索引: metadata=[] 优雅降级).
+ *  索引来源 = 内嵌 vsix (numas 二进制内置扩展) + --extensions-dir 磁盘目录. */
 export function extensionsRoute(vsixDir?: string) {
   const index = createIndex(vsixDir ?? "")
+  let embeddedLoaded = false
   return HttpRouter.use((router) =>
     Effect.gen(function* () {
       const handle = Effect.fn("ExtensionsHttp.handle")(function* (request: HttpServerRequest.HttpServerRequest) {
+        if (!embeddedLoaded) {
+          const embedded = yield* Effect.promise(() => embeddedExtensions())
+          index.setEmbedded(embedded ? Object.values(embedded) : [])
+          embeddedLoaded = true
+        }
         index.ensure()
         const urlPath = decodeURIComponent(new URL(request.url, "http://localhost").pathname)
         if (urlPath === "/extensions/metadata.json") {
