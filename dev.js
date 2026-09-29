@@ -28,6 +28,7 @@ import path from "node:path"
 const ROOT = import.meta.dirname
 const CODEBLITZ = path.join(ROOT, "packages", "codeblitz")
 const CODEBLITZ_DIST = path.join(CODEBLITZ, "dist")
+const EXTENSIONS_DIST = path.join(ROOT, "packages", "extensions", "dist-vsix")
 
 function parseFlag(flag, fallback) {
   const i = process.argv.indexOf(flag)
@@ -205,8 +206,14 @@ function killPort(port) {
   }
 }
 
-console.log(`[dev] 启 opencode serve (port=${PORT}, web-ui=${CODEBLITZ_DIST})`)
+console.log(`[dev] 启 opencode serve (port=${PORT}, web-ui=${CODEBLITZ_DIST}, extensions=${EXTENSIONS_DIST})`)
 killPort(PORT)
+
+// 内置 vsix 扩展: dev 为源码模式, 无内嵌 numas-extensions.gen.ts, 显式指向构建产物目录
+const extensionVsix = fs.existsSync(EXTENSIONS_DIST) ? fs.readdirSync(EXTENSIONS_DIST).filter((f) => f.endsWith(".vsix")) : []
+if (extensionVsix.length === 0) {
+  console.warn(`[dev] 未找到内置 vsix (${EXTENSIONS_DIST}), /extensions 将为空; 先跑: bun run --cwd packages/extensions build`)
+}
 
 const opencodeProc = spawn(
   "bun",
@@ -224,6 +231,8 @@ const opencodeProc = spawn(
     "127.0.0.1",
     "--web-ui",
     "../codeblitz/dist",
+    "--extensions-dir",
+    EXTENSIONS_DIST,
   ],
   { cwd: ROOT, stdio: "inherit", detached: true, shell: false },
 )
