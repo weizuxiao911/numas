@@ -196,8 +196,8 @@ AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁
 - **仓库布局: numas 仓 2 个 worktree + 2 个独立仓库** (2026-09-30 拆分后): 本仓 (`weizuxiao911/numas`)
   只有 `~/Documents/numas`=`main`、`~/Documents/numas-dev`=`dev` 两个 worktree (共享同一 `.git`).
   原 `numas-ide/main`、`oh-my-buddy/main` 已拆为独立仓库:
-  - `weizuxiao911/numas-ide` (普通仓库, main = 原 numas-ide/main 内容)
-  - `weizuxiao911/oh-my-buddy` (普通仓库, main = 原 oh-my-buddy/main 内容)
+  - `cloudlab-os/numas` (org 仓库, 默认分支 `main` = 原 numas-ide/main 内容; 本地 remote `deploy` 指向它)
+  - `weizuxiao911/oh-my-buddy` (普通仓库, main = 原 oh-my-buddy/main 内容; 本地 remote `ohmybuddy`)
   `main` 在独立 worktree 检出, 不能在 numas-dev 里 `git checkout main`; 跨分支操作要去对应 worktree.
 - **GitHub fork `weizuxiao911/opencode` 用作根仓库** (2026-09-30): 它是 `anomalyco/opencode` 的真 fork
   (带 forked-from 标识), 与独立仓库 `weizuxiao911/numas` 并存. 分支布局:
