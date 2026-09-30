@@ -57,6 +57,7 @@ pub fn run() {
                     "open" => open_when_ready(app.clone(), DEFAULT_PORT),
                     "quit" => {
                         stop_server(app);
+                        #[cfg(target_os = "macos")]
                         cleanup_registrations_now();
                         app.exit(0);
                     }
@@ -84,7 +85,11 @@ pub fn run() {
         .run(|app, event| match event {
             RunEvent::ExitRequested { .. } => stop_server(app),
             RunEvent::Exit => stop_server(app),
+            // Reopen / Opened 只在 macOS 存在 (tauri RunEvent 变体 cfg 限定);
+            // Windows 深链走 single-instance argv + deep_link on_open_url, 不需这两个分支.
+            #[cfg(target_os = "macos")]
             RunEvent::Reopen { .. } => ensure_server_running(app.clone(), DEFAULT_PORT),
+            #[cfg(target_os = "macos")]
             RunEvent::Opened { urls } => {
                 let list: Vec<String> = urls.iter().map(|u| u.to_string()).collect();
                 handle_deep_links(&app, &list);

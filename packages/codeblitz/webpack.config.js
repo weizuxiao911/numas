@@ -173,9 +173,10 @@ const config = {
                 use: [{
                         loader: 'esbuild-loader',
                         options: {
-                            // esbuild-loader 默认 tsx=transform, target=es2015; loader 内置 ts 配置
-                            // 不需要 tsconfig (但项目里有 src/ tsconfig.json 给 src/ 自己的 typecheck 用, 不影响构建)
-                            loader: 'tsx',
+                            // 不显式设 loader: esbuild-loader 默认按扩展名推断 (.ts→ts, .tsx→tsx).
+                            // 显式 loader:'tsx' 会让 .ts 也走 tsx 解析, 把 openapi-ts 生成的 .gen.ts
+                            // 里 `<T>(x: T) => ...` 泛型 / `>` 比较误判为 JSX → 整个 codeblitz 编不过.
+                            // tsconfig 由 esbuild-loader 自动从 src/ tsconfig.json 加载.
                             target: 'es2020',
                         },
                     }],
