@@ -250,9 +250,18 @@ export function isPathNotFoundError(e: any): boolean {
 export const WORKDIR_CHANGED_EVENT = 'workdir:changed';
 
 /** URL 协议升级: 页面 https 时, http→https / ws→wss (mixed content 浏览器拒绝)
- *  单一 helper, 所有自建 ws/sse 入口统一走, 避免散落 */
+ *  单一 helper, 所有自建 ws/sse 入口统一走, 避免散落.
+ *  例外: 环回地址 (localhost/127.0.0.1/::1) 是 potentially trustworthy, 浏览器豁免 mixed content,
+ *  必须保持原 http/ws —— 否则前后端分离 (远端 https 页面直连本机 numas) 会被升成
+ *  https://127.0.0.1 而连不上. */
 export function secureUrl(url: string): string {
   if (typeof window === 'undefined' || !url) return url;
   if (window.location.protocol !== 'https:') return url;
+  try {
+    const host = new URL(url, window.location.href).hostname.toLowerCase();
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]') return url;
+  } catch {
+    return url;
+  }
   return url.replace(/^http:/i, 'https:').replace(/^ws:/i, 'wss:');
 }
