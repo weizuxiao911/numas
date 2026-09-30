@@ -196,6 +196,14 @@ AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁
 - **仓库布局: 4 个 worktree** (2026-09-24): `~/Documents/numas`=`main`, `~/Documents/numas-dev`=`dev`,
   `~/Documents/numas-ide`=`numas-ide/main`, `~/Documents/oh-my-buddy`=`oh-my-buddy/main` (共享同一 `.git`).
   `main` 在独立 worktree 检出, 不能在 numas-dev 里 `git checkout main`; 跨分支操作要去对应 worktree.
+- **GitHub fork `weizuxiao911/opencode` 用作根仓库** (2026-09-30): 它是 `anomalyco/opencode` 的真 fork
+  (带 forked-from 标识), 与独立仓库 `weizuxiao911/numas` 并存. 分支布局:
+  `dev`=上游镜像 (只 ff, 永远 0 落后, 无横幅), `main`=numas 的 `main` (默认分支), `next`=numas 的 `dev`,
+  `numas-ide/main` / `oh-my-buddy/main`=对应 numas 分支. 维护:
+  - 同步上游: `git fetch upstream && git push -f myfork upstream/dev:dev`
+  - 推产品: numas `main`→fork `main`; numas `dev`→fork `next`
+  - **不要把 numas 无关历史推回 fork 的 `dev`** (会造成“落后 1w+”横幅; numas 历史是重建的, 与上游无共同祖先).
+  - 本地 remote: `myfork` = `github.com/weizuxiao911/opencode`.
 - **main = dev (同步稳定分支) 用 reset + force-push** (2026-09-23): `main` 是旧布局 (`opencode/packages/...`), `dev` 是新布局 (`packages/...`), 差异巨大 → 合并会残留/冲突. 严格同步: 去 main worktree `git reset --hard dev` → force-push 双远程.
 - **GitLab `main` 是受保护分支, force-push 报 `pre-receive hook declined`** (2026-09-23): GitLab 默认禁止对受保护分支强推. 重写 main 前需先到 GitLab → Settings → Repository → Protected branches 解除保护, 推完可再保护. (GitHub 侧无此限制)
 - 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动 (如 AGENTS.md / packages/tauri/version.json), 不要默认全量 `git add -A`; 用 `question` 让用户拍板纳入范围与拆分方式.
