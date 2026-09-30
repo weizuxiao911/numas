@@ -11,7 +11,7 @@ export const APP_CHAT_CONFIG = {
   brand: {
     name: 'Numas',
     title: 'Numas',
-    subtitle: '牛马有伙伴，凡事皆可办',
+    subtitle: '你的赛博牛马',
     greeting: 'Numas',
     logo: '🐮',
   },

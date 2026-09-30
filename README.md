@@ -1,129 +1,83 @@
+<h1 align="center">Numas · 牛马 AI</h1>
+<p align="center">Your cyber workhorse 🐮</p>
 <p align="center">
-  <a href="https://opencode.ai">
-    <picture>
-      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
-      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="OpenCode logo">
-    </picture>
-  </a>
+  English | <a href="README.zh.md">简体中文</a>
 </p>
-<p align="center">The open source AI coding agent.</p>
-<p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
-</p>
-
-<p align="center">
-  <a href="README.md">English</a> |
-  <a href="README.zh.md">简体中文</a> |
-  <a href="README.zht.md">繁體中文</a> |
-  <a href="README.ko.md">한국어</a> |
-  <a href="README.de.md">Deutsch</a> |
-  <a href="README.es.md">Español</a> |
-  <a href="README.fr.md">Français</a> |
-  <a href="README.it.md">Italiano</a> |
-  <a href="README.da.md">Dansk</a> |
-  <a href="README.ja.md">日本語</a> |
-  <a href="README.pl.md">Polski</a> |
-  <a href="README.ru.md">Русский</a> |
-  <a href="README.bs.md">Bosanski</a> |
-  <a href="README.ar.md">العربية</a> |
-  <a href="README.no.md">Norsk</a> |
-  <a href="README.br.md">Português (Brasil)</a> |
-  <a href="README.th.md">ไทย</a> |
-  <a href="README.tr.md">Türkçe</a> |
-  <a href="README.uk.md">Українська</a> |
-  <a href="README.bn.md">বাংলা</a> |
-  <a href="README.gr.md">Ελληνικά</a> |
-  <a href="README.vi.md">Tiếng Việt</a>
-</p>
-
-[![OpenCode Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
 
 ---
 
-### Installation
+Numas is a locally-run AI workbench for coding and everyday tasks, made of three parts:
 
-```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
+- **opencode engine** — the AI agent runtime (tool calls / sessions / model & provider integration); CLI name is `numas`
+- **codeblitz IDE** — the browser workbench (editor / terminal / extension market)
+- **Desktop shell** — a macOS app (lives in the tray, hosts the local server)
 
-# Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
-brew install opencode              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # Any OS
-nix run nixpkgs#opencode           # or github:anomalyco/opencode for latest dev branch
-```
-
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
-
-### Desktop App (BETA)
-
-OpenCode is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
-
-| Platform              | Download                           |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
-| Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
-
-```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
-```
-
-#### Installation Directory
-
-The install script respects the following priority order for the installation path:
-
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
-
-```bash
-# Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
-```
-
-### Agents
-
-OpenCode includes two built-in agents you can switch between with the `Tab` key.
-
-- **build** - Default, full-access agent for development work
-- **plan** - Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
-
-Also included is a **general** subagent for complex searches and multistep tasks.
-This is used internally and can be invoked using `@general` in messages.
-
-Learn more about [agents](https://opencode.ai/docs/agents).
-
-### Documentation
-
-For more info on how to configure OpenCode, [**head over to our docs**](https://opencode.ai/docs).
-
-### Contributing
-
-If you're interested in contributing to OpenCode, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
-
-### Building on OpenCode
-
-If you are working on a project that's related to OpenCode and is using "opencode" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the OpenCode team and is not affiliated with us in any way.
+Runs locally by default — your files and data stay on your machine. It also supports split deployment (UI in the cloud, connecting directly to the numas running on the visitor's own machine).
 
 ---
 
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+## Install
+
+### Desktop (macOS)
+
+Download `numas-darwin-arm64.dmg` from [Releases](https://github.com/weizuxiao911/numas/releases/latest) and drag it into `Applications`.
+
+Or install with the script (kills old processes → installs → clears quarantine → launches):
+
+```bash
+bash packages/tauri/scripts/install-macos.sh <numas_x.y.z_arch.dmg>
+```
+
+The `numas` CLI is symlinked to `~/.local/bin/numas` after install.
+
+### CLI
+
+```bash
+numas            # start the TUI (terminal UI) by default
+numas web        # start the server and open the web workbench
+numas serve      # start the local server only (headless)
+```
+
+> The CLI binary ships inside the desktop app (`numas.app/Contents/MacOS/numas`); you can also build it from source.
+
+### Build from source
+
+```bash
+cd packages/opencode && bun run build --single   # build the numas CLI (embeds codeblitz)
+cd packages/tauri    && bun run build            # package the desktop shell (syncs the sidecar)
+```
+
+See [`packages/tauri/README.md`](packages/tauri/README.md) for details.
+
+### Split deployment (UI in the cloud)
+
+Serve the UI as static files while it connects directly to the **visitor's own** numas:
+
+```bash
+cd packages/codeblitz && npm run build:site      # output in packages/codeblitz/site/
+```
+
+- Put `site/` on nginx at the **domain root** with SPA fallback `try_files $uri /index.html;`
+- The page connects to the visitor's local numas via the build-time `APP_BASE_URL` (default `http://127.0.0.1:24096`)
+- The local numas must be running and allow cross-origin (`numas` / `numas serve` default to `--cors *`, and handle the Chrome Private Network Access preflight)
+
+---
+
+## Agents
+
+Two built-in agents, switch with `Tab`:
+
+- **build** — default, full access, for development work
+- **plan** — read-only, for analysis and planning (denies edits by default, asks before running bash)
+
+Plus a **general** subagent for complex search and multi-step tasks — invoke with `@general`.
+
+---
+
+## Repository
+
+- GitHub: <https://github.com/weizuxiao911/numas>
+
+## Credits
+
+Numas is built on the open-source project [opencode](https://github.com/anomalyco/opencode).
