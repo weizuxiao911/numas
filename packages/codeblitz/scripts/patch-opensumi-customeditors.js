@@ -13,10 +13,11 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
+const { resolvePkg } = require('./resolve-dep');
 
-const TARGET = path.resolve(
-  __dirname,
-  '../node_modules/@opensumi/ide-extension/lib/browser/vscode/contributes/customEditors.js',
+const TARGET = path.join(
+  resolvePkg('@opensumi/ide-extension'),
+  'lib/browser/vscode/contributes/customEditors.js',
 );
 const SOURCE = path.resolve(__dirname, './customEditors.patch.js');
 const MARKER = '__numasCustomEditorUseRef';

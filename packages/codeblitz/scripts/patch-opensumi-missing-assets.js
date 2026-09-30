@@ -17,19 +17,12 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
+const { resolvePkg } = require('./resolve-dep');
 
-const COMPONENTS_LESS = path.resolve(
-  __dirname,
-  '../node_modules/@opensumi/ide-components/lib/style/variable.less'
-);
-const DEBUG_BREAKPOINT_SVG = path.resolve(
-  __dirname,
-  '../node_modules/@opensumi/ide-debug/lib/browser/assets/breakpoint.svg'
-);
-const DEBUG_BREAKPOINT_DISABLED_SVG = path.resolve(
-  __dirname,
-  '../node_modules/@opensumi/ide-debug/lib/browser/assets/breakpoint-disabled.svg'
-);
+const COMPONENTS_LESS = path.join(resolvePkg('@opensumi/ide-components'), 'lib/style/variable.less');
+const DEBUG_ASSETS = path.join(resolvePkg('@opensumi/ide-debug'), 'lib/browser/assets');
+const DEBUG_BREAKPOINT_SVG = path.join(DEBUG_ASSETS, 'breakpoint.svg');
+const DEBUG_BREAKPOINT_DISABLED_SVG = path.join(DEBUG_ASSETS, 'breakpoint-disabled.svg');
 
 const MARKER = '/* numas-patch: opensumi 3.6.5 漏发 variable.less 兜底 */';
 const SVG_MARKER = '<!-- numas-patch: opensumi ide-debug 漏发 breakpoint.svg 兜底 -->';

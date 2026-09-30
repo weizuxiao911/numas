@@ -25,10 +25,11 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { resolvePkg } = require('./resolve-dep');
 
-const TARGET_FILE = path.resolve(
-  __dirname,
-  '../node_modules/@opensumi/ide-extension-storage/lib/browser/storage-path.js',
+const TARGET_FILE = path.join(
+  resolvePkg('@opensumi/ide-extension-storage'),
+  'lib/browser/storage-path.js',
 );
 const MARKER = '__numasOpensumiStoragePath';
 

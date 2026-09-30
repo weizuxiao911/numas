@@ -26,10 +26,11 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { resolvePkg } = require('./resolve-dep');
 
-const TARGET_FILE = path.resolve(
-  __dirname,
-  '../node_modules/@opensumi/ide-core-browser/lib/components/layout/default-layout.js',
+const TARGET_FILE = path.join(
+  resolvePkg('@opensumi/ide-core-browser'),
+  'lib/components/layout/default-layout.js',
 );
 const MARKER = '__numasFixLayoutKeepDefault';
 

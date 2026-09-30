@@ -32,15 +32,11 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
+const { resolvePkg } = require('./resolve-dep');
 
-const FTMODEL_FILE = path.resolve(
-  __dirname,
-  '../node_modules/@opensumi/ide-file-tree-next/lib/browser/services/file-tree-model.service.js',
-);
-const FTSERVICE_FILE = path.resolve(
-  __dirname,
-  '../node_modules/@opensumi/ide-file-tree-next/lib/browser/file-tree.service.js',
-);
+const FT_PKG = resolvePkg('@opensumi/ide-file-tree-next');
+const FTMODEL_FILE = path.join(FT_PKG, 'lib/browser/services/file-tree-model.service.js');
+const FTSERVICE_FILE = path.join(FT_PKG, 'lib/browser/file-tree.service.js');
 
 const MARKER_DEFER = '__numasDeferDispose';
 const MARKER_RECOVER = '__numasRecoverRoot';

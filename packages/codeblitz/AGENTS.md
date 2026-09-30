@@ -196,3 +196,14 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   `experimental.capabilities`, 直接把 TUI 干成白屏. 现已在 `webpack.config.js` 加
   `resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }` 并删除该批 `.gen.js`.
   后续: 只生成 `.gen.ts`; 若 webpack 报 `.gen.js` not found, 检查 extensionAlias 是否被删.
+- **`bunfig.toml` 的 `linker="hoisted"` 会打断写死 `node_modules/<pkg>` 的路径** (2026-09-30):
+  bun 1.4 对 workspace 默认 isolated; 为让 Windows 上 codeblitz webpack 解析 opensumi 全套传递依赖,
+  bunfig 设 `linker="hoisted"` (扁平布局, 传递依赖提升到仓库根 `node_modules`)。副作用: 包内
+  `node_modules/@codeblitzjs|@opensumi` 不再存在, 所有写死 `../node_modules/<pkg>` 的用法失效:
+  1) `scripts/patch-*.js` 就地改第三方包源码 → 目标找不到、脚本静默跳过 (`patch-codeblitz-constant.js`
+  还 exit 1 → `bun install` 直接失败)。修复: 统一走 `scripts/resolve-dep.js` 的 `resolvePkg(pkg)`
+  逐级向上找 `node_modules/<pkg>`, 兼容两种布局。
+  2) `package.json` 的 `node node_modules/webpack-cli/bin/cli.js` 失效 (webpack-cli 提升到根)。
+  修复: 直接用 bin 名 `webpack-cli` (`bun run` 会把 `.bin` 注入 PATH)。
+  检测: 改安装布局后重装依赖, 必须确认 7 个 patch 脚本全部 applied (而非「跳过/不存在」), 且
+  `packages/codeblitz` 能 `bun run build` 通过。

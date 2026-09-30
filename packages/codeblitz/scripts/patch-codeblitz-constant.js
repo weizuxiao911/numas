@@ -21,8 +21,9 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
+const { resolvePkg } = require('./resolve-dep');
 
-const CONST_FILE = path.resolve(__dirname, '../node_modules/@codeblitzjs/ide-sumi-core/lib/common/constant.js');
+const CONST_FILE = path.join(resolvePkg('@codeblitzjs/ide-sumi-core'), 'lib/common/constant.js');
 const MARKER = '__numasWorkspaceRoot';
 
 const PATCH = `// numas patch (postinstall): WORKSPACE_ROOT 运行时取真实工作目录 (file:///workspace/x → file:///{cwd}/x)
