@@ -189,11 +189,11 @@ AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁
 ### 4.2 避坑指南
 
 - **仓库布局: numas 仓 2 个 worktree + 2 个独立仓库** (2026-09-30 拆分后): 本仓 (`weizuxiao911/numas`)
-  只有 `~/Documents/numas`=`main`、`~/Documents/numas-dev`=`dev` 两个 worktree (共享同一 `.git`).
+  有 `~/Documents/numas/main`=`main`、`~/Documents/numas/next`=`next` (numas 的 dev) 两个 worktree (共享同一 `.git`).
   原 `numas-ide/main`、`oh-my-buddy/main` 已拆为独立仓库:
   - `cloudlab-os/numas` (org 仓库, 默认分支 `main` = 原 numas-ide/main 内容)
   - `weizuxiao911/oh-my-buddy` (普通仓库, main = 原 oh-my-buddy/main 内容)
-  `main` 在独立 worktree 检出, 不能在 numas-dev 里 `git checkout main`; 跨分支操作要去对应 worktree.
+  各分支在独立 worktree 检出, 不能在 next worktree 里 `git checkout main`; 跨分支操作要去对应 worktree.
 - **`weizuxiao911/numas` 本身 = fork 自 `anomalyco/opencode`** (2026-09-30): 原 fork `weizuxiao911/opencode`
   改名为 `numas` (保留 forked-from 标识), standalone numas 仓库已删. 分支布局:
   `dev`=上游镜像 (只 ff, 永远 0 落后, 无横幅), `main`=numas 的 `main` (默认分支), `next`=numas 的 `dev`.
