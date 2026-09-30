@@ -36,7 +36,7 @@
 6. **按要求本地或部署容器验证** — 跑测试/构建镜像/起容器/抓真实流量, 不只"我觉得写对了"
 7. **测试验收通过** — 跑通预期路径 + 边界 + 错误/降级; 用户拍板"通过"才进步骤 8
 8. **总结沉淀积累** — 本次踩坑/模式/隐式偏好 → 补对应子模块 AGENTS.md 避坑 + 必要时 §3.2 长期偏好 (按 §3.1 自查铁律, 不依赖用户催)
-9. **`question` 询问是否 git 提交推送** — 列选项: 提交+双远程 / 仅提交 / 暂存 / 不 git; 用户拍板后执行; **任何上一轮的 git 认可仅单次有效, 下轮重新问** (§1.4)
+9. **`question` 询问是否 git 提交推送** — 列选项: 提交+推送 origin / 仅提交 / 暂存 / 不 git; 用户拍板后执行; **任何上一轮的 git 认可仅单次有效, 下轮重新问** (§1.4)
 10. **等待新需求** — 流程闭环, AI 不主动开新题
 11. **异常分支**: 任何步骤发现违背 §1/§2 铁律 (含用户临时要求 AI 越权做不可逆动作) → AI 必须用 `question` 提醒并等用户拍板, 不沉默执行
 
@@ -73,7 +73,7 @@
 - 改了哪些文件 (简短列表)
 - 关键改动点 (1-2 句话)
 
-选项必须包含: 提交+推送 (双远程) / 仅提交 / 暂存 / 不 git 操作 (用户拍板).
+选项必须包含: 提交+推送 (origin) / 仅提交 / 暂存 / 不 git 操作 (用户拍板).
 
 即使上一轮用户取消了 git 操作选择, 只要 AI 后续又执行了其他改动, 也必须**再次主动反馈**.
 
@@ -83,19 +83,14 @@
 > - ✅ 正解: 一轮改动收尾时, 显式调用 `question` 工具, `questions[].options` 里放 git 操作选项 (首个标 "(推荐)"), 等用户点选返回后再据此执行.
 > - 判据: 检查自己这一轮**有没有发出 `question` 工具调用**. 只输出了文字、没有工具调用 = 违规. 文档/调研类无代码改动的产出同样适用 (要不要提交文档也是 git 决策).
 
-### 1.5 Git 流程 (双远程)
+### 1.5 Git 流程 (单一 origin)
 
 任何代码改动后, AI 必须用 `question` 工具反馈改动内容 + 列出提交/推送选项, 由用户决策. AI 不自作主张 `git add` / `git commit` / `git push`.
 
-典型选项: 提交 (1 commit) / 拆 N 个 commit / 不提交; 推 gitlab / 推 github / 两个都推 / 不推; 提交信息 AI 写 / 用户给.
+典型选项: 提交 (1 commit) / 拆 N 个 commit / 不提交; 推送 origin / 不推; 提交信息 AI 写 / 用户给.
 
-**多远程仓库同步**: 本仓库配置了 2 个远程:
-- gitlab: `gitlab.grjky.com/new-app/numas`
-- github: `weizuxiao911/numas`
-
-用户拍板"推送"时, **默认两个远程仓库都要推** (gitlab + github), 除非用户明确只推某一个.
-
-推送后自检 `git push` 两个 remote 都执行, 缺一个要补.
+**单一远程 (2026-09-30 用户决策)**: `weizuxiao911/numas` (本地 remote `origin`, 本身是 `anomalyco/opencode` 的 fork).
+用户拍板"推送"时只推 `origin`. (原 gitlab / cloudlab-dev 双远程已弃用.)
 
 > **关键**: 用户对 git 的提示/认可**仅单次有效**. 下一次改动后必须重新提问.
 
@@ -196,18 +191,17 @@ AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁
 - **仓库布局: numas 仓 2 个 worktree + 2 个独立仓库** (2026-09-30 拆分后): 本仓 (`weizuxiao911/numas`)
   只有 `~/Documents/numas`=`main`、`~/Documents/numas-dev`=`dev` 两个 worktree (共享同一 `.git`).
   原 `numas-ide/main`、`oh-my-buddy/main` 已拆为独立仓库:
-  - `cloudlab-os/numas` (org 仓库, 默认分支 `main` = 原 numas-ide/main 内容; 本地 remote `deploy` 指向它)
-  - `weizuxiao911/oh-my-buddy` (普通仓库, main = 原 oh-my-buddy/main 内容; 本地 remote `ohmybuddy`)
+  - `cloudlab-os/numas` (org 仓库, 默认分支 `main` = 原 numas-ide/main 内容)
+  - `weizuxiao911/oh-my-buddy` (普通仓库, main = 原 oh-my-buddy/main 内容)
   `main` 在独立 worktree 检出, 不能在 numas-dev 里 `git checkout main`; 跨分支操作要去对应 worktree.
-- **GitHub fork `weizuxiao911/opencode` 用作根仓库** (2026-09-30): 它是 `anomalyco/opencode` 的真 fork
-  (带 forked-from 标识), 与独立仓库 `weizuxiao911/numas` 并存. 分支布局:
-  `dev`=上游镜像 (只 ff, 永远 0 落后, 无横幅), `main`=numas 的 `main` (默认分支), `next`=numas 的 `dev`,
-  `numas-ide/main` / `oh-my-buddy/main`=对应 numas 分支. 维护:
-  - 同步上游: `git fetch upstream && git push -f myfork upstream/dev:dev`
-  - 推产品: numas `main`→fork `main`; numas `dev`→fork `next`
-  - **不要把 numas 无关历史推回 fork 的 `dev`** (会造成“落后 1w+”横幅; numas 历史是重建的, 与上游无共同祖先).
-  - 本地 remote: `myfork` = `github.com/weizuxiao911/opencode`.
-- **main = dev (同步稳定分支) 用 reset + force-push** (2026-09-23): `main` 是旧布局 (`opencode/packages/...`), `dev` 是新布局 (`packages/...`), 差异巨大 → 合并会残留/冲突. 严格同步: 去 main worktree `git reset --hard dev` → force-push 双远程.
-- **GitLab `main` 是受保护分支, force-push 报 `pre-receive hook declined`** (2026-09-23): GitLab 默认禁止对受保护分支强推. 重写 main 前需先到 GitLab → Settings → Repository → Protected branches 解除保护, 推完可再保护. (GitHub 侧无此限制)
+- **`weizuxiao911/numas` 本身 = fork 自 `anomalyco/opencode`** (2026-09-30): 原 fork `weizuxiao911/opencode`
+  改名为 `numas` (保留 forked-from 标识), standalone numas 仓库已删. 分支布局:
+  `dev`=上游镜像 (只 ff, 永远 0 落后, 无横幅), `main`=numas 的 `main` (默认分支), `next`=numas 的 `dev`.
+  维护:
+  - 同步上游: GitHub 页面 **Sync fork** 更新 `origin/dev` (或临时 `git remote add upstream https://github.com/anomalyco/opencode.git && git fetch upstream && git push -f origin upstream/dev:dev`, 用完删掉)
+  - 推产品: numas `main`→`origin main`; numas `dev`→`origin next`
+  - **不要把 numas 无关历史推回 `dev`** (会造成“落后 1w+”横幅; numas 历史是重建的, 与上游无共同祖先).
+  - 本地 remote `origin` = `github.com/weizuxiao911/numas` (唯一远程; gitlab/cloudlab-dev/deploy/ohmybuddy/upstream 均已移除).
+- **main = dev (同步稳定分支) 用 reset + force-push** (2026-09-30 更新): 严格同步去 main worktree `git merge --ff-only dev` (main 是 dev 祖先时) 或 `git reset --hard dev` → `git push origin main`.
 - 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动 (如 AGENTS.md / packages/tauri/version.json), 不要默认全量 `git add -A`; 用 `question` 让用户拍板纳入范围与拆分方式.
 - **反复挂载 DMG / 跑 debug 构建会在 LaunchServices 累积 numas.app 注册** (指向已删除路径), 导致 `numas://` 报「找不到该文件」. 清理: `lsregister -dump | grep -E '^path:.*numas\.app'` 收集路径后逐条 `lsregister -u <path>` (2026-09-20 实测清了 39 条残留). (托盘/无 Dock 细节见 `packages/tauri/AGENTS.md`)
