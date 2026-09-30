@@ -11,12 +11,18 @@
 // 目录契约与工程 registry/vsix 同构; 每次请求校验目录签名 (mtime/size),
 // 新增 .vsix 自动入 metadata (动态添加), 无需重启.
 // metadata uri 不带 authority (kt-ext:///<id>), 前端分流到 registryBaseUrl.
+//
+// 日志: 默认静默 (TUI 内嵌 server 里 stdout 会冲掉画面); 排查用 NUMAS_EXTENSIONS_DEBUG=1.
 
 import { Effect } from "effect"
 import AdmZip from "adm-zip"
 import fs from "node:fs"
 import path from "node:path"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+
+function extensionsDebug(...args: unknown[]): void {
+  if (process.env.NUMAS_EXTENSIONS_DEBUG === "1") console.log(...args)
+}
 
 const PICK_FIELDS = [
   "name",
@@ -96,12 +102,12 @@ function createIndex(vsixDir: string): Index {
       const zip = new AdmZip(file)
       const pkgEntry = zip.getEntry("extension/package.json")
       if (!pkgEntry) {
-        console.warn(`[extensions] skip ${file}: no extension/package.json`)
+        extensionsDebug(`[extensions] skip ${file}: no extension/package.json`)
         return
       }
       const pkg = JSON.parse(pkgEntry.getData().toString("utf-8")) as Record<string, unknown>
       if (!pkg.name || !pkg.publisher || !pkg.version) {
-        console.warn(`[extensions] skip ${file}: missing name/publisher/version`)
+        extensionsDebug(`[extensions] skip ${file}: missing name/publisher/version`)
         return
       }
       const id = `${pkg.publisher}.${pkg.name}-${pkg.version}`
@@ -120,9 +126,9 @@ function createIndex(vsixDir: string): Index {
         uri: `kt-ext:///${id}`,
       })
       zips.set(id, zip)
-      console.log(`[extensions] loaded ${id} <- ${file}`)
+      extensionsDebug(`[extensions] loaded ${id} <- ${file}`)
     } catch (e) {
-      console.warn(`[extensions] skip ${file}:`, e instanceof Error ? e.message : String(e))
+      extensionsDebug(`[extensions] skip ${file}:`, e instanceof Error ? e.message : String(e))
     }
   }
 

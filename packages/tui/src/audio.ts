@@ -1,4 +1,5 @@
 import { Audio, type AudioErrorContext, type AudioPlayOptions, type AudioSound, type AudioVoice } from "@opentui/core"
+import { tuiLog } from "./util/log"
 import { readFile } from "node:fs/promises"
 
 let audio: Audio | null | undefined
@@ -9,12 +10,12 @@ function getAudio() {
   try {
     const next = Audio.create({ autoStart: false })
     next.on("error", (error: Error, context: AudioErrorContext) => {
-      console.debug("tui audio error", { error, context })
+      tuiLog.debug("tui audio error", { error, context })
     })
     audio = next
     return next
   } catch (error) {
-    console.debug("failed to create tui audio", { error })
+    tuiLog.debug("failed to create tui audio", { error })
     audio = null
     return null
   }
@@ -28,7 +29,7 @@ export function loadSoundFile(file: string) {
   const task = readFile(file)
     .then((bytes) => current.loadSound(bytes))
     .catch((error) => {
-      console.debug("failed to load tui sound", { file, error })
+      tuiLog.debug("failed to load tui sound", { file, error })
       return null
     })
   sounds.set(file, task)

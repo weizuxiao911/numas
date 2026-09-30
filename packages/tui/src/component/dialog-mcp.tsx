@@ -1,4 +1,5 @@
 import { createMemo, createSignal } from "solid-js"
+import { tuiLog } from "../util/log"
 import { useLocal } from "../context/local"
 import { useSync } from "../context/sync"
 import { map, pipe, entries, sortBy } from "remeda"
@@ -60,10 +61,10 @@ export function DialogMcp() {
           if (status.data) {
             sync.set("mcp", status.data)
           } else {
-            console.error("Failed to refresh MCP status: no data returned")
+            tuiLog.error("Failed to refresh MCP status: no data returned")
           }
         } catch (error) {
-          console.error("Failed to toggle MCP:", error)
+          tuiLog.error("Failed to toggle MCP:", error)
         } finally {
           setLoading(null)
         }

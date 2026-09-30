@@ -1,4 +1,5 @@
 import { createSignal, type Setter } from "solid-js"
+import { tuiLog } from "../util/log"
 import { createStore, unwrap } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { Flock } from "@opencode-ai/core/util/flock"
@@ -24,7 +25,7 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
         setStore(x)
       })
       .catch((error) => {
-        console.error("Failed to read KV state", { error })
+        tuiLog.error("Failed to read KV state", { error })
       })
       .finally(() => {
         setReady(true)
@@ -57,7 +58,7 @@ export const { use: useKV, provider: KVProvider } = createSimpleContext({
         write = write
           .then(() => Flock.withLock(lock, () => writeJsonAtomic(file, snapshot)))
           .catch((error) => {
-            console.error("Failed to write KV state", { error })
+            tuiLog.error("Failed to write KV state", { error })
           })
       },
     }

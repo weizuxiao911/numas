@@ -16,6 +16,7 @@ import { fileURLToPath } from "url"
 import { TuiConfig } from "@/config/tui"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { errorData, errorMessage } from "@opencode-ai/tui/util/error"
+import { tuiLog } from "@opencode-ai/tui/util/log"
 import { isRecord } from "@opencode-ai/tui/util/record"
 import { resolveHostAttentionSoundPaths } from "@/config/tui-host-attention"
 import {
@@ -127,17 +128,17 @@ const EMPTY_TUI: TuiPluginModule = {
 
 function fail(message: string, data: Record<string, unknown>) {
   if (!("error" in data)) {
-    console.error(`[tui.plugin] ${message}`, data)
+    tuiLog.error(`[tui.plugin] ${message}`, data)
     return
   }
 
   const text = `${message}: ${errorMessage(data.error)}`
   const next = { ...data, error: errorData(data.error) }
-  console.error(`[tui.plugin] ${text}`, next)
+  tuiLog.error(`[tui.plugin] ${text}`, next)
 }
 
 function warn(message: string, data: Record<string, unknown>) {
-  console.warn(`[tui.plugin] ${message}`, data)
+  tuiLog.warn(`[tui.plugin] ${message}`, data)
 }
 
 function createScopedKeymap(keymap: TuiPluginApi["keymap"], scope: PluginScope): TuiPluginApi["keymap"] {

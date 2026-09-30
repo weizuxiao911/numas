@@ -1,4 +1,5 @@
 import type { TuiPluginApi, TuiSlotContext, TuiSlotMap, TuiSlotProps } from "@opencode-ai/plugin/tui"
+import { tuiLog } from "../util/log"
 import { createSlot, createSolidSlotRegistry, type JSX, type SolidPlugin } from "@opentui/solid"
 import { createSignal } from "solid-js"
 import { isRecord } from "../util/record"
@@ -35,7 +36,7 @@ export function createSlots() {
         { theme: api.theme },
         {
           onPluginError(event) {
-            console.error("[tui.slot] plugin error", {
+            tuiLog.error("[tui.slot] plugin error", {
               plugin: event.pluginId,
               slot: event.slot,
               phase: event.phase,

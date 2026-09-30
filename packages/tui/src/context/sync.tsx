@@ -21,6 +21,7 @@ import type {
   ConsoleState,
 } from "@opencode-ai/sdk/v2"
 import { createStore, produce, reconcile } from "solid-js/store"
+import { tuiLog } from "../util/log"
 import { useProject } from "./project"
 import { useEvent } from "./event"
 import { useSDK } from "./sdk"
@@ -538,7 +539,7 @@ export const {
           })
         })
         .catch(async (e) => {
-          console.error("tui bootstrap failed", {
+          tuiLog.error("tui bootstrap failed", {
             error: e instanceof Error ? e.message : String(e),
             name: e instanceof Error ? e.name : undefined,
             stack: e instanceof Error ? e.stack : undefined,

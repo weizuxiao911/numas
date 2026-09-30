@@ -1,4 +1,5 @@
 import { render, TimeToFirstDraw, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { tuiLog } from "./util/log"
 import { registerOpencodeSpinner } from "./component/register-spinner"
 import { createDefaultOpenTuiKeymap } from "@opentui/keymap/opentui"
 import { Deferred, Effect } from "effect"
@@ -223,7 +224,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
           try {
             await input.pluginHost.dispose()
           } catch (error) {
-            console.error("Failed to dispose TUI plugins", error)
+            tuiLog.error("Failed to dispose TUI plugins", error)
           }
         }),
       )
@@ -416,7 +417,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       dispose: () => attention.dispose(),
     })
     .catch((error) => {
-      console.error("Failed to load TUI plugins", error)
+      tuiLog.error("Failed to load TUI plugins", error)
     })
     .finally(() => {
       setReady(true)
@@ -1032,7 +1033,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   })
 
   event.on("installation.update-available", async (evt) => {
-    console.log("installation.update-available", evt)
+    tuiLog.info("installation.update-available", evt)
     const version = evt.properties.version
 
     const skipped = kv.get("skipped_version")

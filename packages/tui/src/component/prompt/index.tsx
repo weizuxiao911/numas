@@ -11,6 +11,7 @@ import {
 import type { CommandContext } from "@opentui/keymap"
 import { createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match } from "solid-js"
 import { registerOpencodeSpinner } from "../register-spinner"
+import { tuiLog } from "../../util/log"
 import path from "path"
 import { fileURLToPath } from "url"
 import { useLocal } from "../../context/local"
@@ -1010,7 +1011,7 @@ export function Prompt(props: PromptProps) {
 
       if (res.error) {
         if (finishMoveProgress) move.finishSubmit()
-        console.log("Creating a session failed:", res.error)
+        tuiLog.info("Creating a session failed:", res.error)
 
         toast.show({
           message: "Creating a session failed. Open console for more details.",
