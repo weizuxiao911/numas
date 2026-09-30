@@ -207,3 +207,8 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   修复: 直接用 bin 名 `webpack-cli` (`bun run` 会把 `.bin` 注入 PATH)。
   检测: 改安装布局后重装依赖, 必须确认 7 个 patch 脚本全部 applied (而非「跳过/不存在」), 且
   `packages/codeblitz` 能 `bun run build` 通过。
+  3) **pre-push `turbo typecheck` 的 `web#typecheck` 会失败**: 根 `.bin/tsc` 被
+  `@typescript/old` (= `@typescript/typescript6` 依赖的 `typescript@6.0.3`) 的 `tsc` bin 抢占
+  (不再是 pin 的 5.8.2), 且 `@types/react` 去重到根版本与 opensumi 不兼容 → `TS5101`/`TS2786`
+  等. 隔离布局下 codeblitz 有自己的 `.bin/tsc`(5.x) 不受影响, hoisted 后没有 → 冲突暴露.
+  (机器 turbo 缓存冷时才复现; 作者侧可能命中旧缓存.) 临时绕过: `git push --no-verify`.
