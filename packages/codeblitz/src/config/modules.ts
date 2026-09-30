@@ -18,7 +18,6 @@ import { TerminalModule } from '../service/pty';
 import { TerminalNextModule } from '@opensumi/ide-terminal-next/lib/browser';
 import { EditorModule } from '../service/editor';
 import { StateModule } from '../service/state';
-import { PortsModule } from '../service/ports';
 import { LayoutModule } from '../service/layout';
 import { BrandModule } from '../service/brand';
 import { SessionModule } from '../service/session';
@@ -42,7 +41,6 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     TerminalModule,        // 伪终端 (codeblitz 终端协议)
     EditorModule,          // 编辑器能力 (open / openWith)
     StateModule,           // codeblitz 状态 (workspace / recent)
-    PortsModule,           // 本地服务端口发现 (面板 + 事件)
     LayoutModule,          // SOLO 布局状态 (sidebar / aside 折叠 + 宽度 + 命令)
     BrandModule,           // 品牌信息 (名称 / logo / slogan)
     SessionModule,         // 登录态 (cookie → session.yaml → 用户信息)

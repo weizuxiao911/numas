@@ -75,7 +75,6 @@ function embeddedUIResponse(
   body: Uint8Array,
   registry?: string,
   acceptEncoding?: string,
-  domainProxy?: string,
 ) {
   const mime = FSUtil.mimeType(file)
   const headers = new Headers({ "content-type": mime })
@@ -87,8 +86,7 @@ function embeddedUIResponse(
     // 注入运行时配置: sumi 前端读 window.__APP_CONFIG__
     //   - registryBaseUrl: 兼容字段 (--registry 或内置 /extensions)
     //   - registryBaseUrls: 全部 vsix 市场地址数组 — 内置 /extensions 恒有, --registry 外部若配则追加 (去重)
-    //   - domainProxy: 子域端口代理域名 (--domain-proxy); proxyUrl 据此拼 http://<port>.<domain>/
-    if (registry || domainProxy) {
+    if (registry) {
       const registryBaseUrls = ["/extensions"]
       if (registry && registry !== "/extensions" && !registryBaseUrls.includes(registry)) {
         registryBaseUrls.push(registry)
@@ -96,7 +94,6 @@ function embeddedUIResponse(
       const config = {
         ...(registry ? { registryBaseUrl: registry } : {}),
         registryBaseUrls,
-        ...(domainProxy ? { domainProxy } : {}),
       }
       const script = `<script>window.__APP_CONFIG__ = Object.assign({}, window.__APP_CONFIG__, ${JSON.stringify(config)});</script>`
       data = new TextEncoder().encode(html.replace("</body>", script + "</body>"))
@@ -132,7 +129,6 @@ function serveDiskUI(
   webRoot: string,
   registry?: string,
   acceptEncoding?: string,
-  domainProxy?: string,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse | undefined, never, never> {
   const rootReal = FSUtil.resolve(webRoot)
   const rel = decodeURIComponent(requestPath.replace(/^\//, "")).replaceAll("\\", "/")
@@ -142,7 +138,7 @@ function serveDiskUI(
     const abs = pathResolve(rootReal, name)
     if (!FSUtil.contains(rootReal, abs)) return Effect.succeed(undefined)
     return fs.readFile(abs).pipe(
-      Effect.map((content) => embeddedUIResponse(abs, content, registry, acceptEncoding, domainProxy)),
+      Effect.map((content) => embeddedUIResponse(abs, content, registry, acceptEncoding)),
       Effect.catch(() => Effect.succeed(undefined as HttpServerResponse.HttpServerResponse | undefined)),
     )
   }
@@ -160,13 +156,12 @@ export function serveEmbeddedUIEffect(
   embeddedWebUI: Record<string, string>,
   registry?: string,
   acceptEncoding?: string,
-  domainProxy?: string,
 ) {
   const file = embeddedWebUI[requestPath.replace(/^\//, "")] ?? embeddedWebUI["index.html"] ?? null
   if (!file) return Effect.succeed(notFound())
 
   return fs.readFile(file).pipe(
-    Effect.map((body) => embeddedUIResponse(file, body, registry, acceptEncoding, domainProxy)),
+    Effect.map((body) => embeddedUIResponse(file, body, registry, acceptEncoding)),
     Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(notFound())),
   )
 }
@@ -183,26 +178,22 @@ export function serveUIEffect(
     /** registry 地址 (--registry 启动参数透传): 注入前端 __APP_CONFIG__.registryBaseUrl.
      *  绕开 context Reference 注入 (Effect v4 beta 无 Layer.provideService), 参数直传. */
     registry?: string
-    /** 子域端口代理域名 (--domain-proxy 启动参数透传): 注入前端 __APP_CONFIG__.domainProxy.
-     *  sumi 端口面板/内置浏览器据此拼 http://<port>.<domain>/ (未配置走 /proxy/<port>/). */
-    domainProxy?: string
   },
 ) {
   return Effect.gen(function* () {
     const registry = services.registry
-    const domainProxy = services.domainProxy
     const path = new URL(request.url, "http://localhost").pathname
     const acceptEncoding = request.headers["accept-encoding"]
 
     // --web-ui 磁盘目录优先: 每次请求实时读盘
     if (services.webUIRoot) {
-      const disk = yield* serveDiskUI(path, services.fs, services.webUIRoot, registry, acceptEncoding, domainProxy)
+      const disk = yield* serveDiskUI(path, services.fs, services.webUIRoot, registry, acceptEncoding)
       if (disk) return disk
     }
 
     const embeddedWebUI = yield* Effect.promise(() => embeddedUI(services.disableEmbeddedWebUi))
     if (embeddedWebUI)
-      return yield* serveEmbeddedUIEffect(path, services.fs, embeddedWebUI, registry, acceptEncoding, domainProxy)
+      return yield* serveEmbeddedUIEffect(path, services.fs, embeddedWebUI, registry, acceptEncoding)
 
     const response = yield* services.client.execute(
       HttpClientRequest.make(request.method)(upstreamURL(path), {

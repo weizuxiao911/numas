@@ -38,8 +38,6 @@ type ListenOptions = CorsOptions & {
   webUI?: string
   /** vsix 扩展市场目录 (内置 /extensions 控制器扫描; 缺省不扫 → 空市场) */
   extensionsDir?: string
-  /** 子域端口代理: 已知端口 P 暴露为 http://P.<domain>/ (见 ports-domain-proxy.ts) */
-  domainProxy?: string
 }
 type ListenerState = {
   scope: Scope.Scope
@@ -105,7 +103,7 @@ const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unkno
 
 function listenerLayer(opts: ListenOptions, port: number) {
   return HttpRouter.serve(
-    HttpApiApp.createRoutes(opts, opts.webUI, opts.registry, opts.extensionsDir, opts.domainProxy),
+    HttpApiApp.createRoutes(opts, opts.webUI, opts.registry, opts.extensionsDir),
     {
       middleware: disposeMiddleware,
       disableLogger: true,

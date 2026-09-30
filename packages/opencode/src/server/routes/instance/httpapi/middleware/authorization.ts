@@ -70,7 +70,7 @@ function decodeCredential(input: string) {
   )
 }
 
-/** 供全局中间件 (domain-proxy) 复用: 从请求解析 Basic / auth_token 凭据 */
+/** 供全局中间件复用: 从请求解析 Basic / auth_token 凭据 */
 export function credentialFromRequest(request: HttpServerRequest.HttpServerRequest) {
   return credentialFromURL(new URL(request.url, "http://localhost"), request)
 }

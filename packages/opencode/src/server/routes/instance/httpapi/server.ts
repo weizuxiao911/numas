@@ -82,8 +82,6 @@ import {
 } from "./middleware/authorization"
 import { EventApi } from "./groups/event"
 import { PtyConnectApi } from "./groups/pty"
-import { PortsService } from "@/ports/ports"
-import { portsRoute } from "@/ports/ports-route"
 import { eventHandlers } from "./handlers/event"
 import { configHandlers } from "./handlers/config"
 import { controlHandlers } from "./handlers/control"
@@ -200,10 +198,7 @@ const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effe
   Layer.provide(authOnlyRouterLayer),
 )
 
-const numasPortsRoute = (domainProxy?: string) =>
-  portsRoute(domainProxy).pipe(Layer.provide(authOnlyRouterLayer), Layer.provide(ServerAuth.Config.layer))
-
-const uiRoute = (webUIRoot?: string, registry?: string, domainProxy?: string) =>
+const uiRoute = (webUIRoot?: string, registry?: string) =>
   HttpRouter.use((router) =>
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -216,7 +211,6 @@ const uiRoute = (webUIRoot?: string, registry?: string, domainProxy?: string) =>
           disableEmbeddedWebUi: flags.disableEmbeddedWebUi,
           webUIRoot,
           registry,
-          domainProxy,
         }),
       )
     }),
@@ -286,7 +280,6 @@ const app = LayerNode.group([
   ProjectV2.node,
   ProjectCopy.node,
   PtyTicket.node,
-  PortsService.node,
 ])
 
 export function createRoutes(
@@ -294,7 +287,6 @@ export function createRoutes(
   webUIRoot?: string,
   registry?: string,
   extensionsDir?: string,
-  domainProxy?: string,
 ): Layer.Layer<never, EffectConfig.ConfigError, RouteRequirements> {
   const locationServiceMapV2 = buildLocationServiceMap(
     [],
@@ -308,9 +300,8 @@ export function createRoutes(
     instanceRoutes,
     serverRoutes,
     docRoute,
-    numasPortsRoute(domainProxy),
     extensionsRoute(extensionsDir),
-    uiRoute(webUIRoot, registry, domainProxy),
+    uiRoute(webUIRoot, registry),
   ).pipe(
     Layer.provide([
       errorLayer,

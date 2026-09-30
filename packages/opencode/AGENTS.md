@@ -208,10 +208,18 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   本次删 `packages/desktop-tauri` 后 `test/launch.html` 仍有安装说明残留.
 - 提交前先看工作区全貌: `git status` 可能混有上一轮遗留的未提交改动, 不要默认全量 `git add -A`;
   用 `question` 让用户拍板纳入范围与拆分方式.
-- **服务层别 `console.log`** (2026-09-23): TUI 内嵌 server 会构建实例层服务 (如 `ports/ports.ts` 的
-  `setInterval` 周期 scan), 服务里直接 `console.log` 会持续往 stdout 刷屏、冲掉 TUI 画面 (现象:
-  运行 `numas` 只见一堆日志、无 TUI). 调试日志默认静默 + env 开关 (如 `NUMAS_PORTS_DEBUG=1`),
-  或走文件 logger; 不要裸 `console.log`.
+- **服务层别 `console.log`** (2026-09-23): TUI 内嵌 server 会构建实例层服务 (如已删除的 `ports/ports.ts`
+  曾有的 `setInterval` 周期 scan), 服务里直接 `console.log` 会持续往 stdout 刷屏、冲掉 TUI 画面 (现象:
+  运行 `numas` 只见一堆日志、无 TUI). 调试日志默认静默 + env 开关, 或走文件 logger; 不要裸 `console.log`.
+- **TUI 内嵌 server 里任何 `console.*` 都会冲掉画面** (2026-09-30): `packages/tui/src` 全部裸
+  `console.*` 已改走文件 logger `@opencode-ai/tui/util/log` 的 `tuiLog` (写
+  `~/.local/share/opencode/log/tui.log`, 绝不碰 stdout/stderr); `server/extensions-route.ts`
+  日志改 `NUMAS_EXTENSIONS_DEBUG=1` 门控; `acp/profile.ts` 自带 `OPENCODE_ACP_PROFILE=1` 门控.
+  改 TUI/server 代码日志一律走上述, 禁止裸 `console.*`.
+- **端口发现/代理功能已整体删除** (2026-09-30, 用户决策): 不再实现端口代理. 已删: `src/ports/`
+  (PortsService 扫描/白名单/事件 + `/ports` `/proxy/:port` 路由 + `--domain-proxy` 子域代理),
+  pty/shell 的 `registerPid`/`registerWorkspace`, codeblitz 的 `service/ports`(PortsModule) 与
+  `__APP_CONFIG__.domainProxy`. 别再引入端口面板/反代; 如需本地服务, 直接用其端口地址.
 - **构建 `packages/opencode` 需联网拉 models.dev** (`script/generate.ts`): 代理下 TLS 校验失败会中断
   build. 解法: 用本地快照 `MODELS_DEV_API_JSON=<api.json路径> bun run build ...` (快照可从
   `~/.cache/opencode/models.json` 取). 另: `--skip-install` 防 `bun run build` 改写 `bun.lock`.

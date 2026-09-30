@@ -18,7 +18,7 @@ import { absToRel } from '../../infra/path';
 function registryBaseUrl(): string {
   let base = ((window as any).__APP_CONFIG__?.registryBaseUrl || '').trim();
   if (!base) return '';
-  // 相对路径 (如 /proxy/7790, 经 opencode 同源反代到容器内 registry) → 归一化为同源绝对 URL:
+  // 相对路径 (如同源反代的 /registry) → 归一化为同源绝对 URL:
   // 下游 new URL(base) / 静态资源拼接都需要绝对形态; 绝对 URL (dev 直连 127.0.0.1:7790) 原样保留
   if (base.startsWith('/')) {
     try { base = new URL(base, window.location.origin).toString(); }
