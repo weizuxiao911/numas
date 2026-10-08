@@ -12,7 +12,7 @@ Numas is a locally-run AI workbench for coding and everyday tasks, made of three
 - **codeblitz IDE** — the browser workbench (editor / terminal / extension market)
 - **Desktop shell** — a macOS app (lives in the tray, hosts the local server)
 
-Runs locally by default — your files and data stay on your machine. It also supports split deployment (UI in the cloud, connecting directly to the numas running on the visitor's own machine).
+Runs locally by default — your files and data stay on your machine.
 
 ---
 
@@ -48,18 +48,6 @@ cd packages/tauri    && bun run build            # package the desktop shell (sy
 ```
 
 See [`packages/tauri/README.md`](packages/tauri/README.md) for details.
-
-### Split deployment (UI in the cloud)
-
-Serve the UI as static files while it connects directly to the **visitor's own** numas:
-
-```bash
-cd packages/codeblitz && npm run build:site      # output in packages/codeblitz/site/
-```
-
-- Put `site/` on nginx at the **domain root** with SPA fallback `try_files $uri /index.html;`
-- The page connects to the visitor's local numas via the build-time `APP_BASE_URL` (default `http://127.0.0.1:24096`)
-- The local numas must be running and allow cross-origin (`numas` / `numas serve` default to `--cors *`, and handle the Chrome Private Network Access preflight)
 
 ---
 

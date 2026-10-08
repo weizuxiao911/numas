@@ -216,13 +216,11 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   `~/.local/share/opencode/log/tui.log`, 绝不碰 stdout/stderr); `server/extensions-route.ts`
   日志改 `NUMAS_EXTENSIONS_DEBUG=1` 门控; `acp/profile.ts` 自带 `OPENCODE_ACP_PROFILE=1` 门控.
   改 TUI/server 代码日志一律走上述, 禁止裸 `console.*`.
-- **远端静态托管 codeblitz 直连本机 24096 需要 PNA 预检头** (2026-09-30): 前后端分离部署
-  (`packages/codeblitz` `npm run build:site` → `site/`, 编译期 `APP_BASE_URL=http://127.0.0.1:24096`)
-  时, 公共 https 页面访问本机环回地址会被 Chrome **Private/Local Network Access** 拦截: 预检需回
-  `Access-Control-Allow-Private-Network: true`. 已在 `httpapi/middleware/cors-vary.ts` 加
-  `corsPrivateNetwork` (对带 CORS 头的响应补该头) 并在 `httpapi/server.ts` 注册. 经典 mixed-content
-  对 `http://127.0.0.1`/`localhost` 有 loopback 豁免, 不是问题. ⚠️ 已知限制: WebSocket (pty)
-  不走 CORS 预检, 新版 Chrome 的 LNA 仍可能要求本地网络权限; 拿不到 PNA 授权的浏览器可能 WS 失败.
+- **历史: 远端静态托管 codeblitz 直连本机 24096 需要 PNA 预检头** (2026-09-30; 前后端分离
+  独立部署 `build:site` 已随开源贡献工作台定制移除, 该避坑留档): 公共 https 页面访问本机环回地址
+  会被 Chrome **Private/Local Network Access** 拦截, 预检需回 `Access-Control-Allow-Private-Network: true`.
+  `httpapi/middleware/cors-vary.ts` 的 `corsPrivateNetwork` 与 `httpapi/server.ts` 注册**仍在**.
+  ⚠️ 已知限制: WebSocket (pty) 不走 CORS 预检, 新版 Chrome 的 LNA 仍可能要求本地网络权限.
 - **端口发现/代理功能已整体删除** (2026-09-30, 用户决策): 不再实现端口代理. 已删: `src/ports/`
   (PortsService 扫描/白名单/事件 + `/ports` `/proxy/:port` 路由 + `--domain-proxy` 子域代理),
   pty/shell 的 `registerPid`/`registerWorkspace`, codeblitz 的 `service/ports`(PortsModule) 与

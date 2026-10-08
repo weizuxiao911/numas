@@ -6,8 +6,7 @@ import '@codeblitzjs/ide-core/bundle/codeblitz.css';
 import '@codeblitzjs/ide-core/languages';
 
 import { getBuiltinModules } from './config/modules';
-import { appBaseUrl, getWorkdir, isBootReady, resolveBoot, setWorkdir } from './infra/url';
-import { isWorkdirLinkedToRepo } from './infra/repo';
+import { appBaseUrl, isBootReady, resolveBoot } from './infra/url';
 import { preferences } from './config/preferences';
 import { getPreloadedMetadata, preloadExtensionMetadata } from './service/extension';
 import type { ExtensionMetadata } from './service/extension';
@@ -36,22 +35,7 @@ export type AppMode = 'solo' | 'ide';
 /** 模式持久化 key: 模式切换按钮会 reload 页面重建 ClientApp (layoutComponent 只在 createApp
  *  时消费一次, 运行时不换布局), 必须持久化否则 reload 后回落 solo. */
 const APP_MODE_STORAGE_KEY = 'NUMAS_MODE';
-/** 任务源入口: URL 携带 `?repo=` (远程 git 仓库地址) → 强制 IDE 模式并持久化.
- *  参数保留在 URL (供 AI 工作台后续读取 issue/项目信息), 不做一次性清理;
- *  手动切换按钮不受影响 (不锁). */
-function urlRepoMode(): AppMode | null {
-  try {
-    return new URL(window.location.href).searchParams.get('repo') ? 'ide' : null;
-  } catch {
-    return null;
-  }
-}
 function readStoredAppMode(): AppMode {
-  const forced = urlRepoMode();
-  if (forced) {
-    try { window.localStorage.setItem(APP_MODE_STORAGE_KEY, forced); } catch { /* localStorage 不可用忽略 */ }
-    return forced;
-  }
   try { return window.localStorage.getItem(APP_MODE_STORAGE_KEY) === 'ide' ? 'ide' : 'solo'; } catch { return 'solo'; }
 }
 let _appMode: AppMode = readStoredAppMode();
@@ -145,22 +129,6 @@ export const App: React.FC = () => {
     if (wsReady) return;
     let alive = true;
     void resolveBoot().then(() => { if (alive) setWsReady(true); });
-    return () => { alive = false; };
-  }, [wsReady]);
-
-  // 节点 1 前置校验 (2026-09-21): URL 携带 ?repo= 时, 若已选项目且与 repo 不关联
-  // (宽松口径: 项目 git remote 无一个归一化等于 repo), 重置回未选择项目状态,
-  // 避免旧项目干扰针对该 repo 的任务流程.
-  React.useEffect(() => {
-    if (!wsReady) return;
-    let alive = true;
-    void (async () => {
-      const repo = new URL(window.location.href).searchParams.get('repo');
-      if (!repo || !getWorkdir()) return; // 无 repo 或无项目 → 不处理
-      const linked = await isWorkdirLinkedToRepo(repo);
-      if (!alive) return;
-      if (!linked) setWorkdir(''); // 重置回未选择项目 (触发 workdir:changed → UI 空态)
-    })();
     return () => { alive = false; };
   }, [wsReady]);
 

@@ -41,52 +41,6 @@
   border-radius: 0px !important;
 }
 
-/* CodeBlitz 默认 landing/welcome 页面 (CodeBlitz logo + "打开命令面板") 隐藏内部内容;
-   class 名带 hash (emptyContainer___f0k_Y), 用前缀匹配抗 hash 变动.
-   自定义 WelcomeView 通过 welcome://home 打开后会占据编辑区, 不受影响 */
-[class^="emptyContainer___"],
-[class*=" emptyContainer___"] {
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  background: transparent !important;
-}
-[class^="emptyContainer___"] > *,
-[class*=" emptyContainer___"] > * {
-  display: none !important;
-}
-/* 无文件 / 无 welcome 时, 空编辑器背景显示艺术化主题 */
-[class^="emptyContainer___"]::before,
-[class*=" emptyContainer___"]::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 60% 50% at 50% 45%, color-mix(in srgb, var(--button-background, #2563eb) 12%, transparent) 0%, transparent 70%);
-  pointer-events: none;
-}
-[class^="emptyContainer___"]::after,
-[class*=" emptyContainer___"]::after {
-  content: '';
-  position: relative;
-  z-index: 1;
-  font-size: clamp(42px, 6vw, 78px);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--editor-foreground, #e5e7eb) 95%, white) 0%,
-    color-mix(in srgb, var(--button-background, #2563eb) 80%, var(--editor-foreground, #e5e7eb)) 50%,
-    color-mix(in srgb, var(--editor-foreground, #e5e7eb) 70%, var(--button-background, #2563eb)) 100%
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 60px color-mix(in srgb, var(--button-background, #2563eb) 20%, transparent);
-  pointer-events: none;
-  user-select: none;
-}
-
 /* 编辑器 active/inactive tab 清圆角 */
 [class*="design-editor_tab_block_container"] {
   border-radius: 0 !important;

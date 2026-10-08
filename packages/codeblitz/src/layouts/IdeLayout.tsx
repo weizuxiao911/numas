@@ -16,8 +16,7 @@ import React from 'react';
 // import { createPortal } from 'react-dom'; // WorkBuddy 功能已整体注释, 恢复时一并取消注释
 import { SlotLocation, SlotRenderer } from '@opensumi/ide-core-browser';
 import { BoxPanel, SplitPanel } from '@opensumi/ide-core-browser/lib/components';
-import { CommandService, URI } from '@opensumi/ide-core-common';
-import { WorkbenchEditorService } from '@opensumi/ide-editor';
+import { CommandService } from '@opensumi/ide-core-common';
 import { useInjectable } from '@opensumi/ide-core-browser/lib/react-hooks/injectable-hooks';
 import { IMainLayoutService } from '@opensumi/ide-main-layout/lib/common';
 
@@ -58,17 +57,6 @@ const styles = `
 }
 .app-ide__toggle:hover { background: color-mix(in srgb, currentColor 14%, transparent); color: var(--editor-foreground); }
 .app-ide__toggle.is-active { color: var(--editor-foreground); }
-/* 顶部文字按钮 (帮助 / 提交 PR) */
-.app-ide__text-btn {
-  height: 32px; flex: 0 0 auto;
-  display: inline-flex; align-items: center;
-  padding: 0 12px;
-  border: none; border-radius: 8px; background: none; cursor: pointer;
-  color: var(--descriptionForeground, #8f8f8f);
-  font-size: 13px;
-  transition: background .12s, color .12s;
-}
-.app-ide__text-btn:hover { background: color-mix(in srgb, currentColor 14%, transparent); color: var(--editor-foreground); }
 .app-ide__top .app-side-topbar { flex: 0 0 auto; padding: 0; }
 /* === WorkBuddy 启动按钮 + 下载引导样式 (用户要求暂时注释掉整个功能; 恢复时去掉本块注释) ===
 .app-ide__top-divider {
@@ -182,8 +170,6 @@ const styles = `
   .app-ide * { box-shadow: none !important; }
   /* 例外: chat 设置 popover 保留弹层阴影 (与 chat modal 一致; 在 .chat 内可解析 --ai-pop-shadow) */
   .app-ide .chat__settings-pop { box-shadow: var(--ai-pop-shadow) !important; }
-  /* 例外: welcome 底部步骤条保留淡阴影, 与 issue 内容区隔 (变量在 welcome.css 定义, 泛化复用) */
-  .app-ide .numas-welcome__steps { box-shadow: var(--numas-welcome-steps-shadow) !important; }
   /* top + activity bar 背景跟 SOLO sidebar 一致 (偏灰 token; 主题默认半透明白) */
   .app-ide .left-slot,
   .app-ide [class*="left_tab"],
@@ -212,46 +198,6 @@ const styles = `
   }
 }
 `;
-
-/** 帮助按钮: 打开/聚焦 welcome 引导 tab (官方注册 ONE_PER_WORKBENCH, 重复打开只聚焦不重复) */
-const HelpButton: React.FC = () => {
-  const editorService = useInjectable<WorkbenchEditorService>(WorkbenchEditorService);
-  const onClick = () => {
-    try {
-      void editorService.open(new URI('welcome://'), { preview: false });
-    } catch { /* 编辑器服务未就绪忽略 */ }
-  };
-  return (
-    <button type="button" className="app-ide__toggle" title="帮助 (打开引导页)" onClick={onClick}>
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M9.6 9.2a2.4 2.4 0 1 1 3.4 2.2c-.8.4-1 .9-1 1.8" />
-        <circle cx="12" cy="16.6" r="0.6" fill="currentColor" stroke="none" />
-      </svg>
-    </button>
-  );
-};
-
-/** 提交 PR 按钮: 仅选择项目后显示; 触发 chat 执行「提交PR」技能 (跨拓展命令 chatbot.send) */
-const PrButton: React.FC = () => {
-  const commandService = useInjectable<CommandService>(CommandService);
-  const [selected, setSelected] = React.useState<boolean>(() => isWorkdirSelected());
-  React.useEffect(() => subscribeWorkdir((dir) => setSelected(!!dir)), []);
-  if (!selected) return null;
-  const onClick = () => {
-    const lines = ['请执行「提交PR」技能。'];
-    try {
-      const issue = new URL(window.location.href).searchParams.get('issue');
-      if (issue) lines.push(`任务 issue: ${issue}`);
-    } catch { /* URL 解析失败忽略 */ }
-    void commandService.executeCommand('chatbot.send', lines.join('\n'));
-  };
-  return (
-    <button type="button" className="app-ide__text-btn" title="提交 PR (触发 AI 向上游发起 PR)" onClick={onClick}>
-      提交 PR
-    </button>
-  );
-};
 
 /** 内置浏览器按钮: 在编辑区打开浏览器 tab (browser.open 全局命令, 跨拓展契约) */
 const IdeBrowserButton: React.FC = () => {
@@ -523,13 +469,11 @@ export function IdeLayout(): React.ReactElement {
             <SlotRenderer slot={SOLO_SLOTS.MainAction} />
           </div>
           <div className="app-ide__top-right">
-            <PrButton />
             {/* WorkBuddy 启动按钮 (用户要求暂时注释掉整个功能, 恢复时去掉注释即可)
             <WorkBuddyButton />
             <span className="app-ide__top-divider" />
             */}
             <IdeBrowserButton />
-            <HelpButton />
             <span className="app-ide__top-divider" />
             <PanelToggles rightVisible={rightVisible} onToggleRight={() => setRightVisible((v) => !v)} />
           </div>

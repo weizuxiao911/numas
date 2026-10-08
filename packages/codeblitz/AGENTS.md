@@ -111,46 +111,32 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
 
 ## 4. 本子工程避坑
 
-- **前后端分离单源** (2026-09-20): 前端唯一源 = `packages/codeblitz`; numas 接入门控内建在 `src/gate`
-  (探测目标取 `appBaseUrl()` — CLI/内嵌=同源自身秒过, 独立部署=本机 numas). 独立部署产物:
-  `npm run build:site` → `packages/codeblitz/site/` (`.env.site` 注入后端基址, 平台侧静态托管);
-  旧 `test/ide` 拷贝已删除. **不要再拷贝前端源码到别处.**
-- codeblitz 前置 numas 检测 (`src/gate`) 支持 `?numasPort=<port>` URL 覆盖 (仅当该参数存在时生效),
-  用于不打扰真实环境地模拟"未安装/自定义端口"验证引导分支; 默认探测配置的后端基址 (`appBaseUrl()`).
-- **自定义协议 scheme (`numas://`) 唤起的浏览器行为与弹窗根因** (2026-09-22 实测修订, 取代旧结论):
-  - **Chrome 强制要求用户手势**: 页面加载时自动 fire (iframe / `location.href` 均如此) 被静默拦截,
-    console 报 `Not allowed to launch 'numas://serve' because a user gesture is required`, **无系统弹窗**.
-    解法: 进入时 fire 一次(尽力而为, 部分浏览器有效) + **首次用户交互 (pointerdown/keydown) 补 fire**
-    (满足手势); **整页最多补一次** (用 ref 跨 phase 持久, 反复 fire 会在下述"已允许"状态下反复弹框).
-  - **未注册 scheme + 手势 fire**: Chrome 报 `Failed to launch ... scheme does not have a registered
-    handler`, **静默失败, 无系统弹窗** (playwright 实测 + AppleScript 窗口枚举确认).
-  - **弹窗真正根因 (两个)**:
-    1. **Chrome "始终允许" 记录**: 用户曾在 Chrome 确认框勾"始终允许"后, 该 origin+scheme 存于
-       `Default/Preferences` → `protocol_handler.allowed_origin_protocol_pairs[origin][scheme]=true`;
-       Chrome 跳过确认**直接交系统启动** → 应用已删/未装 → macOS 弹「找不到该文件」/「未设定用来打开URL」;
-       gate 反复 fire → **一直弹**. 清理: 退出 Chrome → 编辑 Preferences 删嵌套 key (结构是
-       `origin -> scheme -> true`, 不是扁平 key!) + `safe_browsing.external_app_redirect_timestamps[scheme]`
-       → 重开 Chrome. (Chrome 运行中编辑会被覆盖, 必须先退出.)
-    2. **LaunchServices 死注册**: dmg 挂载/已删构建产物残留声称 `numas:` scheme → 系统选到失效 handler →
-       弹框. 清理: `lsregister -dump | grep -E '^path:.*numas.*\.app$'` 逐条 `lsregister -u`
-       (挂载卷死路径需先卸载卷; 构建产物 app 直接删).
-  - **结论**: fire 未注册 scheme 本身**不会弹窗**; 弹窗一律来自"系统认为有 handler 但 app 不存在"
-    (allowed 记录 / 死注册). 排查弹窗先查这两处, 再动 gate 代码.
+- **开源贡献 AI 工作台定制 (2026-10-08 移除)** (用户决策): 曾内建于本工程的开源贡献工作台
+  定制流程与 UI 已整体移除, 包括: ① 引导层 `src/extensions/welcome/**` (自定义 WelcomeView 六步
+  skill / issue 卡片) + `config/runtime.ts` 注入 + `IdeLayout.tsx` 顶栏 `HelpButton`/`PrButton`;
+  ② 接入门控层 `src/gate/**` (`Gate`/`numas.ts`/`login.ts`, 即 numas 探测、`numas://` 唤起、下载
+  引导、登录门槛) + 独立部署 `build:site`/`dev:site`/`.env.site*`; ③ 任务分发层 `infra/repo.ts`
+  (`?repo=` 关联判定) + `App.tsx` 的 `?repo=` 强制 IDE + `test/demo` + `test/launch.html` +
+  `specs/开源项目贡献AI工作台功能需求规格书.md`; ④ opencode 侧 `NUMAS_SKILL_URLS` 自动写入
+  `~/.config/opencode/numas.json` (仅去自动写入, **保留**对已有 numas.json 的加载).
+  现在 `index.tsx` 直接渲染 `App`; welcome 页回落为 codeblitz **官方默认**欢迎视图
+  (`runtimeConfig.startupEditor: 'welcomePage'`, 不再注入 `WelcomePage`);
+  `editor-restore`/`workspace` 对 `scheme === 'welcome'` 的保留/清理逻辑**仍在**(官方 welcome tab
+  的生命周期), 不要误删. 下文涉及 gate/welcome 定制/独立部署的避坑为**历史记录**, 相关代码已不存在.
+- **历史: 前后端分离单源** (2026-09-20): 前端唯一源 = `packages/codeblitz`; 独立部署产物曾为
+  `npm run build:site` → `packages/codeblitz/site/`. 该形态已随工作台定制移除; 旧 `test/ide` 拷贝亦已删除.
+  **不要再拷贝前端源码到别处.**
+- **历史: 自定义协议 scheme (`numas://`) 唤起与弹窗根因** (2026-09-22 实测): `src/gate` 已删除.
+  结论留档: fire 未注册 scheme 本身**不弹窗**; 弹窗来自"系统认为有 handler 但 app 不存在"
+  (Chrome `protocol_handler.allowed_origin_protocol_pairs` 记录 / LaunchServices 死注册). 清理:
+  退出 Chrome 删 Preferences 嵌套 key (`origin -> scheme -> true`) + `lsregister -u <path>` 清死注册.
 - 端口 404 排查先查**残留进程占用**: 已删除目录的 dev server 可能仍在监听 (如旧 `test/poc-opencode-ide`
   的 vite 占 5173), 新起服务 bind 不到 → 返回旧进程的 404. 用 `lsof -iTCP:<port> -sTCP:LISTEN -n -P`
   看 PID, 确认对应已删除目录后 `kill` 再验.
-- **welcome 引导步骤 ↔ 远程 skill 名必须精确一致** (2026-09-23): 前端按钮经 `chatbot.send` 发
-  `请执行「<技能名>」技能。`, 该名字**必须逐字等于** numas-skills 仓库的 skill 目录名 / `index.json` 的
-  `name` / SKILL.md frontmatter `name` 三者 (含空格/中英混排). 任一处不一致 → AI 找不到 skill, 引导断链.
-  改动步骤文案 (如 `fork并clone` → `Fork克隆`) 时, 四处同步: `WelcomeView.tsx` 的 `SKILL_*` 常量 +
-  按钮 JSX 文案 + 远程仓库目录/index.json/frontmatter + `IdeLayout.tsx` 顶部按钮的触发串.
-- **改远程 skill 内容必须递增 `index.json` 的 `version`** (2026-09-23): 客户端按 version 比对缓存
-  (`~/.cache/opencode/skills/<name>/`), 内容改了但 version 未变 → 不会重新拉取, 用户看到的还是旧 skill.
-  端到端验收 skill 前先重启 numas (拉取新 version).
-- **切工作区不能无条件 `CLOSE_ALL`** (2026-09-23): `extensions/workspace/module.ts` 的 `switchWorkspace`
-  原本执行官方 `EDITOR_COMMANDS.CLOSE_ALL`, 会把 welcome 引导页 tab (`welcome://`) 一起关掉 →
-  切项目后引导页消失. 修复: 改为**定向 close**(遍历 editorGroups, 跳过 `scheme === 'welcome'` 的资源).
-  凡是"切项目重置编辑器"的逻辑都要保留 welcome tab.
+- **切工作区用定向 close 而非官方 `CLOSE_ALL`** (2026-09-23): `extensions/workspace/module.ts` 的
+  `switchWorkspace` 改为遍历 editorGroups 定向 close (跳过 `scheme === 'welcome'` 的资源), 而非官方
+  `EDITOR_COMMANDS.CLOSE_ALL` — 后者会把 welcome tab 一起关掉. 自定义 welcome 引导页虽已移除,
+  官方 welcome tab 仍在, 该保留逻辑继续有效.
 - **`--editor-border` 全局从未定义** (2026-09-23): 代码里多处写 `var(--editor-border)` (app-shell.css
   的 aside resizer / IdeLayout 右栏 resizer), 但 CSS/主题/opensumi 都**没有**定义该变量 → 该声明
   **在计算值阶段整条失效**, 边框/分隔线实际不可见 (不是继承默认色). 用到它必须写兜底
@@ -170,21 +156,13 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   `asideWidthManual` 标记拖拽后 resize 不再按比例重置. 改 `ASIDE_RATIO` 后, 已有持久化的用户看不到变化
   → 验证时先 `localStorage.removeItem('NUMAS_SOLO_LAYOUT_V1')`; 线上要让默认生效需用户拖动/清 key.
 - **IDE 布局里加阴影必须在 `@layer numas-override` 开例外** (2026-09-23): `IdeLayout.tsx` 的
-  `.app-ide, .app-ide * { box-shadow: none !important }` (flat 布局) 会清掉**所有**后代阴影, welcome
-  引导页在 `.app-ide` 内 → 其步骤条阴影被清. 解法: 把阴影值定义为 CSS 变量 (如 welcome.css 的
-  `--numas-welcome-steps-shadow`), 再在 `@layer numas-override` 写
-  `.app-ide .numas-welcome__steps { box-shadow: var(--numas-welcome-steps-shadow) !important }` (同层内
-  比 `.app-ide *` specificity 高, 可盖过). 同类例: `.app-ide .chat__settings-pop`.
-- **welcome 底部步骤条通栏** (2026-09-23): `.numas-welcome__steps` 原 `max-width: 780px` (对齐 issue
-  内容列) 会让贴底栏/阴影两侧留白. 要通栏整宽 = 对齐编辑器 tab 容器: 去 `max-width` + `width:
-  calc(100% + 48px)` + `margin-left/right: -24px` 抵消 `.numas-welcome` 的 24px 左右 padding (二者同在
-  welcome.css, 改 padding 时需同步这里).
-- **访问门槛 (登录态) 内建在 `src/gate/login.ts`** (2026-09-23): 独立部署经 `.env.{DEPLOY_ENV}` 的
-  `LOGIN_REDIRECT` (webpack DefinePlugin → `__APP_LOGIN_REDIRECT__`) 注入登录地址; `src/index.tsx`
-  **渲染前**调 `enforceLogin()` — cookie 无 `token` 且无 `authorization` → 跳
-  `{LOGIN_REDIRECT}{encodeURIComponent(当前URL)}`. **未注入 `LOGIN_REDIRECT` → 不门槛**
-  (桌面/CLI/内嵌/本地 dev 不受影响). env: `.env.site`(生产→beta.cloudlab.top) / `.env.site-test`(测试).
-  前端**读不到请求的 `Authorization` 头**, 只能靠 cookie/注入 (这是 gate 用 cookie 的原因).
+  `.app-ide, .app-ide * { box-shadow: none !important }` (flat 布局) 会清掉**所有**后代阴影. 解法:
+  把阴影值定义为 CSS 变量, 再在 `@layer numas-override` 写
+  `.app-ide .<目标> { box-shadow: var(...) !important }` (同层内比 `.app-ide *` specificity 高, 可盖过).
+  现存例: `.app-ide .chat__settings-pop { box-shadow: var(--ai-pop-shadow) !important }`.
+- **历史: 访问门槛 (登录态)** (2026-09-23, 已随工作台定制移除): 曾是 `src/gate/login.ts` 经
+  `.env.{DEPLOY_ENV}` 的 `LOGIN_REDIRECT` 注入 (webpack `__APP_LOGIN_REDIRECT__`), `index.tsx` 渲染前
+  `enforceLogin()` 未登录跳转. 该机制与独立部署一并删除.
 - **chat 默认模型不再本地记忆** (2026-09-24): `modelPrefs` 曾把"最后选过的模型"写进 localStorage
   (`chat.modelPrefs.v1` 的 `default/defaultProvider`) → 打开就是上次选的模型 (如 MiniMax, 而非
   `config.model`) — 这是错误行为, 已移除. 现在模型选择只改内存态 (`currentModel/currentProvider`),

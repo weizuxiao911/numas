@@ -44,9 +44,8 @@ function getEnv(name, fallback = '') {
     return process.env[name] || loadEnvVar(name, '') || fallback;
 }
 const isDev = process.env.NODE_ENV !== 'production';
-// 产物目录: 默认 dist/ (CLI 内嵌模式, 由 numas serve --web-ui 提供);
-// DEPLOY_ENV=site → site/ (前后端分离独立部署产物, 平台侧静态托管)
-const OUT_DIR = process.env.DEPLOY_ENV === 'site' ? 'site' : 'dist';
+// 产物目录: dist/ (CLI 内嵌模式, 由 numas serve --web-ui 提供)
+const OUT_DIR = 'dist';
 const config = {
     mode: isDev ? 'development' : 'production',
     target: 'web',
@@ -359,10 +358,6 @@ const config = {
             // 扩展市场默认同源 /extensions: opencode fork 内置控制器 (扫 --extensions-dir vsix),
             // dev/容器一致无跨源; 运行时 --registry 注入覆盖 (外部自建市场 URL 亦可).
             __APP_REGISTRY_BASE_URL__: JSON.stringify(getEnv('REGISTRY_BASE_URL', '/extensions')),
-            __APP_DEPLOY_ENV__: JSON.stringify(process.env.DEPLOY_ENV || 'development'),
-            // 登录门槛 (仅独立部署生效): 未登录 → 跳 {LOGIN_REDIRECT}{encodeURIComponent(当前URL)}&needToken=true
-            // 空 = 不门槛 (桌面/CLI/内嵌/本地 dev 不受影响)
-            __APP_LOGIN_REDIRECT__: JSON.stringify(getEnv('LOGIN_REDIRECT', '')),
         }),
         // 第三方库（opensumi/codeblitz）浏览器 fallback: 构建期 polyfill, src 本身零 node 依赖
         new node_polyfill_webpack_plugin_1.default({ includeAliases: ['process', 'Buffer'] }),

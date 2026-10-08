@@ -12,7 +12,7 @@ Numas 是一个本地运行的 AI 工作台（编码 / 办公任务），由三�
 - **codeblitz IDE** — 浏览器端工作台（编辑器 / 终端 / 扩展市场）
 - **桌面壳** — macOS 应用（托盘常驻，托管本地服务）
 
-默认本地运行，数据与文件不出本机；也支持前后端分离部署（页面在云端，直连访问者本机的 numas）。
+默认本地运行，数据与文件不出本机。
 
 ---
 
@@ -48,18 +48,6 @@ cd packages/tauri    && bun run build            # 打包桌面壳（自动同�
 ```
 
 细节见 [`packages/tauri/README.md`](packages/tauri/README.md)。
-
-### 独立部署（前后端分离）
-
-页面静态托管在云端，运行时直连**访问者本机**的 numas：
-
-```bash
-cd packages/codeblitz && npm run build:site      # 产物在 packages/codeblitz/site/
-```
-
-- `site/` 丢到 nginx（部署在**域名根路径**，SPA 回退 `try_files $uri /index.html;`）
-- 页面按编译期 `APP_BASE_URL`（默认 `http://127.0.0.1:24096`）直连访问者本机 numas
-- 本机 numas 需在运行且允许跨源（`numas`/`numas serve` 默认 `--cors *`，并已支持 Chrome Private Network Access 预检）
 
 ---
 

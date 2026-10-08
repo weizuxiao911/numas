@@ -10,7 +10,6 @@ import { WORKSPACE_ROOT } from '@codeblitzjs/ide-core';
 
 declare const __APP_BASE_URL__: string;
 declare const __APP_REGISTRY_BASE_URL__: string;
-declare const __APP_DEPLOY_ENV__: string;
 
 export interface AppConfig {
   appBaseUrl: string;
@@ -42,7 +41,7 @@ function buildAppConfig(): AppConfig {
     appBaseUrl: injected.appBaseUrl || __APP_BASE_URL__ || '',
     registryBaseUrl: injectedUrl || '',
     registryBaseUrls,
-    deployEnv: injected.deployEnv || __APP_DEPLOY_ENV__ || 'development',
+    deployEnv: injected.deployEnv || 'development',
     workspaceDir: WORKSPACE_ROOT,
     theme: 'opensumi-design-dark-theme',
     chatConfig: APP_CHAT_CONFIG,
