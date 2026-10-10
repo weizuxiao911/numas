@@ -1,22 +1,17 @@
 #!/usr/bin/env node
 /**
- * numas-dev dev.js — 集成模式入口
+ * numas-dev dev.js — 集成模式入口 (内嵌上游 packages/app)
  *
  * 流程:
- *   1. packages/webapp npm install (--workspaces=false 跳过 root workspaces)
- *      → build → dist/
- *   2. 启 opencode serve --web-ui packages/webapp/dist (detached)
+ *   1. build packages/app → dist/  (都已产物则跳过, 默认不重跑)
+ *   2. 启 opencode serve --web-ui packages/app/dist (detached)
  *   3. /global/health 探活 → 打印 URL → spawn 'open' 开浏览器
  *   4. SIGINT/SIGTERM → kill 整组 process group
  *
  * CLI:
  *   --port <n>     opencode 端口 (默认 24096, env NUMAS_DEV_PORT)
  *   --no-open      不自动开浏览器
- *   --fast         跳过 webapp install + build (复用现有产物)
- *
- * 注: 浏览器只开根 URL, 不塞 ?directory=. webapp 自己负责项目选择 (URL 一次性入口
- *     + localStorage 兜底, 见 packages/webapp/src/infra/url.ts). dev.js 越权选项目
- *     会绕开 webapp 的选择 UI.
+ *   --fast         跳过 app build (复用现有产物)
  */
 
 import { spawn, spawnSync } from "node:child_process"
@@ -26,8 +21,8 @@ import http from "node:http"
 import path from "node:path"
 
 const ROOT = import.meta.dirname
-const WEBAPP = path.join(ROOT, "packages", "webapp")
-const WEBAPP_DIST = path.join(WEBAPP, "dist")
+const APP = path.join(ROOT, "packages", "app")
+const APP_DIST = path.join(APP, "dist")
 const EXTENSIONS_DIST = path.join(ROOT, "packages", "extensions", "dist-vsix")
 
 function parseFlag(flag, fallback) {
@@ -56,13 +51,6 @@ if (isNaN(PORT)) {
 
 const isWin = process.platform === "win32"
 
-function fileSha256(p) {
-  try {
-    return crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex")
-  } catch {
-    return ""
-  }
-}
 function readMarker(p) {
   try {
     return fs.readFileSync(p, "utf8").trim()
@@ -83,13 +71,9 @@ function runStep(label, cmd, args, opts = {}) {
 }
 
 // --------------------------------------------------------------------------
-// 1. webapp install + build → dist/  (都已产物则跳过, 默认不重跑)
+// 1. build packages/app → dist/  (都已产物则跳过, 默认不重跑)
 // --------------------------------------------------------------------------
-const installMarker = path.join(WEBAPP, "node_modules", ".numas-dev-install-hash")
-const buildMarker = path.join(WEBAPP_DIST, ".numas-dev-build-hash")
-const installHash = ["package.json", "package-lock.json"]
-  .map((f) => fileSha256(path.join(WEBAPP, f)))
-  .join("|")
+const buildMarker = path.join(APP_DIST, ".numas-dev-build-hash")
 
 function walkSrc(root) {
   const out = []
@@ -108,19 +92,13 @@ function walkSrc(root) {
     }
   }
   recur(root)
-  return out
+  return out.sort()
 }
 function buildHash() {
   const h = crypto.createHash("sha256")
-  for (const f of ["package.json", "package-lock.json", "webpack.config.js", "tsconfig.json"]) {
+  for (const f of walkSrc(APP)) {
     try {
-      h.update(fs.readFileSync(path.join(WEBAPP, f)))
-    } catch {
-      h.update(f)
-    }
-  }
-  for (const f of walkSrc(WEBAPP)) {
-    try {
+      h.update(path.relative(APP, f))
       h.update(fs.readFileSync(f))
     } catch {
       /* */
@@ -130,41 +108,21 @@ function buildHash() {
 }
 
 if (FAST) {
-  console.log("[dev] webapp install: --fast, 跳过")
-} else if (readMarker(installMarker) === installHash && fs.existsSync(path.join(WEBAPP, "node_modules"))) {
-  console.log("[dev] webapp install: 已产物, 跳过 (rm packages/webapp/node_modules/.numas-dev-install-hash 重跑)")
+  console.log("[dev] app build: --fast, 跳过")
+} else if (readMarker(buildMarker) === buildHash() && fs.existsSync(path.join(APP_DIST, "index.html"))) {
+  console.log("[dev] app build: 已产物, 跳过 (rm packages/app/dist/.numas-dev-build-hash 重跑)")
 } else {
-  // --workspaces=false: 不走 root workspaces (否则 npm 看 root package.json 的 catalog: protocol 报错)
-  runStep(
-    "webapp npm install",
-    "npm",
-    ["install", "--no-audit", "--no-fund", "--workspaces=false"],
-    { cwd: WEBAPP },
-  )
+  runStep("app build", "bun", ["run", "--cwd", "packages/app", "build"], { cwd: ROOT })
   try {
-    fs.mkdirSync(path.join(WEBAPP, "node_modules"), { recursive: true })
-    fs.writeFileSync(installMarker, installHash)
-  } catch {
-    /* */
-  }
-}
-
-if (FAST) {
-  console.log("[dev] webapp build: --fast, 跳过")
-} else if (readMarker(buildMarker) === buildHash() && fs.existsSync(path.join(WEBAPP_DIST, "index.html"))) {
-  console.log("[dev] webapp build: 已产物, 跳过 (rm packages/webapp/dist/.numas-dev-build-hash 重跑)")
-} else {
-  runStep("webapp build", "npm", ["run", "build"], { cwd: WEBAPP })
-  try {
-    fs.mkdirSync(WEBAPP_DIST, { recursive: true })
+    fs.mkdirSync(APP_DIST, { recursive: true })
     fs.writeFileSync(buildMarker, buildHash())
   } catch {
     /* */
   }
 }
 
-if (!fs.existsSync(path.join(WEBAPP_DIST, "index.html"))) {
-  console.error(`[dev] webapp 产物缺 index.html: ${WEBAPP_DIST}`)
+if (!fs.existsSync(path.join(APP_DIST, "index.html"))) {
+  console.error(`[dev] app 产物缺 index.html: ${APP_DIST}`)
   console.error("[dev] 去掉 --fast 跑一次完整 build")
   process.exit(1)
 }
@@ -206,7 +164,7 @@ function killPort(port) {
   }
 }
 
-console.log(`[dev] 启 opencode serve (port=${PORT}, web-ui=${WEBAPP_DIST}, extensions=${EXTENSIONS_DIST})`)
+console.log(`[dev] 启 opencode serve (port=${PORT}, web-ui=${APP_DIST}, extensions=${EXTENSIONS_DIST})`)
 killPort(PORT)
 
 // 内置 vsix 扩展: dev 为源码模式, 无内嵌 numas-extensions.gen.ts, 显式指向构建产物目录
@@ -230,7 +188,7 @@ const opencodeProc = spawn(
     "--hostname",
     "127.0.0.1",
     "--web-ui",
-    "../webapp/dist",
+    "../app/dist",
     "--extensions-dir",
     EXTENSIONS_DIST,
   ],

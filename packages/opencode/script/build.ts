@@ -24,35 +24,19 @@ const sourcemapsFlag = process.argv.includes("--sourcemaps")
 const plugin = createSolidTransformPlugin()
 const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
 const skipEmbedExtensions = process.argv.includes("--skip-embed-extensions")
-const webUiName = (() => {
-  const i = process.argv.indexOf("--web-ui")
-  if (i === -1) return "webapp"
-  const v = process.argv[i + 1]
-  if (v !== "app" && v !== "webapp") {
-    throw new Error(`--web-ui must be "app" or "webapp", got: ${v}`)
-  }
-  return v
-})()
 
 const createEmbeddedWebUIBundle = async () => {
-  // numas 模式: NUMAS_WEB_DIST 指向 numas webapp 的静态产物 (已 build), 直接内嵌, 不构建 packages/app
-  const numasWebDist = process.env.NUMAS_WEB_DIST
-  let appDir: string
-  if (numasWebDist) {
-    console.log(`Building Web UI to embed in the binary (numas: ${numasWebDist})`)
-    appDir = path.resolve(numasWebDist, "..")
-  } else {
-    console.log(`Building Web UI to embed in the binary (--web-ui=${webUiName})`)
-    appDir = path.join(import.meta.dirname, `../../${webUiName}`)
-    // 跨平台: 不用 POSIX 的 `OPENCODE_CHANNEL=X cmd` 前缀 (Windows cmd/powershell 不支持), 改注入 process.env
-    const prevChannel = process.env.OPENCODE_CHANNEL
-    process.env.OPENCODE_CHANNEL = Script.channel
-    try {
-      await $`bun run --cwd ${appDir} build`
-    } finally {
-      if (prevChannel === undefined) delete process.env.OPENCODE_CHANNEL
-      else process.env.OPENCODE_CHANNEL = prevChannel
-    }
+  // 内嵌上游 packages/app 的静态产物 (回到 opencode 默认集成形态)
+  const appDir = path.join(import.meta.dirname, "../../app")
+  console.log(`Building Web UI to embed in the binary (packages/app)`)
+  // 跨平台: 不用 POSIX 的 `OPENCODE_CHANNEL=X cmd` 前缀 (Windows cmd/powershell 不支持), 改注入 process.env
+  const prevChannel = process.env.OPENCODE_CHANNEL
+  process.env.OPENCODE_CHANNEL = Script.channel
+  try {
+    await $`bun run --cwd ${appDir} build`
+  } finally {
+    if (prevChannel === undefined) delete process.env.OPENCODE_CHANNEL
+    else process.env.OPENCODE_CHANNEL = prevChannel
   }
   const dist = path.join(appDir, "dist")
   const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: dist })))

@@ -217,7 +217,7 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   日志改 `NUMAS_EXTENSIONS_DEBUG=1` 门控; `acp/profile.ts` 自带 `OPENCODE_ACP_PROFILE=1` 门控.
   改 TUI/server 代码日志一律走上述, 禁止裸 `console.*`.
 - **远端静态托管 webapp 直连本机 24096 需要 PNA 预检头** (2026-09-30): 前后端分离部署
-  (`packages/webapp` `npm run build:site` → `site/`, 编译期 `APP_BASE_URL=http://127.0.0.1:24096`)
+  (`webapp` `npm run build:site` → `site/`, 编译期 `APP_BASE_URL=http://127.0.0.1:24096`)
   时, 公共 https 页面访问本机环回地址会被 Chrome **Private/Local Network Access** 拦截: 预检需回
   `Access-Control-Allow-Private-Network: true`. 已在 `httpapi/middleware/cors-vary.ts` 加
   `corsPrivateNetwork` (对带 CORS 头的响应补该头) 并在 `httpapi/server.ts` 注册. 经典 mixed-content
@@ -260,7 +260,7 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   SDK 缺 `sdk.client.experimental.capabilities` → `SyncProvider.bootstrap` **同步抛 TypeError**
   → `sync.status` 永远 `loading` → `SyncProvider.ready=false` → `createSimpleContext` 的
   `<Show when={init.ready}>` 挡住**整棵子树**(含 `<App>` 与 `StartupLoading`) → 全屏空.
-  修复: 删除那批 `.gen.js` + 给 `packages/webapp/webpack.config.js` 加
+  修复: 删除那批 `.gen.js` + 给 `webapp/webpack.config.js` 加
   `resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }` (webpack 也能解析到 `.gen.ts`).
   **教训**: 生成物 `.js` 不要入库; 排查 TUI 白屏先开 `DEBUG` 看 `sdk.client.experimental` 是否存在 +
   `sync.status` 是否停在 `loading` (旧 AGENTS 记的"依赖漂移"是表象之一, 真因是这套陈旧 `.js`).
