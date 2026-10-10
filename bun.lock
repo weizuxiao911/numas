@@ -142,50 +142,6 @@
         "effect",
       ],
     },
-    "packages/codeblitz": {
-      "name": "web",
-      "version": "0.1.0",
-      "dependencies": {
-        "@codeblitzjs/ide-core": "2.4.6",
-        "@opencode-ai/sdk": "^1.18.11",
-        "@opensumi/ide-file-tree-next": "3.6.5-next-1766394426.0",
-        "@opensumi/ide-terminal-next": "3.6.5-next-1766394426.0",
-        "@tanstack/react-virtual": "^3.14.13",
-        "fflate": "^0.8.3",
-        "katex": "^0.18.7",
-        "marked": "^7.0.5",
-        "marked-katex-extension": "^5.1.12",
-        "marked-shiki": "^1.2.1",
-        "mermaid": "^12.0.0",
-        "pdfjs-dist": "^4.10.38",
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0",
-        "shiki": "^4.4.1",
-      },
-      "devDependencies": {
-        "@types/react": "^18.2.0",
-        "@types/react-dom": "^18.2.0",
-        "cross-env": "^7.0.3",
-        "css-loader": "^6.7.3",
-        "esbuild": "^0.24.0",
-        "esbuild-loader": "^4.2.2",
-        "file-loader": "^6.2.0",
-        "html-webpack-plugin": "^5.6.0",
-        "less": "^4.8.1",
-        "less-loader": "^12.3.3",
-        "node-polyfill-webpack-plugin": "^3.0.0",
-        "path-browserify": "^1.0.1",
-        "raw-loader": "^4.0.2",
-        "style-loader": "^3.3.1",
-        "ts-loader": "^9.5.1",
-        "ts-node": "^10.9.2",
-        "typescript": "^5.5.4",
-        "url-loader": "^4.1.1",
-        "webpack": "^5.89.0",
-        "webpack-cli": "^5.1.4",
-        "webpack-dev-server": "^4.15.1",
-      },
-    },
     "packages/codemode": {
       "name": "@opencode-ai/codemode",
       "version": "1.18.33",
@@ -1103,6 +1059,50 @@
         "@types/node": "catalog:",
         "opencode": "workspace:*",
         "typescript": "catalog:",
+      },
+    },
+    "packages/webapp": {
+      "name": "webapp",
+      "version": "0.1.0",
+      "dependencies": {
+        "@codeblitzjs/ide-core": "2.4.6",
+        "@opencode-ai/sdk": "^1.18.11",
+        "@opensumi/ide-file-tree-next": "3.6.5-next-1766394426.0",
+        "@opensumi/ide-terminal-next": "3.6.5-next-1766394426.0",
+        "@tanstack/react-virtual": "^3.14.13",
+        "fflate": "^0.8.3",
+        "katex": "^0.18.7",
+        "marked": "^7.0.5",
+        "marked-katex-extension": "^5.1.12",
+        "marked-shiki": "^1.2.1",
+        "mermaid": "^12.0.0",
+        "pdfjs-dist": "^4.10.38",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "shiki": "^4.4.1",
+      },
+      "devDependencies": {
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0",
+        "cross-env": "^7.0.3",
+        "css-loader": "^6.7.3",
+        "esbuild": "^0.24.0",
+        "esbuild-loader": "^4.2.2",
+        "file-loader": "^6.2.0",
+        "html-webpack-plugin": "^5.6.0",
+        "less": "^4.8.1",
+        "less-loader": "^12.3.3",
+        "node-polyfill-webpack-plugin": "^3.0.0",
+        "path-browserify": "^1.0.1",
+        "raw-loader": "^4.0.2",
+        "style-loader": "^3.3.1",
+        "ts-loader": "^9.5.1",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.5.4",
+        "url-loader": "^4.1.1",
+        "webpack": "^5.89.0",
+        "webpack-cli": "^5.1.4",
+        "webpack-dev-server": "^4.15.1",
       },
     },
   },
@@ -6635,13 +6635,13 @@
 
     "wbuf": ["wbuf@1.7.3", "https://registry.npmmirror.com/wbuf/-/wbuf-1.7.3.tgz", { "dependencies": { "minimalistic-assert": "^1.0.0" } }, "sha512-O84QOnr0icsbFGLS0O3bI5FswxzRr8/gHwWkDlQFskhSPryQXvrTMxjxGP4+iWYoauLoBvfDpkrOauZ+0iZpDA=="],
 
-    "web": ["web@workspace:packages/codeblitz"],
-
     "web-namespaces": ["web-namespaces@2.0.1", "https://registry.npmmirror.com/web-namespaces/-/web-namespaces-2.0.1.tgz", {}, "sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ=="],
 
     "web-streams-polyfill": ["web-streams-polyfill@4.0.0-beta.3", "https://registry.npmmirror.com/web-streams-polyfill/-/web-streams-polyfill-4.0.0-beta.3.tgz", {}, "sha512-QW95TCTaHmsYfHDybGMwO5IJIM93I/6vTRk+daHTWFPhwh+C8Cg7j7XyKrwrj8Ib6vYXe0ocYNrmzY4xAAN6ug=="],
 
     "web-tree-sitter": ["web-tree-sitter@0.25.10", "https://registry.npmmirror.com/web-tree-sitter/-/web-tree-sitter-0.25.10.tgz", { "peerDependencies": { "@types/emscripten": "^1.40.0" }, "optionalPeers": ["@types/emscripten"] }, "sha512-Y09sF44/13XvgVKgO2cNDw5rGk6s26MgoZPXLESvMXeefBf7i6/73eFurre0IsTW6E14Y0ArIzhUMmjoc7xyzA=="],
+
+    "webapp": ["webapp@workspace:packages/webapp"],
 
     "webcrypto-core": ["webcrypto-core@1.9.2", "https://registry.npmmirror.com/webcrypto-core/-/webcrypto-core-1.9.2.tgz", { "dependencies": { "@peculiar/asn1-schema": "^2.7.0", "@peculiar/json-schema": "^1.1.12", "@peculiar/utils": "^2.0.2", "asn1js": "^3.0.10", "tslib": "^2.8.1" } }, "sha512-gsXecm82UQNlTBURJGuqOWy1Ww08S3kZUcr3aOJS02Pk0xLtkfeUAVC0u0xhgdonFme80edSJUIJyuvL/7250Q=="],
 
@@ -8019,13 +8019,13 @@
 
     "vscode-languageserver-protocol/vscode-languageserver-types": ["vscode-languageserver-types@3.18.3", "https://registry.npmmirror.com/vscode-languageserver-types/-/vscode-languageserver-types-3.18.3.tgz", {}, "sha512-XIlzJ7Qp/jzSI1ds7/FwPAWrPeTZA7pAtlW4hdJ1J6xXWJL6dR9QYnDhJOdLzdKhUQ5Mm6mvUMw+3DcOQQasPw=="],
 
-    "web/@types/react": ["@types/react@18.3.31", "https://registry.npmmirror.com/@types/react/-/react-18.3.31.tgz", { "dependencies": { "@types/prop-types": "*", "csstype": "^3.2.2" } }, "sha512-vfEqpXTvwT91yhmwdfouStN2hSKwTvyRs8qpLfADyrq/kxDw0hZM7Wk9Ug1FELj8hIby+S/+kQCSRFF32nv2Qw=="],
+    "webapp/@types/react": ["@types/react@18.3.31", "https://registry.npmmirror.com/@types/react/-/react-18.3.31.tgz", { "dependencies": { "@types/prop-types": "*", "csstype": "^3.2.2" } }, "sha512-vfEqpXTvwT91yhmwdfouStN2hSKwTvyRs8qpLfADyrq/kxDw0hZM7Wk9Ug1FELj8hIby+S/+kQCSRFF32nv2Qw=="],
 
-    "web/katex": ["katex@0.18.9", "https://registry.npmmirror.com/katex/-/katex-0.18.9.tgz", { "dependencies": { "commander": "^15.0.0" }, "bin": { "katex": "cli.js" } }, "sha512-8ad9RyoKsb/g8/yLFE+KAlP+DhbCTRUNi/V9XGsxn0R+trJJltNwzcDNo0q/DEkOy5fQUQTAQyCXCYSE+OakTQ=="],
+    "webapp/katex": ["katex@0.18.9", "https://registry.npmmirror.com/katex/-/katex-0.18.9.tgz", { "dependencies": { "commander": "^15.0.0" }, "bin": { "katex": "cli.js" } }, "sha512-8ad9RyoKsb/g8/yLFE+KAlP+DhbCTRUNi/V9XGsxn0R+trJJltNwzcDNo0q/DEkOy5fQUQTAQyCXCYSE+OakTQ=="],
 
-    "web/marked": ["marked@7.0.5", "https://registry.npmmirror.com/marked/-/marked-7.0.5.tgz", { "bin": { "marked": "bin/marked.js" } }, "sha512-lwNAFTfXgqpt/XvK17a/8wY9/q6fcSPZT1aP6QW0u74VwaJF/Z9KbRcX23sWE4tODM+AolJNcUtErTkgOeFP/Q=="],
+    "webapp/marked": ["marked@7.0.5", "https://registry.npmmirror.com/marked/-/marked-7.0.5.tgz", { "bin": { "marked": "bin/marked.js" } }, "sha512-lwNAFTfXgqpt/XvK17a/8wY9/q6fcSPZT1aP6QW0u74VwaJF/Z9KbRcX23sWE4tODM+AolJNcUtErTkgOeFP/Q=="],
 
-    "web/shiki": ["shiki@4.4.3", "https://registry.npmmirror.com/shiki/-/shiki-4.4.3.tgz", { "dependencies": { "@shikijs/core": "4.4.3", "@shikijs/engine-javascript": "4.4.3", "@shikijs/engine-oniguruma": "4.4.3", "@shikijs/langs": "4.4.3", "@shikijs/themes": "4.4.3", "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-Mb/GvXPHBAXdgGIcnfU5L3ldpn1XcxrGkPHwqgRx17/I2XRfqlFKk2vGkHWINn1kdXvzJZeuO3is6I9KLPFm0g=="],
+    "webapp/shiki": ["shiki@4.4.3", "https://registry.npmmirror.com/shiki/-/shiki-4.4.3.tgz", { "dependencies": { "@shikijs/core": "4.4.3", "@shikijs/engine-javascript": "4.4.3", "@shikijs/engine-oniguruma": "4.4.3", "@shikijs/langs": "4.4.3", "@shikijs/themes": "4.4.3", "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-Mb/GvXPHBAXdgGIcnfU5L3ldpn1XcxrGkPHwqgRx17/I2XRfqlFKk2vGkHWINn1kdXvzJZeuO3is6I9KLPFm0g=="],
 
     "webpack/es-module-lexer": ["es-module-lexer@2.3.2", "https://registry.npmmirror.com/es-module-lexer/-/es-module-lexer-2.3.2.tgz", {}, "sha512-poHGpORABojJJucnV9KbOavETW8lBVnphkW77ER5/BQ5Fz7oXSoCNek7IH3vR5nRjdsEz926ibFYX8KtLQmdyw=="],
 
@@ -9247,19 +9247,19 @@
 
     "vscode-languageserver/vscode-languageserver-protocol/vscode-jsonrpc": ["vscode-jsonrpc@8.2.0", "https://registry.npmmirror.com/vscode-jsonrpc/-/vscode-jsonrpc-8.2.0.tgz", {}, "sha512-C+r0eKJUIfiDIfwJhria30+TYWPtuHJXHtI7J0YlOmKAo7ogxP20T0zxB7HZQIFhIyvoBPwWskjxrvAtfjyZfA=="],
 
-    "web/katex/commander": ["commander@15.0.0", "https://registry.npmmirror.com/commander/-/commander-15.0.0.tgz", {}, "sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg=="],
+    "webapp/katex/commander": ["commander@15.0.0", "https://registry.npmmirror.com/commander/-/commander-15.0.0.tgz", {}, "sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg=="],
 
-    "web/shiki/@shikijs/core": ["@shikijs/core@4.4.3", "https://registry.npmmirror.com/@shikijs/core/-/core-4.4.3.tgz", { "dependencies": { "@shikijs/primitive": "4.4.3", "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5", "hast-util-to-html": "^9.0.5" } }, "sha512-QCR4q2ZO/ILJEuwiBMel4wdcTDb1JGwfjKTxPDF6x8ixOaluPrVqIn06C99AcRPhmYlBR56d/Fb+GN58GzExpg=="],
+    "webapp/shiki/@shikijs/core": ["@shikijs/core@4.4.3", "https://registry.npmmirror.com/@shikijs/core/-/core-4.4.3.tgz", { "dependencies": { "@shikijs/primitive": "4.4.3", "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5", "hast-util-to-html": "^9.0.5" } }, "sha512-QCR4q2ZO/ILJEuwiBMel4wdcTDb1JGwfjKTxPDF6x8ixOaluPrVqIn06C99AcRPhmYlBR56d/Fb+GN58GzExpg=="],
 
-    "web/shiki/@shikijs/engine-javascript": ["@shikijs/engine-javascript@4.4.3", "https://registry.npmmirror.com/@shikijs/engine-javascript/-/engine-javascript-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "oniguruma-to-es": "^4.3.6" } }, "sha512-FbOjFJp9VLdo1Wevs10BBtVxiTWwNLqZh5Gkhjgda/ioL15YOgeSl9n+6XMa3qRlPQzfhFNe641SrynFHYG0nQ=="],
+    "webapp/shiki/@shikijs/engine-javascript": ["@shikijs/engine-javascript@4.4.3", "https://registry.npmmirror.com/@shikijs/engine-javascript/-/engine-javascript-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "oniguruma-to-es": "^4.3.6" } }, "sha512-FbOjFJp9VLdo1Wevs10BBtVxiTWwNLqZh5Gkhjgda/ioL15YOgeSl9n+6XMa3qRlPQzfhFNe641SrynFHYG0nQ=="],
 
-    "web/shiki/@shikijs/engine-oniguruma": ["@shikijs/engine-oniguruma@4.4.3", "https://registry.npmmirror.com/@shikijs/engine-oniguruma/-/engine-oniguruma-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2" } }, "sha512-EcOQkxdxGQrc1Row/cC2c96/v1dbZqGnEVu1qTuT/MJmp6+cXCvQussowVmCv5Tqr3KuY3c7IbM6HTW3LJ1k9w=="],
+    "webapp/shiki/@shikijs/engine-oniguruma": ["@shikijs/engine-oniguruma@4.4.3", "https://registry.npmmirror.com/@shikijs/engine-oniguruma/-/engine-oniguruma-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2" } }, "sha512-EcOQkxdxGQrc1Row/cC2c96/v1dbZqGnEVu1qTuT/MJmp6+cXCvQussowVmCv5Tqr3KuY3c7IbM6HTW3LJ1k9w=="],
 
-    "web/shiki/@shikijs/langs": ["@shikijs/langs@4.4.3", "https://registry.npmmirror.com/@shikijs/langs/-/langs-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3" } }, "sha512-ePic0yfAJGOF83D5wBHK/00EjK65oahBYxFk5epgq33WRv7X9UuxLEV8PtR0szC0z8dl7INIpIodB99JRFlR+A=="],
+    "webapp/shiki/@shikijs/langs": ["@shikijs/langs@4.4.3", "https://registry.npmmirror.com/@shikijs/langs/-/langs-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3" } }, "sha512-ePic0yfAJGOF83D5wBHK/00EjK65oahBYxFk5epgq33WRv7X9UuxLEV8PtR0szC0z8dl7INIpIodB99JRFlR+A=="],
 
-    "web/shiki/@shikijs/themes": ["@shikijs/themes@4.4.3", "https://registry.npmmirror.com/@shikijs/themes/-/themes-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3" } }, "sha512-w8UHjeUnIR965KMWJHUPXOc2mNJUnK3vpVLYLvw5IYU2mnTTJ89E24OrJDBNiJDQ0qzb0tc4l7mrIXx5cFeIyw=="],
+    "webapp/shiki/@shikijs/themes": ["@shikijs/themes@4.4.3", "https://registry.npmmirror.com/@shikijs/themes/-/themes-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3" } }, "sha512-w8UHjeUnIR965KMWJHUPXOc2mNJUnK3vpVLYLvw5IYU2mnTTJ89E24OrJDBNiJDQ0qzb0tc4l7mrIXx5cFeIyw=="],
 
-    "web/shiki/@shikijs/types": ["@shikijs/types@4.4.3", "https://registry.npmmirror.com/@shikijs/types/-/types-4.4.3.tgz", { "dependencies": { "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-UEJxmRR++MAGR6hugn0vgVS2W/6lWAts84FFSrnlH9sP0LNol7E5+NQ792pH8liWUhyMyjhTgSUH3k7iD7tc5g=="],
+    "webapp/shiki/@shikijs/types": ["@shikijs/types@4.4.3", "https://registry.npmmirror.com/@shikijs/types/-/types-4.4.3.tgz", { "dependencies": { "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-UEJxmRR++MAGR6hugn0vgVS2W/6lWAts84FFSrnlH9sP0LNol7E5+NQ792pH8liWUhyMyjhTgSUH3k7iD7tc5g=="],
 
     "webpack-dev-middleware/mime-types/mime-db": ["mime-db@1.52.0", "https://registry.npmmirror.com/mime-db/-/mime-db-1.52.0.tgz", {}, "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg=="],
 
@@ -9811,7 +9811,7 @@
 
     "vitest/vite/esbuild/@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "https://registry.npmmirror.com/@esbuild/win32-x64/-/win32-x64-0.25.12.tgz", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
 
-    "web/shiki/@shikijs/core/@shikijs/primitive": ["@shikijs/primitive@4.4.3", "https://registry.npmmirror.com/@shikijs/primitive/-/primitive-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-m0wBeLDQDeIxRdUmrCPdQqfuUamDwRL5isCfYbguKD6NiaKpVbsv+3J81DyIKgNW5h4WAIIr8T4EkgQrBBxvaQ=="],
+    "webapp/shiki/@shikijs/core/@shikijs/primitive": ["@shikijs/primitive@4.4.3", "https://registry.npmmirror.com/@shikijs/primitive/-/primitive-4.4.3.tgz", { "dependencies": { "@shikijs/types": "4.4.3", "@shikijs/vscode-textmate": "^10.0.2", "@types/hast": "^3.0.5" } }, "sha512-m0wBeLDQDeIxRdUmrCPdQqfuUamDwRL5isCfYbguKD6NiaKpVbsv+3J81DyIKgNW5h4WAIIr8T4EkgQrBBxvaQ=="],
 
     "webpack-dev-server/chokidar/readdirp/picomatch": ["picomatch@2.3.2", "https://registry.npmmirror.com/picomatch/-/picomatch-2.3.2.tgz", {}, "sha512-V7+vQEJ06Z+c5tSye8S+nHUfI51xoXIXjHQ99cQtKUkQqqO1kO/KCJUfZXuB47h/YBlDhah2H3hdUGXn8ie0oA=="],
 

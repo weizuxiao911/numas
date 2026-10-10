@@ -26,16 +26,16 @@ const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
 const skipEmbedExtensions = process.argv.includes("--skip-embed-extensions")
 const webUiName = (() => {
   const i = process.argv.indexOf("--web-ui")
-  if (i === -1) return "codeblitz"
+  if (i === -1) return "webapp"
   const v = process.argv[i + 1]
-  if (v !== "app" && v !== "codeblitz") {
-    throw new Error(`--web-ui must be "app" or "codeblitz", got: ${v}`)
+  if (v !== "app" && v !== "webapp") {
+    throw new Error(`--web-ui must be "app" or "webapp", got: ${v}`)
   }
   return v
 })()
 
 const createEmbeddedWebUIBundle = async () => {
-  // numas 模式: NUMAS_WEB_DIST 指向 numas web 的静态产物 (已 build), 直接内嵌, 不构建 packages/app
+  // numas 模式: NUMAS_WEB_DIST 指向 numas webapp 的静态产物 (已 build), 直接内嵌, 不构建 packages/app
   const numasWebDist = process.env.NUMAS_WEB_DIST
   let appDir: string
   if (numasWebDist) {

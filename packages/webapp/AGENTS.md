@@ -1,6 +1,6 @@
-# AGENTS.md — packages/codeblitz (前端交互层) 子工程规范
+# AGENTS.md — packages/webapp (前端交互层) 子工程规范
 
-> codeblitz = numas 前端唯一源 (原 sumi), opensumi/codeblitz 交互层 (纯浏览器)。
+> webapp = numas 前端唯一源 (原 sumi), 基于 opensumi/codeblitz 交互层 (纯浏览器)。
 > 本文件是本子工程的工程约束, 与根 `AGENTS.md` 配合使用。
 
 ---
@@ -111,11 +111,11 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
 
 ## 4. 本子工程避坑
 
-- **前后端分离单源** (2026-09-20): 前端唯一源 = `packages/codeblitz`; numas 接入门控内建在 `src/gate`
+- **前后端分离单源** (2026-09-20): 前端唯一源 = `packages/webapp`; numas 接入门控内建在 `src/gate`
   (探测目标取 `appBaseUrl()` — CLI/内嵌=同源自身秒过, 独立部署=本机 numas). 独立部署产物:
-  `npm run build:site` → `packages/codeblitz/site/` (`.env.site` 注入后端基址, 平台侧静态托管);
+  `npm run build:site` → `packages/webapp/site/` (`.env.site` 注入后端基址, 平台侧静态托管);
   旧 `test/ide` 拷贝已删除. **不要再拷贝前端源码到别处.**
-- codeblitz 前置 numas 检测 (`src/gate`) 支持 `?numasPort=<port>` URL 覆盖 (仅当该参数存在时生效),
+- webapp 前置 numas 检测 (`src/gate`) 支持 `?numasPort=<port>` URL 覆盖 (仅当该参数存在时生效),
   用于不打扰真实环境地模拟"未安装/自定义端口"验证引导分支; 默认探测配置的后端基址 (`appBaseUrl()`).
 - **自定义协议 scheme (`numas://`) 唤起的浏览器行为与弹窗根因** (2026-09-22 实测修订, 取代旧结论):
   - **Chrome 强制要求用户手势**: 页面加载时自动 fire (iframe / `location.href` 均如此) 被静默拦截,
@@ -139,7 +139,7 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
 - 端口 404 排查先查**残留进程占用**: 已删除目录的 dev server 可能仍在监听 (如旧 `test/poc-opencode-ide`
   的 vite 占 5173), 新起服务 bind 不到 → 返回旧进程的 404. 用 `lsof -iTCP:<port> -sTCP:LISTEN -n -P`
   看 PID, 确认对应已删除目录后 `kill` 再验.
-- **repo/登录等特定业务流程已整体移除** (2026-10-10): codeblitz 不再承载"开源贡献任务"业务流程.
+- **repo/登录等特定业务流程已整体移除** (2026-10-10): webapp 不再承载"开源贡献任务"业务流程.
   已删: `src/gate/login.ts`(访问门槛) + `src/service/session/*`(登录态 DI) + `src/infra/session.ts`
   (session.yaml) + `src/infra/cookie.ts` + `src/infra/repo.ts`(?repo= 关联校验); `WelcomeView` 改回
   **通用欢迎空态**(不再读 `?repo=`/`?issue=`、不再拉 GitHub issue / 不再有 6 步技能按钮); `IdeLayout`
@@ -199,7 +199,7 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   `resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }` 并删除该批 `.gen.js`.
   后续: 只生成 `.gen.ts`; 若 webpack 报 `.gen.js` not found, 检查 extensionAlias 是否被删.
 - **`bunfig.toml` 的 `linker="hoisted"` 会打断写死 `node_modules/<pkg>` 的路径** (2026-09-30):
-  bun 1.4 对 workspace 默认 isolated; 为让 Windows 上 codeblitz webpack 解析 opensumi 全套传递依赖,
+  bun 1.4 对 workspace 默认 isolated; 为让 Windows 上 webapp webpack 解析 opensumi 全套传递依赖,
   bunfig 设 `linker="hoisted"` (扁平布局, 传递依赖提升到仓库根 `node_modules`)。副作用: 包内
   `node_modules/@codeblitzjs|@opensumi` 不再存在, 所有写死 `../node_modules/<pkg>` 的用法失效:
   1) `scripts/patch-*.js` 就地改第三方包源码 → 目标找不到、脚本静默跳过 (`patch-codeblitz-constant.js`
@@ -208,9 +208,9 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   2) `package.json` 的 `node node_modules/webpack-cli/bin/cli.js` 失效 (webpack-cli 提升到根)。
   修复: 直接用 bin 名 `webpack-cli` (`bun run` 会把 `.bin` 注入 PATH)。
   检测: 改安装布局后重装依赖, 必须确认 7 个 patch 脚本全部 applied (而非「跳过/不存在」), 且
-  `packages/codeblitz` 能 `bun run build` 通过。
-  3) **pre-push `turbo typecheck` 的 `web#typecheck` 会失败**: 根 `.bin/tsc` 被
+  `packages/webapp` 能 `bun run build` 通过。
+  3) **pre-push `turbo typecheck` 的 `webapp#typecheck` 会失败**: 根 `.bin/tsc` 被
   `@typescript/old` (= `@typescript/typescript6` 依赖的 `typescript@6.0.3`) 的 `tsc` bin 抢占
   (不再是 pin 的 5.8.2), 且 `@types/react` 去重到根版本与 opensumi 不兼容 → `TS5101`/`TS2786`
-  等. 隔离布局下 codeblitz 有自己的 `.bin/tsc`(5.x) 不受影响, hoisted 后没有 → 冲突暴露.
+  等. 隔离布局下 webapp 有自己的 `.bin/tsc`(5.x) 不受影响, hoisted 后没有 → 冲突暴露.
   (机器 turbo 缓存冷时才复现; 作者侧可能命中旧缓存.) 临时绕过: `git push --no-verify`.

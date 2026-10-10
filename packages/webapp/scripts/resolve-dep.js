@@ -3,7 +3,7 @@
  * resolve-dep.js — 定位依赖包目录, 兼容 bun isolated 与 hoisted 两种 node_modules 布局。
  *
  * 背景: bun 1.4 对 workspace 默认 isolated (依赖装在各包自己的 node_modules);
- * bunfig 设 linker="hoisted" 后 (Windows 上 codeblitz webpack 解析 opensumi 全套
+ * bunfig 设 linker="hoisted" 后 (Windows 上 webapp webpack 解析 opensumi 全套
  * 传递依赖需要扁平布局), 传递依赖被提升到仓库根 node_modules, 包内
  * node_modules/@codeblitzjs|@opensumi 下不再有这些包。
  *

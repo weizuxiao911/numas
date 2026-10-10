@@ -9,7 +9,7 @@
 Numas 是一个本地运行的 AI 工作台（编码 / 办公任务），由三部分组成：
 
 - **opencode 引擎** — AI agent 运行时（工具调用 / 会话 / 模型/provider 接入），CLI 命令名 `numas`
-- **codeblitz IDE** — 浏览器端工作台（编辑器 / 终端 / 扩展市场）
+- **webapp IDE** — 浏览器端工作台（编辑器 / 终端 / 扩展市场）
 - **桌面壳** — macOS 应用（托盘常驻，托管本地服务）
 
 默认本地运行，数据与文件不出本机；也支持前后端分离部署（页面在云端，直连访问者本机的 numas）。
@@ -43,7 +43,7 @@ numas serve      # 仅起本地服务（headless）
 ### 从源码构建
 
 ```bash
-cd packages/opencode && bun run build --single   # 构建内嵌 codeblitz 的 numas CLI
+cd packages/opencode && bun run build --single   # 构建内嵌 webapp 的 numas CLI
 cd packages/tauri    && bun run build            # 打包桌面壳（自动同步 sidecar）
 ```
 
@@ -54,7 +54,7 @@ cd packages/tauri    && bun run build            # 打包桌面壳（自动同�
 页面静态托管在云端，运行时直连**访问者本机**的 numas：
 
 ```bash
-cd packages/codeblitz && npm run build:site      # 产物在 packages/codeblitz/site/
+cd packages/webapp && npm run build:site        # 产物在 packages/webapp/site/
 ```
 
 - `site/` 丢到 nginx（部署在**域名根路径**，SPA 回退 `try_files $uri /index.html;`）

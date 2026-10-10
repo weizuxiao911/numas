@@ -15,7 +15,7 @@
 
 | 子模块 | AGENTS.md | 覆盖内容 |
 |---|---|---|
-| `packages/codeblitz/` | `packages/codeblitz/AGENTS.md` | 前端交互层: 分层架构 / 跨平台路径 / opencode 跨进程通信 / gate 门控 |
+| `packages/webapp/` | `packages/webapp/AGENTS.md` | 前端交互层: 分层架构 / 跨平台路径 / opencode 跨进程通信 / gate 门控 |
 | `packages/opencode/` | `packages/opencode/AGENTS.md` | opencode 引擎: 上游 fork 约定 / 代码风格 / 类型检查 / 测试 / V2 Session / 版本号 |
 | `packages/tauri/` | `packages/tauri/AGENTS.md` | 桌面壳: 托盘 / 无 Dock (LSUIElement) / bundle id / 生命周期 / 打包验证 |
 | 其它 | — | 暂未拆分, 遵循本文件全局规范 |
@@ -110,7 +110,7 @@
 
 ### 2.2 全局工程约定 / 禁忌
 
-- **直连无代理**: client → opencode 之间不加 HTTP 中间层 (具体约定见 `packages/codeblitz/AGENTS.md`)
+- **直连无代理**: client → opencode 之间不加 HTTP 中间层 (具体约定见 `packages/webapp/AGENTS.md`)
 - **单一事实源**: 端口 / CORS / APP_BASE_URL 由 dev.js 控制, 透 process.env 注入. 不要散落
 - **单一职责**: 每个模块只做一件事
 - **配置外置**: 敏感信息不入库
@@ -123,7 +123,7 @@
   - 每次写完一组操作**必须自检** `git status --short` + `ls .tmp/` 确认没有散落到项目根或子目录的 stray 文件
   - 发现 stray 立刻 `mv` 到 `.tmp/` (mv 不算"破坏性操作")
 
-> 分层架构铁律 / 跨平台路径铁律 / opencode 跨进程通信约定 → `packages/codeblitz/AGENTS.md`
+> 分层架构铁律 / 跨平台路径铁律 / opencode 跨进程通信约定 → `packages/webapp/AGENTS.md`
 > 上游 fork 约定 (分支/提交/代码风格/类型检查/测试/V2 Session) → `packages/opencode/AGENTS.md`
 
 ---
@@ -172,11 +172,11 @@ AI **仍需 `question`**:
 ## 4. 全局实践与避坑
 
 AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁律持续沉淀.
-> 模块特定避坑见对应子模块 AGENTS.md (§0 索引): codeblitz / opencode / tauri.
+> 模块特定避坑见对应子模块 AGENTS.md (§0 索引): webapp / opencode / tauri.
 
 ### 4.1 实践指南
 
-- `packages/tauri` 壳构建顺序: 先在 `packages/opencode` 跑 `bun run build --single` (内嵌 codeblitz 的 numas 二进制), 再 `packages/tauri` 的 `scripts/prepare.ts` 同步到 `binaries/numas-<triple>`, 最后 `tauri build`; 产物在 `packages/tauri/target/release/bundle/{macos/numas.app,dmg/numas_<ver>_<arch>.dmg}` (注意是不带 triple 的 `target/release/` 路径, 别再找旧的 `target/aarch64-apple-darwin/...`); 缺二进制时 `cargo check` 就会因 externalBin 校验失败. (桌面壳细节见 `packages/tauri/AGENTS.md`)
+- `packages/tauri` 壳构建顺序: 先在 `packages/opencode` 跑 `bun run build --single` (内嵌 webapp 的 numas 二进制), 再 `packages/tauri` 的 `scripts/prepare.ts` 同步到 `binaries/numas-<triple>`, 最后 `tauri build`; 产物在 `packages/tauri/target/release/bundle/{macos/numas.app,dmg/numas_<ver>_<arch>.dmg}` (注意是不带 triple 的 `target/release/` 路径, 别再找旧的 `target/aarch64-apple-darwin/...`); 缺二进制时 `cargo check` 就会因 externalBin 校验失败. (桌面壳细节见 `packages/tauri/AGENTS.md`)
 - **桌面发布规则** (固化在 `packages/tauri/scripts/release.ts`, 后续发版只改 `packages/tauri/version.json` + `CHANGELOG.md`):
   - 版本: 读 `packages/tauri/version.json` (不写死); Release title 只写版本号 `v<semver>`; notes 从 `packages/tauri/CHANGELOG.md` 对应 `## [<semver>]` 段读
   - tag: `numas-v<semver>-<YYYYMMDDHHMM>` (与既有 release 规律一致)
@@ -188,6 +188,12 @@ AI 自主维护, 用户可随时指出错误或要求补充. 按 §3.1 自查铁
 
 ### 4.2 避坑指南
 
+- **前端包 `packages/codeblitz` 已更名 `packages/webapp`** (2026-10-10, 用户决策): 目录 / 包名
+  (`package.json` `name: webapp`) / `dev.js` `WEBAPP` 常量 / `packages/opencode/script/build.ts`
+  的 `--web-ui` 合法值 (`app | webapp`, 默认 `webapp`) / 根 README+AGENTS / tauri README+AGENTS /
+  `bun.lock` workspace key 均已同步。**上游第三方标识保留不动**: `@codeblitzjs/*` import、
+  `@codeblitzjs/ide-core/bundle/codeblitz.css`、`codeblitz-root`/`codeblitz-light`/`codeblitz-dark`
+  CSS 类、`scripts/patch-codeblitz-*.js` 文件名、注释中"opensumi/codeblitz 框架/官方/默认"等描述.
 - **仓库布局: numas 仓 2 个 worktree + 2 个独立仓库** (2026-09-30 拆分后): 本仓 (`weizuxiao911/numas`)
   有 `~/Documents/numas/main`=`main`、`~/Documents/numas/next`=`next` (numas 的 dev) 两个 worktree (共享同一 `.git`).
   原 `numas-ide/main`、`oh-my-buddy/main` 已拆为独立仓库:

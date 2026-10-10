@@ -133,7 +133,7 @@ flowchart TD
 
 ## 4. 本地构建
 
-先构建当前平台的 numas CLI（内嵌 codeblitz + 内置 vsix 扩展）：
+先构建当前平台的 numas CLI（内嵌 webapp + 内置 vsix 扩展）：
 
 ```bash
 cd packages/opencode
@@ -158,7 +158,7 @@ bun run build:universal       # macOS universal（需两个架构的 numas 二�
 
 ```bash
 cd packages/opencode
-NUMAS_WEB_DIST=../codeblitz/dist NUMAS_TARGET=darwin-x64 bun run script/build.ts
+NUMAS_WEB_DIST=../webapp/dist NUMAS_TARGET=darwin-x64 bun run script/build.ts
 ```
 
 产物在 `packages/tauri/target/release/bundle/`（macOS: dmg/app，Windows: nsis，Linux: appimage/deb/rpm）。
@@ -220,7 +220,7 @@ bun run scripts/release.ts --dry-run  # 只预览
 - Release title 只写版本号; notes 从 `CHANGELOG.md` 对应 `## [<semver>]` 段读
 - 上传 `weizuxiao911/numas`; 幂等（同 tag 复用, `--clobber` 覆盖）
 - **opencode 二进制版本固定官方 `1.18.30`**（`packages/script/src/index.ts` 的 `NUMAS_VERSION`）,
-  `version.json` 只作用于 tauri 壳版本, 不影响 opencode 二进制 UA; codeblitz 用自身 `package.json` 版本
+  `version.json` 只作用于 tauri 壳版本, 不影响 opencode 二进制 UA; webapp 用自身 `package.json` 版本
 
 ---
 

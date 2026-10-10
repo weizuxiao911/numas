@@ -29,7 +29,7 @@ export const corsVaryFix = HttpRouter.middleware(
 )
 
 // Chrome Private Network Access (PNA / Local Network Access):
-// 公共 https 页面 (如远端静态托管的 codeblitz) 访问私有/环回地址 (http://127.0.0.1:24096) 时,
+// 公共 https 页面 (如远端静态托管的 webapp) 访问私有/环回地址 (http://127.0.0.1:24096) 时,
 // 浏览器先发带 `Access-Control-Request-Private-Network: true` 的预检, 服务端必须回
 // `Access-Control-Allow-Private-Network: true`, 否则请求被拦 (新版 Chrome 还会弹本地网络权限).
 // 这里对所有带 CORS 头的响应补该头 (浏览器仅对预检生效, 实际响应忽略, 无副作用).

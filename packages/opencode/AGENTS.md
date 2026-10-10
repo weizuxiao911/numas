@@ -216,8 +216,8 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   `~/.local/share/opencode/log/tui.log`, 绝不碰 stdout/stderr); `server/extensions-route.ts`
   日志改 `NUMAS_EXTENSIONS_DEBUG=1` 门控; `acp/profile.ts` 自带 `OPENCODE_ACP_PROFILE=1` 门控.
   改 TUI/server 代码日志一律走上述, 禁止裸 `console.*`.
-- **远端静态托管 codeblitz 直连本机 24096 需要 PNA 预检头** (2026-09-30): 前后端分离部署
-  (`packages/codeblitz` `npm run build:site` → `site/`, 编译期 `APP_BASE_URL=http://127.0.0.1:24096`)
+- **远端静态托管 webapp 直连本机 24096 需要 PNA 预检头** (2026-09-30): 前后端分离部署
+  (`packages/webapp` `npm run build:site` → `site/`, 编译期 `APP_BASE_URL=http://127.0.0.1:24096`)
   时, 公共 https 页面访问本机环回地址会被 Chrome **Private/Local Network Access** 拦截: 预检需回
   `Access-Control-Allow-Private-Network: true`. 已在 `httpapi/middleware/cors-vary.ts` 加
   `corsPrivateNetwork` (对带 CORS 头的响应补该头) 并在 `httpapi/server.ts` 注册. 经典 mixed-content
@@ -225,7 +225,7 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
   不走 CORS 预检, 新版 Chrome 的 LNA 仍可能要求本地网络权限; 拿不到 PNA 授权的浏览器可能 WS 失败.
 - **端口发现/代理功能已整体删除** (2026-09-30, 用户决策): 不再实现端口代理. 已删: `src/ports/`
   (PortsService 扫描/白名单/事件 + `/ports` `/proxy/:port` 路由 + `--domain-proxy` 子域代理),
-  pty/shell 的 `registerPid`/`registerWorkspace`, codeblitz 的 `service/ports`(PortsModule) 与
+  pty/shell 的 `registerPid`/`registerWorkspace`, webapp 的 `service/ports`(PortsModule) 与
   `__APP_CONFIG__.domainProxy`. 别再引入端口面板/反代; 如需本地服务, 直接用其端口地址.
 - **构建 `packages/opencode` 需联网拉 models.dev** (`script/generate.ts`): 代理下 TLS 校验失败会中断
   build. 解法: 用本地快照 `MODELS_DEV_API_JSON=<api.json路径> bun run build ...` (快照可从
@@ -256,11 +256,11 @@ Plain async code should pass explicit context or stay inside an Effect fiber; do
 - **TUI 白屏真正根因 = 陈旧 `.gen.js` 覆盖 SDK** (2026-09-30): TUI 进去全屏空白 (连 StartupLoading
   都没有)。链路: `packages/sdk/js/src/v2/client.ts` 按 TS nodenext 用 `.js` 后缀 import
   (`./gen/sdk.gen.js`), 而仓库里误提交了一套**陈旧**的 `packages/sdk/js/src/v2/gen/*.gen.js`
-  (`ec8cd1fd14`, 原本为 codeblitz webpack 无 extensionAlias 而加) → Bun 优先加载真实 `.js`,
+  (`ec8cd1fd14`, 原本为 webapp webpack 无 extensionAlias 而加) → Bun 优先加载真实 `.js`,
   SDK 缺 `sdk.client.experimental.capabilities` → `SyncProvider.bootstrap` **同步抛 TypeError**
   → `sync.status` 永远 `loading` → `SyncProvider.ready=false` → `createSimpleContext` 的
   `<Show when={init.ready}>` 挡住**整棵子树**(含 `<App>` 与 `StartupLoading`) → 全屏空.
-  修复: 删除那批 `.gen.js` + 给 `packages/codeblitz/webpack.config.js` 加
+  修复: 删除那批 `.gen.js` + 给 `packages/webapp/webpack.config.js` 加
   `resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] }` (webpack 也能解析到 `.gen.ts`).
   **教训**: 生成物 `.js` 不要入库; 排查 TUI 白屏先开 `DEBUG` 看 `sdk.client.experimental` 是否存在 +
   `sync.status` 是否停在 `loading` (旧 AGENTS 记的"依赖漂移"是表象之一, 真因是这套陈旧 `.js`).

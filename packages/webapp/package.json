@@ -1,8 +1,8 @@
 {
-  "name": "web",
+  "name": "webapp",
   "version": "0.1.0",
   "private": true,
-  "description": "Numas web — opensumi/codeblitz 交互层（纯浏览器）",
+  "description": "Numas webapp — opensumi/codeblitz 交互层（纯浏览器）",
   "scripts": {
     "dev": "webpack-cli serve --config webpack.config.js",
     "dev:site": "cross-env DEPLOY_ENV=site webpack-cli serve --config webpack.config.js",

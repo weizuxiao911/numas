@@ -439,7 +439,7 @@ numas serve --port 24096</pre>
         setStatus('up', '已连接 — ' + SERVER_URL)
         show($okPanel)
         $open.classList.remove('hide')
-        // 自动跳转到 numas serve(让用户落到 codeblitz IDE)
+        // 自动跳转到 numas serve(让用户落到 webapp IDE)
         setTimeout(() => { window.location.href = SERVER_URL }, 800)
       } else {
         setStatus('down', '本地 numas 未运行 — 点「启动 numas」唤起,或按下方步骤安装')

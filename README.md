@@ -9,7 +9,7 @@
 Numas is a locally-run AI workbench for coding and everyday tasks, made of three parts:
 
 - **opencode engine** — the AI agent runtime (tool calls / sessions / model & provider integration); CLI name is `numas`
-- **codeblitz IDE** — the browser workbench (editor / terminal / extension market)
+- **webapp IDE** — the browser workbench (editor / terminal / extension market)
 - **Desktop shell** — a macOS app (lives in the tray, hosts the local server)
 
 Runs locally by default — your files and data stay on your machine. It also supports split deployment (UI in the cloud, connecting directly to the numas running on the visitor's own machine).
@@ -43,7 +43,7 @@ numas serve      # start the local server only (headless)
 ### Build from source
 
 ```bash
-cd packages/opencode && bun run build --single   # build the numas CLI (embeds codeblitz)
+cd packages/opencode && bun run build --single   # build the numas CLI (embeds webapp)
 cd packages/tauri    && bun run build            # package the desktop shell (syncs the sidecar)
 ```
 
@@ -54,7 +54,7 @@ See [`packages/tauri/README.md`](packages/tauri/README.md) for details.
 Serve the UI as static files while it connects directly to the **visitor's own** numas:
 
 ```bash
-cd packages/codeblitz && npm run build:site      # output in packages/codeblitz/site/
+cd packages/webapp && npm run build:site        # output in packages/webapp/site/
 ```
 
 - Put `site/` on nginx at the **domain root** with SPA fallback `try_files $uri /index.html;`
