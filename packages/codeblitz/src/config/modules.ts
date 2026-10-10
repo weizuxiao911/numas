@@ -20,7 +20,6 @@ import { EditorModule } from '../service/editor';
 import { StateModule } from '../service/state';
 import { LayoutModule } from '../service/layout';
 import { BrandModule } from '../service/brand';
-import { SessionModule } from '../service/session';
 
 import { EditorRestoreFallbackModule } from '../contribution/editor-restore';
 
@@ -43,7 +42,6 @@ export function getBuiltinModules(_opts?: { vsixMetadata?: any[] }): any[] {
     StateModule,           // codeblitz 状态 (workspace / recent)
     LayoutModule,          // SOLO 布局状态 (sidebar / aside 折叠 + 宽度 + 命令)
     BrandModule,           // 品牌信息 (名称 / logo / slogan)
-    SessionModule,         // 登录态 (cookie → session.yaml → 用户信息)
     TerminalNextModule,    // 官方终端 UI (bottom slot; solo 终端模式渲染于 aside)
 
     // contribution 层 (lifecycle / UI 状态)

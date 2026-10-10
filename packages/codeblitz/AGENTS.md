@@ -139,11 +139,16 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
 - 端口 404 排查先查**残留进程占用**: 已删除目录的 dev server 可能仍在监听 (如旧 `test/poc-opencode-ide`
   的 vite 占 5173), 新起服务 bind 不到 → 返回旧进程的 404. 用 `lsof -iTCP:<port> -sTCP:LISTEN -n -P`
   看 PID, 确认对应已删除目录后 `kill` 再验.
-- **welcome 引导步骤 ↔ 远程 skill 名必须精确一致** (2026-09-23): 前端按钮经 `chatbot.send` 发
-  `请执行「<技能名>」技能。`, 该名字**必须逐字等于** numas-skills 仓库的 skill 目录名 / `index.json` 的
-  `name` / SKILL.md frontmatter `name` 三者 (含空格/中英混排). 任一处不一致 → AI 找不到 skill, 引导断链.
-  改动步骤文案 (如 `fork并clone` → `Fork克隆`) 时, 四处同步: `WelcomeView.tsx` 的 `SKILL_*` 常量 +
-  按钮 JSX 文案 + 远程仓库目录/index.json/frontmatter + `IdeLayout.tsx` 顶部按钮的触发串.
+- **repo/登录等特定业务流程已整体移除** (2026-10-10): codeblitz 不再承载"开源贡献任务"业务流程.
+  已删: `src/gate/login.ts`(访问门槛) + `src/service/session/*`(登录态 DI) + `src/infra/session.ts`
+  (session.yaml) + `src/infra/cookie.ts` + `src/infra/repo.ts`(?repo= 关联校验); `WelcomeView` 改回
+  **通用欢迎空态**(不再读 `?repo=`/`?issue=`、不再拉 GitHub issue / 不再有 6 步技能按钮); `IdeLayout`
+  顶部「提交PR」按钮(PrButton)与 `?issue=` 读取一并删除; webpack 的 `__APP_LOGIN_REDIRECT__` +
+  `.env.site*` 的 `LOGIN_REDIRECT` 已清. 历史避坑 (下方 skill 名一致/登录门槛/welcome 步骤条) 仅存档,
+  若将来重新引入同类流程需重读.
+- **(存档) welcome 引导步骤 ↔ 远程 skill 名必须精确一致** (2026-09-23): 曾用 `chatbot.send` 发
+  `请执行「<技能名>」技能。`, 名字须逐字等于 numas-skills 仓库目录名 / `index.json` `name` /
+  frontmatter `name` (当前引导按钮已随任务流程移除, 保留以备重建).
 - **改远程 skill 内容必须递增 `index.json` 的 `version`** (2026-09-23): 客户端按 version 比对缓存
   (`~/.cache/opencode/skills/<name>/`), 内容改了但 version 未变 → 不会重新拉取, 用户看到的还是旧 skill.
   端到端验收 skill 前先重启 numas (拉取新 version).
@@ -179,12 +184,9 @@ const dir = raw ? decodeURIComponent(raw) : process.cwd()
   内容列) 会让贴底栏/阴影两侧留白. 要通栏整宽 = 对齐编辑器 tab 容器: 去 `max-width` + `width:
   calc(100% + 48px)` + `margin-left/right: -24px` 抵消 `.numas-welcome` 的 24px 左右 padding (二者同在
   welcome.css, 改 padding 时需同步这里).
-- **访问门槛 (登录态) 内建在 `src/gate/login.ts`** (2026-09-23): 独立部署经 `.env.{DEPLOY_ENV}` 的
-  `LOGIN_REDIRECT` (webpack DefinePlugin → `__APP_LOGIN_REDIRECT__`) 注入登录地址; `src/index.tsx`
-  **渲染前**调 `enforceLogin()` — cookie 无 `token` 且无 `authorization` → 跳
-  `{LOGIN_REDIRECT}{encodeURIComponent(当前URL)}`. **未注入 `LOGIN_REDIRECT` → 不门槛**
-  (桌面/CLI/内嵌/本地 dev 不受影响). env: `.env.site`(生产→beta.cloudlab.top) / `.env.site-test`(测试).
-  前端**读不到请求的 `Authorization` 头**, 只能靠 cookie/注入 (这是 gate 用 cookie 的原因).
+- **访问门槛 (登录态) 已移除** (2026-10-10, 取代 2026-09-23 条目): 原 `src/gate/login.ts` 经
+  `.env.{DEPLOY_ENV}` 的 `LOGIN_REDIRECT` (webpack DefinePlugin → `__APP_LOGIN_REDIRECT__`) 注入登录地址,
+  `src/index.tsx` 渲染前调 `enforceLogin()` 跳登录页. 现随"特定业务流程"整体删除, 独立部署不再有登录门槛.
 - **chat 默认模型不再本地记忆** (2026-09-24): `modelPrefs` 曾把"最后选过的模型"写进 localStorage
   (`chat.modelPrefs.v1` 的 `default/defaultProvider`) → 打开就是上次选的模型 (如 MiniMax, 而非
   `config.model`) — 这是错误行为, 已移除. 现在模型选择只改内存态 (`currentModel/currentProvider`),

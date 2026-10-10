@@ -8,10 +8,9 @@
  * 文件系统实现见 ./fs.ts (CustomFileSystemProvider + DI 注入 CustomFsProviderContribution).
  * 不依赖任何 codeblitz ide-browserfs 模块, 不维护 InMemory 缓存 / 墓碑 / overlay.
  *
- * 欢迎页 (2026-09-22 重启并改造为任务引导页): `startupEditor: 'welcomePage'` +
+ * 欢迎页: `startupEditor: 'welcomePage'` +
  * `WelcomePage: WelcomeView` (extensions/welcome) 注入官方 WelcomeContribution 的 welcome:// tab;
- * 未选项目 / 无打开文件时显示: 读 URL ?repo=&issue= 展示 issue 卡片 + 6 步按钮触发对应 skill.
- * (2026-09 曾关闭欢迎页; 现按开源贡献引导需求重启, 组件为全新实现, 见 docs/AI工作台适配开源项目贡献 SPEC.md §5)
+ * 未选项目 / 无打开文件时显示通用欢迎空态 (提示选择项目开始).
  */
 
 import type { IAppRendererProps } from '@codeblitzjs/ide-core';

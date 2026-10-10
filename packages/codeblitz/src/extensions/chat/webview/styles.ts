@@ -111,22 +111,6 @@ export const styles = `
 }
 .chat__icon-btn:hover { background: var(--ai-hover); color: var(--ai-fg); }
 .chat__icon-btn:active { box-shadow: var(--ai-press-shadow); }
-.chat__login-btn {
-  height: 26px; padding: 0 12px;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--ai-accent, #0e639c); border: none; border-radius: 7px;
-  color: #fff; font-size: 12px; font-weight: 600;
-  cursor: pointer;
-  transition: opacity .12s, background .12s;
-}
-.chat__login-btn:hover { opacity: .9; }
-.chat__login-gate {
-  flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 10px;
-  padding: 24px;
-}
-.chat__login-title { font-size: 20px; font-weight: 700; color: var(--ai-fg); }
-.chat__login-desc { font-size: 13px; color: var(--ai-fg-muted); }
 
 /* Todos bar */
 /* Todos dock (above composer, OpenCode style) */
